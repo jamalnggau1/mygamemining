@@ -1216,7 +1216,7 @@ export const gameActions = {
       const db = getDb();
       const levels = await loadLevels(db);
       const p = await loadPlayer(db, levels);
-      const fail = (error: string) => ({ ok: false, error, durationSec: 0, energy: p.energy, oreName: null });
+      const fail = (error: string) => ({ ok: false, error, durationSec: 0, energy: p.energy, oreName: null as string | null });
       const exp = parseExpedition(p.expedition);
       if (!exp) return fail("Data asteroid tidak valid, coba muat ulang.");
       if (parseJob(p.job)) return fail("Ada operasi yang sedang berjalan. Selesaikan atau batalkan dulu.");
@@ -1271,7 +1271,7 @@ export const gameActions = {
       const levels = await loadLevels(db);
       const p = await loadPlayer(db, levels);
       const fail = (error: string) => ({
-        ok: false, error, kind: null, oreId: null, oreName: null, qty: 0, isRare: false, allMined: false,
+        ok: false, error, kind: null as "scan" | "mine" | null, oreId: null as string | null, oreName: null as string | null, qty: 0, isRare: false, allMined: false,
         jammed: false, hullHit: false, repairFeeKt: 0,
       });
       const exp = parseExpedition(p.expedition);
@@ -1432,7 +1432,7 @@ export const gameActions = {
       const db = getDb();
       const levels = await loadLevels(db);
       const p = await loadPlayer(db, levels);
-      const fail = (error: string) => ({ ok: false, error, asteroidName: null });
+      const fail = (error: string) => ({ ok: false, error, asteroidName: null as string | null });
       if (parseJob(p.job)) return fail("Batalkan operasi yang sedang berjalan dulu sebelum pindah asteroid.");
       if (p.energy < ABANDON_ENERGY_COST)
         return fail(`Bahan bakar tidak cukup — pindah asteroid butuh ${ABANDON_ENERGY_COST} daya, kamu punya ${p.energy}.`);
@@ -1459,7 +1459,7 @@ export const gameActions = {
       const db = getDb();
       const levels = await loadLevels(db);
       const p = await loadPlayer(db, levels);
-      const fail = (error: string) => ({ ok: false, error, mapName: null, asteroidName: null });
+      const fail = (error: string) => ({ ok: false, error, mapName: null as string | null, asteroidName: null as string | null });
       if (args.zoneIndex >= MAPS.length) return fail("Peta itu tidak ada di bagan navigasi stasiun.");
       const target = mapByIndex(args.zoneIndex);
       if (p.layer < target.minLayer)
@@ -1497,7 +1497,7 @@ export const gameActions = {
       // first ever action — the order itself has no player column.
       await loadPlayer(db, levels);
       const plan = PREMIUM_PLANS[args.plan];
-      const fail = (error: string) => ({ ok: false, error, orderId: null, stars: plan.stars });
+      const fail = (error: string) => ({ ok: false, error, orderId: null as number | null, stars: plan.stars });
       const pending = await db
         .select()
         .from(schema.premiumOrders)
@@ -1794,7 +1794,7 @@ export const gameActions = {
       const levels = await loadLevels(db);
       const p = await loadPlayer(db, levels);
       const def = upgradeById(args.upgradeId);
-      const fail = (error: string) => ({ ok: false, error, newLevel: null, costPaid: 0, ktBalance: p.ktBalance });
+      const fail = (error: string) => ({ ok: false, error, newLevel: null as number | null, costPaid: 0, ktBalance: p.ktBalance });
       if (!def) return fail("Upgrade tidak dikenal.");
       const level = levels[def.id] ?? 0;
       if (level >= def.maxLevel) return fail(`${def.name} sudah level maksimum.`);
@@ -1846,7 +1846,7 @@ export const gameActions = {
       const p = await loadPlayer(db, levels);
       const amountKt = args.amountKt;
       const amountGram = amountKt / KT_PER_GRAM;
-      const fail = (error: string) => ({ ok: false, error, wdId: null, ktBalance: p.ktBalance });
+      const fail = (error: string) => ({ ok: false, error, wdId: null as number | null, ktBalance: p.ktBalance });
       if (amountKt % WD_STEP_KT !== 0)
         return fail(`Jumlah WD harus kelipatan ${WD_STEP_KT} KT (0,5 GRAM) — ${amountKt} KT tidak valid.`);
       const paidCount = await countPaidWithdrawals(db);
