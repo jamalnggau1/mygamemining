@@ -41,13 +41,16 @@ export type TelegramIdentity = {
 
 /** Sesi pemain yang sudah diputuskan server untuk satu request.
  *  `telegramId === null` berarti request datang dari browser web biasa
- *  (tanpa initData) — pemain lama id=1, yang juga dianggap admin
- *  supaya asnit tetap bisa menguji & mengelola game dari web. */
+ *  (tanpa initData) — pemain lama id=1, pemain BIASA tanpa hak admin.
+ *  Admin HANYA lewat Telegram: initData tervalidasi yang id-nya sama
+ *  dengan ADMIN_TELEGRAM_ID. Browser web tidak pernah admin, supaya
+ *  siapa pun yang membuka URL tidak bisa melihat/menggunakan Kendali. */
 export type Session = {
   telegramId: number | null;
   username: string | null;
-  /** Boleh menjalankan aksi Kendali (admin): pemain web lama, atau
-   *  pemain Telegram yang id-nya sama dengan ADMIN_TELEGRAM_ID. */
+  /** Boleh menjalankan aksi Kendali (admin): HANYA pemain Telegram
+   *  yang id-nya sama dengan ADMIN_TELEGRAM_ID. Pemain web lama
+   *  (tanpa initData) bukan admin. */
   isAdmin: boolean;
 };
 
@@ -64,12 +67,15 @@ export function resolveSession(
   initData?: string | null,
 ): SessionResolution {
   if (!initData) {
-    // Browser web biasa — pemain lama, dianggap admin (asnit menguji
-    // dari web). Tidak ada identitas Telegram yang bisa dipalsukan
-    // di jalur ini karena tidak ada initData sama sekali.
+    // Browser web biasa — pemain lama id=1, pemain BIASA (bukan
+    // admin). Kendali hanya untuk ADMIN_TELEGRAM_ID lewat Telegram,
+    // supaya siapa pun yang membuka URL — termasuk browser di dalam
+    // Telegram yang tidak mengirim initData — tidak pernah mendapat
+    // akses admin atau melihat tab Kendali. Pemain web tetap bisa
+    // bermain penuh; hanya aksi Kendali yang ditolak.
     return {
       ok: true,
-      session: { telegramId: null, username: null, isAdmin: true },
+      session: { telegramId: null, username: null, isAdmin: false },
     };
   }
   const validated = validateTelegramInitData(initData);

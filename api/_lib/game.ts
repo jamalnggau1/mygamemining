@@ -102,7 +102,10 @@
 //   player_id, so two players can never see or spend each other's KT.
 //   The only cross-player reads are the admin (Kendali) queue in
 //   getGameState and the admin actions, which are gated in
-//   dispatchGameAction to the legacy web player or ADMIN_TELEGRAM_ID.
+//   dispatchGameAction to ADMIN_TELEGRAM_ID only (validated Telegram
+//   initData). The legacy web player (no initData) is a REGULAR
+//   player with no admin rights — opening the URL in a plain browser
+//   never shows or grants Kendali.
 //   Admin actions that move KT/premium always target the WD/order
 //   OWNER's row, never the admin's own row.
 //
@@ -2235,9 +2238,9 @@ export async function dispatchGameAction(
     return { ok: false, error: resolved.error };
   }
   // Aksi Kendali hanya untuk pemilik — dijaga di sini (satu pintu)
-  // supaya tidak ada handler admin yang lupa memeriksa: sesi web
-  // lama (tanpa initData) dianggap pemilik, sesi Telegram harus
-  // cocok dengan ADMIN_TELEGRAM_ID. Gagal tertutup: bukan admin →
+  // supaya tidak ada handler admin yang lupa memeriksa: hanya sesi
+  // Telegram yang id-nya cocok dengan ADMIN_TELEGRAM_ID. Pemain web
+  // lama (tanpa initData) BUKAN admin. Gagal tertutup: bukan admin →
   // ok:false, aksi TIDAK dijalankan.
   const ADMIN_ACTIONS = new Set([
     "updateWithdrawal",

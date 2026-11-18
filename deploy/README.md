@@ -63,14 +63,16 @@ lalu memetakan pemain ke baris `player`-nya sendiri lewat
 `telegram_id` — saldo KT, inventory, upgrade, riwayat WD, pesanan
 Premium, dan log aktivitas terpisah per pemain. Membuka game dari
 browser biasa (tanpa Telegram) tetap memakai pemain web lama (id=1),
-yang juga dianggap admin supaya pemilik bisa menguji dari web.
+tapi pemain web lama adalah pemain BIASA — bukan admin, tidak melihat
+tab Kendali, dan tidak bisa menjalankan aksi Kendali. Kendali/admin
+hanya lewat Telegram, untuk id di `ADMIN_TELEGRAM_ID` saja.
 
 Yang penting diingat:
 - Tanpa `BOT_TOKEN` di Vercel, pemain Telegram **ditolak semua**
   (fail closed) — game hanya bisa dimainkan dari web.
-- Tanpa `ADMIN_TELEGRAM_ID`, **tidak ada** pemain Telegram yang
-  bisa memakai Kendali — WD dan pesanan Premium harus diproses dari
-  web (pemain lama) sampai id admin diisi.
+- Tanpa `ADMIN_TELEGRAM_ID`, **tidak ada siapa pun** yang bisa
+  memakai Kendali — WD dan pesanan Premium tidak bisa diproses sampai
+  id admin diisi (Kendali hanya lewat Telegram, bukan dari web).
 - Kalau string koneksi Neon atau `BOT_TOKEN` pernah dibagikan lewat
   chat atau tempat terbuka lain, **reset di tempat asalnya**
   (Neon Console untuk password database, BotFather `/revoke` untuk

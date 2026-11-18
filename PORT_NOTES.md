@@ -98,11 +98,12 @@ single-player code until the owner pushes + redeploys + migrates):
   resolves the session FIRST; every handler works on the session
   player's row only. Admin actions (updateWithdrawal,
   confirmPremiumOrder, rejectPremiumOrder, grantPremium) are gated
-  in dispatch to the legacy web player or ADMIN_TELEGRAM_ID, and
-  always move KT/premium on the WD/order OWNER's row, never the
-  admin's. `getGameState` returns `player.isAdmin` + `adminStats`
-  (global paid-GRAM total, admin only); non-admins see only their
-  own WDs/orders.
+  in dispatch to ADMIN_TELEGRAM_ID only (validated Telegram initData)
+  and always move KT/premium on the WD/order OWNER's row, never the
+  admin's. The legacy web player (no initData) is a REGULAR player —
+  it can play, but it is NOT admin, never sees the Kendali tab, and
+  cannot run admin actions. `getGameState` returns `player.isAdmin` +
+  `adminStats` (global paid-GRAM total, admin only); non-admins see only their own WDs/orders.
 - Client: `telegram-web-app.js` in `client/index.html`,
   `window.Telegram.WebApp.initData` sent with every `/api/game`
   call (`client/src/api.ts`), `ready()` + `expand()` guarded in
@@ -126,8 +127,32 @@ stale/wrong-token initData rejected, missing BOT_TOKEN fails
 closed, non-admin cannot approve WD / confirm Premium / grant
 Premium, admin approve→pay lands on the WD owner's row and the
 escalating WD minimum rises per-player, legacy no-initData path
-still works as admin player id=1. All 13 tests pass, 3 consecutive
+still works as a REGULAR (non-admin) player id=1 that can play but
+cannot run any admin action. All 13 tests pass, 3 consecutive
 runs.
+
+## Admin is Telegram-only (2026-11-18, tightening — NOT yet deployed)
+
+The first sessions pass left one hole: a request with NO initData
+resolved to the legacy web player id=1 **with isAdmin=true**, so
+anyone opening the site in a plain browser (or in Telegram's
+in-app browser, which sends no initData) got the shared admin
+account and saw the Kendali tab. Fixed in this directory:
+`resolveSession` now returns `isAdmin: false` for the no-initData
+legacy player, and the dispatch gate admits only a validated
+Telegram initData whose id equals `ADMIN_TELEGRAM_ID`. The legacy
+player keeps its balance/progress and can play normally — it just
+has no admin rights and never sees Kendali. Client already hides
+the Kendali tab when `p.isAdmin` is false (App.tsx) — verified,
+no UI change needed. Docs updated (`deploy/README.md`, this file).
+Verified locally: typecheck 0 errors (strict + Vercel-style),
+`bun run build:client` OK, telegram tests extended (legacy
+non-admin: can play, cannot approve WD / confirm or reject Premium
+/ grant Premium; admin can approve a legacy player's WD onto the
+owner's row) + the 7 game tests updated to call admin actions with
+validated admin initData. Deploy note: until this is pushed +
+redeployed, the live site still grants admin to the legacy web
+player.
 
 Typecheck note (Vercel lesson, same class as the TS7018 incident):
 Vercel typechecks WITHOUT strictNullChecks, and under that setting
