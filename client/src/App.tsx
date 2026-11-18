@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { api, type ApiResponse } from "./api";
+import { api, getTelegramSessionInfo, type ApiResponse } from "./api";
 import heroImg from "./assets/hero.webp";
 import asteroidImg from "./assets/asteroid.webp";
 import oresImg from "./assets/ores.webp";
@@ -620,6 +620,14 @@ export function App() {
   if (state.error || !state.data) return (<div className="min-h-screen bg-[var(--bg)] text-[var(--text)]"><div aria-hidden="true" className="bg-[var(--bg)] pt-safe" /><main className="mx-auto max-w-3xl px-4 py-16 text-center"><p className="font-display text-xl">Sinyal stasiun terputus</p><p className="mt-2 text-sm text-[var(--dim)]">Koneksi ke server misi gagal. Coba muat ulang.</p><button type="button" onClick={() => state.refetch()} className="btn-press mt-4 rounded-xl bg-cyan-500 px-5 py-2 font-bold text-black">Coba Lagi</button></main></div>);
 
   const data = state.data; const p = data.player; const exp = data.expedition; const job = data.job;
+  // Label diagnostik sesi (tampil di bawah halaman): membuktikan
+  // apakah klien benar-benar menerima initData dari Telegram.
+  const sessionInfo = getTelegramSessionInfo();
+  const sessionLabel = !sessionInfo.inTelegram
+    ? "Sesi: Web — tanpa login Telegram (akun bersama)"
+    : !sessionInfo.hasInitData
+      ? "Sesi: Telegram — login kosong (buka lewat tombol Mini App, bukan link)"
+      : `Sesi: Telegram • ID ${sessionInfo.userId ?? "?"}`;
   const pendingCount = data.withdrawals.filter((w) => w.status === "pending").length;
   const approvedCount = data.withdrawals.filter((w) => w.status === "approved").length;
   const pendingOrders = data.premiumOrders.filter((o) => o.status === "pending").length;
@@ -866,6 +874,7 @@ export function App() {
         {tab === "wd" && (<WdTab data={data} onCancel={(id) => cancelWd.mutate(id)} cancelling={cancelWd.isPending} onDone={(ok, err, good) => { showResult(ok, err, good); refresh(); }} />)}
         {tab === "admin" && p.isAdmin && (<AdminTab data={data} onDone={(ok, err, good) => { showResult(ok, err, good); refresh(); }} />)}
         </div>
+        <p className="mt-6 pb-2 text-center text-[11px] text-[var(--dim)]">{sessionLabel}</p>
       </main>
     </div>
   );

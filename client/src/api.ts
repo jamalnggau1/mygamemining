@@ -46,6 +46,30 @@ export function getTelegramInitData(): string {
   }
 }
 
+/** Diagnostik sesi (hanya untuk ditampilkan ke pemain sendiri, bukan
+ *  untuk keputusan server): apakah game berjalan di dalam Telegram,
+ *  apakah Telegram memberikan initData, dan id Telegram yang terlihat
+ *  di initDataUnsafe. Id di sini TIDAK dipercaya server — server
+ *  hanya memakai id dari initData yang lolos validasi hash. */
+export function getTelegramSessionInfo(): {
+  inTelegram: boolean;
+  hasInitData: boolean;
+  userId: number | null;
+} {
+  try {
+    const wa = window.Telegram?.WebApp;
+    if (!wa) return { inTelegram: false, hasInitData: false, userId: null };
+    const uid = wa.initDataUnsafe?.user?.id;
+    return {
+      inTelegram: true,
+      hasInitData: (wa.initData?.length ?? 0) > 0,
+      userId: typeof uid === "number" ? uid : null,
+    };
+  } catch {
+    return { inTelegram: false, hasInitData: false, userId: null };
+  }
+}
+
 async function callAction<K extends keyof Actions>(
   action: K,
   args: Parameters<Api[K]>[0],
