@@ -537,6 +537,17 @@ export function App() {
   const prevBalanceRef = useRef<number | null>(null);
   const state = useQuery({ queryKey: ["game-state"], queryFn: () => api.getGameState({}), refetchInterval: 5000 });
   const refresh = () => queryClient.invalidateQueries({ queryKey: ["game-state"] });
+  // Label diagnostik sesi — dihitung di awal supaya tampil juga di
+  // layar loading/error, bukan hanya saat game berhasil dimuat.
+  // "Web" = bukan di Telegram; "login kosong" = di Telegram tapi
+  // Telegram tidak memberikan initData (tombol/link salah jenis);
+  // "ID ..." = initData ada dan akun sudah terpisah.
+  const sessionInfo = getTelegramSessionInfo();
+  const sessionLabel = !sessionInfo.inTelegram
+    ? "Sesi: Web — tanpa login Telegram (akun bersama)"
+    : !sessionInfo.hasInitData
+      ? "Sesi: Telegram — login kosong (buka lewat tombol Mini App, bukan link)"
+      : `Sesi: Telegram • ID ${sessionInfo.userId ?? "?"}`;
   const showResult = (ok: boolean, error: string | null, goodText: ReactNode) => showBanner(ok ? "good" : "bad", ok ? goodText : (error ?? "Gagal, coba lagi."));
   const fireBurst = (kind: BurstKind, oreColor?: string) => setBurst({ id: Date.now(), kind, oreColor });
 
@@ -616,18 +627,11 @@ export function App() {
   const buy = useMutation({ mutationFn: (upgradeId: string) => api.buyUpgrade({ upgradeId }), onSuccess: (r) => { showResult(r.ok, r.error, `Upgrade terpasang (level ${r.newLevel ?? "?"}) seharga ${fmt(r.costPaid)} KT.`); refresh(); } });
   const cancelWd = useMutation({ mutationFn: (wdId: number) => api.cancelWithdrawal({ wdId }), onSuccess: (r) => { showResult(r.ok, r.error, "WD dibatalkan — KT dikembalikan ke saldo."); refresh(); } });
 
-  if (state.isPending) return (<div className="min-h-screen bg-[var(--bg)] text-[var(--text)]"><div aria-hidden="true" className="bg-[var(--bg)] pt-safe" /><main className="mx-auto max-w-3xl px-4 py-16 text-center"><p className="font-display text-2xl tracking-widest">ASTRA MINING</p><p className="mt-2 text-sm text-[var(--dim)]">Menghubungkan ke stasiun orbital…</p></main></div>);
-  if (state.error || !state.data) return (<div className="min-h-screen bg-[var(--bg)] text-[var(--text)]"><div aria-hidden="true" className="bg-[var(--bg)] pt-safe" /><main className="mx-auto max-w-3xl px-4 py-16 text-center"><p className="font-display text-xl">Sinyal stasiun terputus</p><p className="mt-2 text-sm text-[var(--dim)]">Koneksi ke server misi gagal. Coba muat ulang.</p><button type="button" onClick={() => state.refetch()} className="btn-press mt-4 rounded-xl bg-cyan-500 px-5 py-2 font-bold text-black">Coba Lagi</button></main></div>);
+  if (state.isPending) return (<div className="min-h-screen bg-[var(--bg)] text-[var(--text)]"><div aria-hidden="true" className="bg-[var(--bg)] pt-safe" /><main className="mx-auto max-w-3xl px-4 py-16 text-center"><p className="font-display text-2xl tracking-widest">ASTRA MINING</p><p className="mt-2 text-sm text-[var(--dim)]">Menghubungkan ke stasiun orbital…</p><p className="mt-2 text-[11px] text-[var(--dim)]">{sessionLabel}</p></main></div>);
+  if (state.error || !state.data) return (<div className="min-h-screen bg-[var(--bg)] text-[var(--text)]"><div aria-hidden="true" className="bg-[var(--bg)] pt-safe" /><main className="mx-auto max-w-3xl px-4 py-16 text-center"><p className="font-display text-xl">Sinyal stasiun terputus</p><p className="mt-2 text-sm text-[var(--dim)]">Koneksi ke server misi gagal. Coba muat ulang.</p><p className="mt-2 text-[11px] text-[var(--dim)]">{sessionLabel}</p><button type="button" onClick={() => state.refetch()} className="btn-press mt-4 rounded-xl bg-cyan-500 px-5 py-2 font-bold text-black">Coba Lagi</button></main></div>);
 
   const data = state.data; const p = data.player; const exp = data.expedition; const job = data.job;
-  // Label diagnostik sesi (tampil di bawah halaman): membuktikan
-  // apakah klien benar-benar menerima initData dari Telegram.
-  const sessionInfo = getTelegramSessionInfo();
-  const sessionLabel = !sessionInfo.inTelegram
-    ? "Sesi: Web — tanpa login Telegram (akun bersama)"
-    : !sessionInfo.hasInitData
-      ? "Sesi: Telegram — login kosong (buka lewat tombol Mini App, bukan link)"
-      : `Sesi: Telegram • ID ${sessionInfo.userId ?? "?"}`;
+
   const pendingCount = data.withdrawals.filter((w) => w.status === "pending").length;
   const approvedCount = data.withdrawals.filter((w) => w.status === "approved").length;
   const pendingOrders = data.premiumOrders.filter((o) => o.status === "pending").length;
@@ -658,6 +662,7 @@ export function App() {
         <div className="absolute inset-0 bg-gradient-to-t from-[#050810] via-[#050810]/35 to-transparent" />
         <div className="absolute inset-x-0 bottom-0 mx-auto max-w-3xl px-4 pb-4">
           <p className="text-[11px] font-bold uppercase tracking-[0.3em] text-cyan-300">Play-to-Earn • Jelajah Asteroid • Dapatkan GRAM</p>
+          <p className="mt-1 text-[11px] text-[var(--dim)]">{sessionLabel}</p>
           <h1 className="font-display title-shine mt-1 text-3xl font-black leading-none sm:text-5xl">ASTRA MINING</h1>
           <p className="mt-2 max-w-xl text-[15px] leading-snug text-slate-200">Jelajahi asteroid satu per satu: <b>scan</b> komposisinya, <b>bor urat mineralnya</b> — setiap operasi butuh waktu nyata — jual hasilnya jadi <b>Kredit Tambang Antariksa (KT)</b>, lalu tarik jadi <b>GRAM</b> asli.</p>
         </div>
@@ -874,7 +879,6 @@ export function App() {
         {tab === "wd" && (<WdTab data={data} onCancel={(id) => cancelWd.mutate(id)} cancelling={cancelWd.isPending} onDone={(ok, err, good) => { showResult(ok, err, good); refresh(); }} />)}
         {tab === "admin" && p.isAdmin && (<AdminTab data={data} onDone={(ok, err, good) => { showResult(ok, err, good); refresh(); }} />)}
         </div>
-        <p className="mt-6 pb-2 text-center text-[11px] text-[var(--dim)]">{sessionLabel}</p>
       </main>
     </div>
   );
