@@ -69,6 +69,7 @@ const result = await build({
   target: "es2022",
   platform: "browser",
   outdir: assetsDir,
+  publicPath: "/assets",
   entryNames: "[name]-[hash]",
   assetNames: "[name]-[hash]",
   loader: { ".webp": "file", ".png": "file", ".jpg": "file" },
