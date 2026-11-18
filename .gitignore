@@ -1,0 +1,6 @@
+# Secrets — never commit a real DATABASE_URL.
+.env
+.env*.local
+
+# Vercel local metadata
+.vercel
