@@ -71,14 +71,86 @@ scan 2.5 min base with map factors ×1/×1.3/×1.6/×2.0/×2.5, 5 maps
 with their gems and challenges, ads 10/day +15 KT with 60s cooldown,
 server-side validation of everything.
 
+## Per-player sessions — Telegram initData (2026-11-18, implemented, NOT yet deployed)
+
+The single-player limitation above is fixed in this directory (not
+yet pushed/deployed — the live Vercel deployment still runs the old
+single-player code until the owner pushes + redeploys + migrates):
+
+- `api/_lib/telegram.ts` (new): server-side Telegram WebApp
+  `initData` validation per Telegram's spec — secret =
+  HMAC_SHA256("WebAppData", BOT_TOKEN), data_check_string hash
+  compared constant-time, `auth_date` max 24h old. BOT_TOKEN from
+  env only, never logged; missing BOT_TOKEN fails closed (every
+  Telegram login rejected).
+- `player.telegram_id` BIGINT UNIQUE (NULL only for the legacy web
+  player id=1); `player_id` on inventory, upgrades, wd_requests,
+  premium_orders, activity (composite PKs on inventory/upgrades).
+  `player.id` is now IDENTITY START WITH 1000 so the sequence can
+  never hand out id=1 to a Telegram player (explicit inserts do not
+  advance the sequence — the first Telegram player would otherwise
+  collide with the legacy row).
+- `deploy/neon/init.sql` updated to the new schema (fresh installs);
+  `deploy/neon/migration-0001-telegram-id.sql` (new) migrates the
+  existing Neon DB in place — existing rows are adopted as the
+  legacy player's (player_id=1), idempotent, safe to re-run.
+- `api/_lib/game.ts`: `dispatchGameAction(action, input, initData)`
+  resolves the session FIRST; every handler works on the session
+  player's row only. Admin actions (updateWithdrawal,
+  confirmPremiumOrder, rejectPremiumOrder, grantPremium) are gated
+  in dispatch to the legacy web player or ADMIN_TELEGRAM_ID, and
+  always move KT/premium on the WD/order OWNER's row, never the
+  admin's. `getGameState` returns `player.isAdmin` + `adminStats`
+  (global paid-GRAM total, admin only); non-admins see only their
+  own WDs/orders.
+- Client: `telegram-web-app.js` in `client/index.html`,
+  `window.Telegram.WebApp.initData` sent with every `/api/game`
+  call (`client/src/api.ts`), `ready()` + `expand()` guarded in
+  `main.tsx`; the Kendali tab is hidden for non-admins (`App.tsx`)
+  — server enforcement is what matters, the tab is only cosmetic.
+- Env vars (Vercel, never in code): `BOT_TOKEN` (BotFather),
+  `ADMIN_TELEGRAM_ID` (owner's numeric Telegram id). Documented in
+  `deploy/README.md` + `.env.example`.
+
+Verified locally (2026-11-18): clean-copy `bun install` (92
+packages, 0 space-sdk refs), `bun run typecheck` 0 errors under
+BOTH strict and Vercel-style (`--strictNullChecks false`) settings
+— the non-strict run caught 3 real bugs (see note below),
+`bun run build:client` OK, route checks (GET→405, forged
+initData→200 `{ok:false}`, non-string initData→400, unknown
+action→500). Against local Postgres 16 (migration-0001 applied,
+idempotent): old smoke test 7/7 (101 assertions) + new
+`/tmp/smoke-test/telegram.test.ts` 6/6 — two validated initData
+payloads get independent players/balances/inventory, tampered/
+stale/wrong-token initData rejected, missing BOT_TOKEN fails
+closed, non-admin cannot approve WD / confirm Premium / grant
+Premium, admin approve→pay lands on the WD owner's row and the
+escalating WD minimum rises per-player, legacy no-initData path
+still works as admin player id=1. All 13 tests pass, 3 consecutive
+runs.
+
+Typecheck note (Vercel lesson, same class as the TS7018 incident):
+Vercel typechecks WITHOUT strictNullChecks, and under that setting
+(a) `!x.ok` does NOT narrow a discriminated union — the code uses
+`=== false` in `telegram.ts` resolveSession and in
+dispatchGameAction, (b) bare `null` in an untyped object literal
+widens to implicit any — `insertFreshPlayer` types its nulls
+explicitly, (c) `unknown` from the request body does not narrow by
+`typeof` guards the same way — `api/game.ts` extracts initData
+with an explicit `string | undefined` type.
+
 ## Known limitation — single player, no auth
 
-The Muse version was effectively single-player (one `player` row,
+~~The Muse version was effectively single-player (one `player` row,
 id = 1). This port keeps that: **anyone who opens the deployed URL
 shares the same player, KT balance, and admin (Kendali) tab**. No
 Telegram auth was invented. Before opening this to real players,
 per-player identity (e.g. Telegram WebApp `initData` validation)
-must be added — otherwise one player's WD queue is everyone's.
+must be added — otherwise one player's WD queue is everyone's.~~
+SUPERSEDED — see "Per-player sessions" above. The limitation now
+applies only to the LIVE deployment until the owner pushes this
+code, redeploys, runs migration-0001 on Neon, and sets BOT_TOKEN +
+ADMIN_TELEGRAM_ID in Vercel.
 
 ## What was tested (2026-11-18, local machine)
 
@@ -144,3 +216,10 @@ must be added — otherwise one player's WD queue is everyone's.
 7. **Before real players:** add per-player auth (see limitation
    above) and reset the Neon password if the connection string was
    ever shared in chat.
+8. **Per-player sessions (2026-11-18, code ready in this dir, NOT
+   yet deployed):** push this directory, redeploy, then in Neon run
+   `deploy/neon/migration-0001-telegram-id.sql` once (NOT init.sql —
+   the tables already exist), and in Vercel set `BOT_TOKEN` +
+   `ADMIN_TELEGRAM_ID` (Production & Preview). Until then the live
+   deployment still shares one player. See `deploy/README.md` →
+   "Sesi per pemain (Telegram)".

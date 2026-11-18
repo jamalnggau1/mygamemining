@@ -15,9 +15,12 @@
 
 import type { Actions } from "../../api/_lib/game";
 
-/** Turns one server action entry into its call signature. */
-type ToFn<A> = A extends { handler: (args: infer Args) => infer R }
-  ? (args: Args) => R
+/** Turns one server action entry into its call signature. The
+ *  server handler takes (args, session) — the client only ever
+ *  passes args; the session is resolved server-side from initData,
+ *  so only the first parameter is exposed here. */
+type ToFn<A> = A extends { handler: (...args: infer P) => infer R }
+  ? (args: P[0]) => R
   : never;
 
 /** The typed client: one method per server action. */
@@ -30,6 +33,19 @@ export type ApiResponse<
   K extends keyof T,
 > = Awaited<ReturnType<T[K]>>;
 
+/** Reads the Telegram WebApp initData for this session, if the game
+ *  runs inside Telegram. Empty string in a plain browser (the server
+ *  then plays as the legacy web player). The value is an opaque
+ *  signed string — the client never parses an id out of it; only the
+ *  server validates it. */
+export function getTelegramInitData(): string {
+  try {
+    return window.Telegram?.WebApp?.initData ?? "";
+  } catch {
+    return "";
+  }
+}
+
 async function callAction<K extends keyof Actions>(
   action: K,
   args: Parameters<Api[K]>[0],
@@ -37,7 +53,9 @@ async function callAction<K extends keyof Actions>(
   const res = await fetch("/api/game", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ action, args }),
+    // initData accompanies every call so the server can resolve the
+    // calling player (or reject a forged one) on every action.
+    body: JSON.stringify({ action, args, initData: getTelegramInitData() }),
   });
   const data = (await res.json().catch(() => ({}))) as {
     ok?: boolean;

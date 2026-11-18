@@ -91,6 +91,21 @@
 //   server-side balance). A tampered client can at most ask politely;
 //   it cannot mint KT, shorten a job, or withdraw below the minimum.
 //
+// Per-player sessions (Telegram, 2026-11-18):
+//   Every request carries the caller's Telegram WebApp initData
+//   (or nothing, for a plain browser). dispatchGameAction resolves
+//   the session FIRST — initData is validated in api/_lib/telegram.ts
+//   (HMAC-SHA256 against BOT_TOKEN, auth_date max 24h) and the
+//   validated Telegram user id maps to that player's OWN player row
+//   (player.telegram_id, UNIQUE). Balances, inventory, upgrades, WD
+//   history, premium orders and the activity log are all scoped by
+//   player_id, so two players can never see or spend each other's KT.
+//   The only cross-player reads are the admin (Kendali) queue in
+//   getGameState and the admin actions, which are gated in
+//   dispatchGameAction to the legacy web player or ADMIN_TELEGRAM_ID.
+//   Admin actions that move KT/premium always target the WD/order
+//   OWNER's row, never the admin's own row.
+//
 // Economy rebalance #2 (2026-11-18, owner asked whether the economy
 // still leaks — it did):
 //   The previous pass only slowed energy regen; at ~370 KT per tank on
@@ -127,9 +142,10 @@
 //   classifies as an economy event in the split log.
 
 import { z } from "zod";
-import { desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import * as schema from "../../deploy/neon/schema.pg.js";
 import { getDb, type Db } from "./store.js";
+import { resolveSession, type Session } from "./telegram.js";
 
 // ---------------------------------------------------------------------------
 // Game design constants
@@ -524,8 +540,11 @@ function travelCostFor(zoneIdx: number, premium: boolean): number {
 // Player loading + energy regeneration
 // ---------------------------------------------------------------------------
 
-async function loadLevels(db: Db): Promise<Record<string, number>> {
-  const rows = await db.select().from(schema.upgrades);
+async function loadLevels(db: Db, playerId: number): Promise<Record<string, number>> {
+  const rows = await db
+    .select()
+    .from(schema.upgrades)
+    .where(eq(schema.upgrades.playerId, playerId));
   const levels: Record<string, number> = {};
   for (const def of UPGRADES) levels[def.id] = 0;
   for (const row of rows) levels[row.upgradeId] = row.level;
@@ -546,44 +565,119 @@ function sellMultiplier(levels: Record<string, number>, premium: boolean): numbe
 
 type PlayerRow = typeof schema.player.$inferSelect;
 
-/** Loads (or creates) the singleton player, applies timed energy regen,
- *  and makes sure the player is orbiting a valid asteroid. */
-async function loadPlayer(db: Db, levels: Record<string, number>): Promise<PlayerRow> {
-  const existing = await db
+/** Menyisipkan baris player baru dengan saldo/aturan awal yang sama
+ *  untuk semua pemain. `id` eksplisit hanya untuk pemain web lama
+ *  (id=1); pemain Telegram dibuat tanpa id (IDENTITY memberi nomor)
+ *  dan dicatat telegram_id-nya. Mengembalikan id internal baris. */
+async function insertFreshPlayer(
+  db: Db,
+  id: number | null,
+  telegramId: number | null,
+): Promise<number> {
+  const exp = generateExpedition(0, {});
+  const base = {
+    ktBalance: 0,
+    energy: BASE_MAX_ENERGY,
+    energyUpdatedAt: new Date(),
+    layer: 1,
+    currentZone: 0,
+    // NB: null eksplisit bertipe — tanpa strictNullChecks, `null`
+    // polos melebar jadi implicit any (TS7018, pernah menggagalkan
+    // build Vercel).
+    premiumUntil: null as Date | null,
+    premiumTier: null as "standard" | "pro" | null,
+    grid: "[]",
+    expedition: JSON.stringify(exp),
+    job: null as string | null,
+    totalScans: 0,
+    asteroidsDone: 0,
+    totalDigs: 0,
+    totalKtEarned: 0,
+    totalWdPaidGram: 0,
+  };
+  const inserted =
+    id !== null
+      ? await db
+          .insert(schema.player)
+          .values({ ...base, id })
+          .returning({ id: schema.player.id })
+      : await db
+          .insert(schema.player)
+          .values({ ...base, telegramId })
+          .returning({ id: schema.player.id });
+  const row = inserted[0];
+  if (!row) throw new Error("player init failed");
+  return row.id;
+}
+
+/** Memuat satu baris player berdasarkan id internal, atau null bila
+ *  tidak ada. Dipakai aksi admin yang menyentuh pemain lain (WD /
+ *  Premium milik pemain X) — tanpa regen/expedition, karena aksi
+ *  admin tidak menyentuh daya atau asteroid. */
+async function loadPlayerRowOrNull(
+  db: Db,
+  playerId: number,
+): Promise<PlayerRow | null> {
+  const rows = await db
     .select()
     .from(schema.player)
-    .where(eq(schema.player.id, 1))
+    .where(eq(schema.player.id, playerId))
     .limit(1);
-  let p = existing[0];
-  if (!p) {
-    const exp = generateExpedition(0, levels);
-    await db.insert(schema.player).values({
-      id: 1,
-      ktBalance: 0,
-      energy: BASE_MAX_ENERGY,
-      energyUpdatedAt: new Date(),
-      layer: 1,
-      currentZone: 0,
-      premiumUntil: null,
-      premiumTier: null,
-      grid: "[]",
-      expedition: JSON.stringify(exp),
-      job: null,
-      totalScans: 0,
-      asteroidsDone: 0,
-      totalDigs: 0,
-      totalKtEarned: 0,
-      totalWdPaidGram: 0,
-    });
-    const created = await db
+  return rows[0] ?? null;
+}
+
+/** Loads (or creates) the player for one session, applies timed
+ *  energy regen, and makes sure the player is orbiting a valid
+ *  asteroid.
+ *  - Sesi web lama (tanpa initData): pemain id=1 (telegram_id NULL).
+ *  - Sesi Telegram: baris dicari lewat telegram_id yang SUDAH
+ *    divalidasi di resolveSession; pemain baru dibuat dengan
+ *    saldo/aturan awal yang sama persis. */
+async function loadPlayer(db: Db, session: Session): Promise<PlayerRow> {
+  let playerId: number;
+  if (session.telegramId === null) {
+    playerId = 1;
+    const legacy = await db
       .select()
       .from(schema.player)
       .where(eq(schema.player.id, 1))
       .limit(1);
-    p = created[0];
-    if (!p) throw new Error("player init failed");
-    return p;
+    if (!legacy[0]) {
+      playerId = await insertFreshPlayer(db, 1, null);
+    }
+  } else {
+    const byTelegram = await db
+      .select()
+      .from(schema.player)
+      .where(eq(schema.player.telegramId, session.telegramId))
+      .limit(1);
+    if (byTelegram[0]) {
+      playerId = byTelegram[0].id;
+    } else {
+      try {
+        playerId = await insertFreshPlayer(db, null, session.telegramId);
+      } catch {
+        // Balapan dengan request pertama lain untuk pemain yang sama:
+        // UNIQUE telegram_id menolak insert kedua — pakai baris yang
+        // sudah tercipta.
+        const retry = await db
+          .select()
+          .from(schema.player)
+          .where(eq(schema.player.telegramId, session.telegramId))
+          .limit(1);
+        if (!retry[0]) throw new Error("player init failed");
+        playerId = retry[0].id;
+      }
+    }
   }
+  const levels = await loadLevels(db, playerId);
+  const rows = await db
+    .select()
+    .from(schema.player)
+    .where(eq(schema.player.id, playerId))
+    .limit(1);
+  let p = rows[0];
+  if (!p) throw new Error("player init failed");
   // Energy regeneration: 1 energy per regenSeconds, capped at max.
   // Premium captains recharge twice as fast.
   const premium = isPremium(p);
@@ -601,13 +695,13 @@ async function loadPlayer(db: Db, levels: Record<string, number>): Promise<Playe
     await db
       .update(schema.player)
       .set({ energy: newEnergy, energyUpdatedAt: newUpdated })
-      .where(eq(schema.player.id, 1));
+      .where(eq(schema.player.id, playerId));
     p = { ...p, energy: newEnergy, energyUpdatedAt: newUpdated };
   } else if (p.energy >= cap && elapsed > 0) {
     await db
       .update(schema.player)
       .set({ energyUpdatedAt: new Date(now) })
-      .where(eq(schema.player.id, 1));
+      .where(eq(schema.player.id, playerId));
     p = { ...p, energyUpdatedAt: new Date(now) };
   }
   // Ensure a valid current asteroid (first visit after the expedition
@@ -620,14 +714,14 @@ async function loadPlayer(db: Db, levels: Record<string, number>): Promise<Playe
     await db
       .update(schema.player)
       .set({ expedition: JSON.stringify(exp) })
-      .where(eq(schema.player.id, 1));
+      .where(eq(schema.player.id, playerId));
     p = { ...p, expedition: JSON.stringify(exp) };
   } else if (typeof parsedExp.zone !== "number") {
     parsedExp.zone = p.currentZone;
     await db
       .update(schema.player)
       .set({ expedition: JSON.stringify(parsedExp) })
-      .where(eq(schema.player.id, 1));
+      .where(eq(schema.player.id, playerId));
     p = { ...p, expedition: JSON.stringify(parsedExp) };
   }
   return p;
@@ -647,11 +741,14 @@ function energyAfterSpend(p: PlayerRow, levels: Record<string, number>, cost: nu
 
 async function logActivity(
   db: Db,
+  playerId: number,
   kind: string,
   message: string,
   amountKt: number | null,
 ): Promise<void> {
-  await db.insert(schema.activity).values({ kind, message, amountKt });
+  await db
+    .insert(schema.activity)
+    .values({ playerId, kind, message, amountKt });
 }
 
 // The activity log is split into two streams for the UI: MISSION events
@@ -667,19 +764,29 @@ function activityCategory(kind: string): "mission" | "economy" {
 /** How many WDs the owner has actually PAID — drives the escalating
  *  WD minimum. Counted from the database on every relevant call, never
  *  taken from the client. */
-async function countPaidWithdrawals(db: Db): Promise<number> {
+async function countPaidWithdrawals(db: Db, playerId: number): Promise<number> {
   const rows = await db
     .select({ id: schema.wdRequests.id })
     .from(schema.wdRequests)
-    .where(eq(schema.wdRequests.status, "paid"));
+    .where(
+      and(
+        eq(schema.wdRequests.status, "paid"),
+        eq(schema.wdRequests.playerId, playerId),
+      ),
+    );
   return rows.length;
 }
 
-async function canClaimDailyBonus(db: Db): Promise<boolean> {
+async function canClaimDailyBonus(db: Db, playerId: number): Promise<boolean> {
   const rows = await db
     .select()
     .from(schema.activity)
-    .where(eq(schema.activity.kind, "daily_bonus"))
+    .where(
+      and(
+        eq(schema.activity.playerId, playerId),
+        eq(schema.activity.kind, "daily_bonus"),
+      ),
+    )
     .orderBy(desc(schema.activity.id))
     .limit(1);
   const last = rows[0];
@@ -709,11 +816,16 @@ type AdStats = {
  *  activity rows and enforces the cooldown from the most recent one.
  *  The client can display these numbers but can never bypass them —
  *  watchAd re-checks them on every claim. */
-async function getAdStats(db: Db): Promise<AdStats> {
+async function getAdStats(db: Db, playerId: number): Promise<AdStats> {
   const rows = await db
     .select()
     .from(schema.activity)
-    .where(eq(schema.activity.kind, "ad_reward"))
+    .where(
+      and(
+        eq(schema.activity.playerId, playerId),
+        eq(schema.activity.kind, "ad_reward"),
+      ),
+    )
     .orderBy(desc(schema.activity.id))
     .limit(100);
   const now = new Date();
@@ -784,12 +896,12 @@ function defineGameAction<Req extends z.ZodTypeAny, Res>(def: {
   description: string;
   request: Req;
   response: z.ZodTypeAny;
-  handler: (args: z.infer<Req>) => Promise<Res>;
+  handler: (args: z.infer<Req>, session: Session) => Promise<Res>;
 }): {
   description: string;
   request: Req;
   response: z.ZodTypeAny;
-  handler: (args: z.infer<Req>) => Promise<Res>;
+  handler: (args: z.infer<Req>, session: Session) => Promise<Res>;
 } {
   return def;
 }
@@ -839,6 +951,7 @@ export const gameActions = {
         wdMinGram: z.number(),
         wdNextMinKt: z.number(),
         wdStepKt: z.number(),
+        isAdmin: z.boolean(),
         ads: z.object({
           rewardKt: z.number(),
           dailyCap: z.number(),
@@ -967,37 +1080,75 @@ export const gameActions = {
           createdAt: z.string(),
         }),
       ),
+      // Ringkasan Kendali untuk admin (null untuk pemain biasa):
+      // total GRAM yang sudah dibayar ke semua pemain.
+      adminStats: z
+        .object({ totalWdPaidGram: z.number() })
+        .nullable(),
     }),
-    async handler() {
+    async handler(_args, session) {
       const db = getDb();
-      const levels = await loadLevels(db);
-      const p = await loadPlayer(db, levels);
+      const p = await loadPlayer(db, session);
+      const levels = await loadLevels(db, p.id);
       const premium = isPremium(p);
       const exp = parseExpedition(p.expedition) ?? generateExpedition(p.currentZone, levels);
       const job = parseJob(p.job);
-      const invRows = await db.select().from(schema.inventory);
+      const invRows = await db
+        .select()
+        .from(schema.inventory)
+        .where(eq(schema.inventory.playerId, p.id));
       const invMap = new Map(invRows.map((r) => [r.oreId, r.qty]));
       const mult = sellMultiplier(levels, premium);
       const zoneIdx = expeditionZone(exp, p.currentZone);
       const zone = mapByIndex(zoneIdx);
+      // Kendali (admin) melihat antrean WD semua pemain; pemain
+      // biasa hanya melihat WD-nya sendiri.
       const wdRows = await db
         .select()
         .from(schema.wdRequests)
+        .where(
+          session.isAdmin
+            ? undefined
+            : eq(schema.wdRequests.playerId, p.id),
+        )
         .orderBy(desc(schema.wdRequests.id))
         .limit(30);
+      // Sama seperti WD: admin melihat pesanan Premium semua
+      // pemain, pemain biasa hanya pesanannya sendiri.
       const orderRows = await db
         .select()
         .from(schema.premiumOrders)
+        .where(
+          session.isAdmin
+            ? undefined
+            : eq(schema.premiumOrders.playerId, p.id),
+        )
         .orderBy(desc(schema.premiumOrders.id))
         .limit(20);
       const actRows = await db
         .select()
         .from(schema.activity)
+        .where(eq(schema.activity.playerId, p.id))
         .orderBy(desc(schema.activity.id))
         .limit(30);
-      const wdPaidCount = await countPaidWithdrawals(db);
+      const wdPaidCount = await countPaidWithdrawals(db, p.id);
       const wdMinKt = wdMinKtForPaidCount(wdPaidCount);
-      const adStats = await getAdStats(db);
+      const adStats = await getAdStats(db, p.id);
+      // Kendali: total GRAM yang sudah dibayar ke SEMUA pemain (hanya
+      // untuk admin; pemain biasa mendapat null).
+      const adminStats = session.isAdmin
+        ? {
+            totalWdPaidGram: Number(
+              (
+                await db
+                  .select({
+                    total: sql<number>`coalesce(sum(${schema.player.totalWdPaidGram}), 0)`,
+                  })
+                  .from(schema.player)
+              )[0]?.total ?? 0,
+            ),
+          }
+        : null;
       const now = Date.now();
       const remainingSec = job ? Math.max(0, Math.ceil((job.endsAt - now) / 1000)) : 0;
       return {
@@ -1030,7 +1181,7 @@ export const gameActions = {
           asteroidsDone: p.asteroidsDone,
           totalKtEarned: p.totalKtEarned,
           totalWdPaidGram: p.totalWdPaidGram,
-          canClaimDailyBonus: await canClaimDailyBonus(db),
+          canClaimDailyBonus: await canClaimDailyBonus(db, p.id),
           dailyBonusKt: DAILY_BONUS_KT,
           ktPerGram: KT_PER_GRAM,
           wdPaidCount,
@@ -1038,6 +1189,7 @@ export const gameActions = {
           wdMinGram: wdMinKt / KT_PER_GRAM,
           wdNextMinKt: wdMinKtForPaidCount(wdPaidCount + 1),
           wdStepKt: WD_STEP_KT,
+          isAdmin: session.isAdmin,
           ads: {
             rewardKt: AD_REWARD_KT,
             dailyCap: AD_DAILY_CAP,
@@ -1160,6 +1312,7 @@ export const gameActions = {
           amountKt: a.amountKt,
           createdAt: a.createdAt.toISOString(),
         })),
+        adminStats,
       };
     },
   }),
@@ -1172,10 +1325,10 @@ export const gameActions = {
       durationSec: z.number(),
       energy: z.number(),
     }),
-    async handler() {
+    async handler(_args, session) {
       const db = getDb();
-      const levels = await loadLevels(db);
-      const p = await loadPlayer(db, levels);
+      const p = await loadPlayer(db, session);
+      const levels = await loadLevels(db, p.id);
       const fail = (error: string) => ({ ok: false, error, durationSec: 0, energy: p.energy });
       const exp = parseExpedition(p.expedition);
       if (!exp) return fail("Data asteroid tidak valid, coba muat ulang.");
@@ -1198,7 +1351,7 @@ export const gameActions = {
       await db
         .update(schema.player)
         .set({ ...spend, job: JSON.stringify(job) })
-        .where(eq(schema.player.id, 1));
+        .where(eq(schema.player.id, p.id));
       return { ok: true, error: null, durationSec, energy: spend.energy };
     },
   }),
@@ -1212,10 +1365,10 @@ export const gameActions = {
       energy: z.number(),
       oreName: z.string().nullable(),
     }),
-    async handler(args) {
+    async handler(args, session) {
       const db = getDb();
-      const levels = await loadLevels(db);
-      const p = await loadPlayer(db, levels);
+      const p = await loadPlayer(db, session);
+      const levels = await loadLevels(db, p.id);
       const fail = (error: string) => ({ ok: false, error, durationSec: 0, energy: p.energy, oreName: null as string | null });
       const exp = parseExpedition(p.expedition);
       if (!exp) return fail("Data asteroid tidak valid, coba muat ulang.");
@@ -1246,7 +1399,7 @@ export const gameActions = {
       await db
         .update(schema.player)
         .set({ ...spend, job: JSON.stringify(job) })
-        .where(eq(schema.player.id, 1));
+        .where(eq(schema.player.id, p.id));
       return { ok: true, error: null, durationSec, energy: spend.energy, oreName: oreById(vein.oreId)?.name ?? null };
     },
   }),
@@ -1266,10 +1419,10 @@ export const gameActions = {
       hullHit: z.boolean(),
       repairFeeKt: z.number(),
     }),
-    async handler() {
+    async handler(_args, session) {
       const db = getDb();
-      const levels = await loadLevels(db);
-      const p = await loadPlayer(db, levels);
+      const p = await loadPlayer(db, session);
+      const levels = await loadLevels(db, p.id);
       const fail = (error: string) => ({
         ok: false, error, kind: null as "scan" | "mine" | null, oreId: null as string | null, oreName: null as string | null, qty: 0, isRare: false, allMined: false,
         jammed: false, hullHit: false, repairFeeKt: 0,
@@ -1287,15 +1440,15 @@ export const gameActions = {
         await db
           .update(schema.player)
           .set({ expedition: JSON.stringify(exp), job: null, totalScans: p.totalScans + 1 })
-          .where(eq(schema.player.id, 1));
-        await logActivity(db, "scan", `Scan ${exp.name} selesai — ${exp.veins.length} urat mineral terdeteksi.`, null);
+          .where(eq(schema.player.id, p.id));
+        await logActivity(db, p.id, "scan", `Scan ${exp.name} selesai — ${exp.veins.length} urat mineral terdeteksi.`, null);
         return { ok: true, error: null, kind: "scan" as const, oreId: null, oreName: null, qty: 0, isRare: false, allMined: false, jammed: false, hullHit: false, repairFeeKt: 0 };
       }
 
       // Mining job.
       const vein = job.veinIndex != null ? exp.veins[job.veinIndex] : undefined;
       if (!vein || vein.mined || vein.oreId !== job.oreId) {
-        await db.update(schema.player).set({ job: null }).where(eq(schema.player.id, 1));
+        await db.update(schema.player).set({ job: null }).where(eq(schema.player.id, p.id));
         return fail("Urat target operasi ini sudah tidak tersedia — operasi dibatalkan.");
       }
       const ore = oreById(vein.oreId);
@@ -1309,8 +1462,8 @@ export const gameActions = {
         await db
           .update(schema.player)
           .set({ expedition: JSON.stringify(exp), job: null, totalDigs: p.totalDigs + 1 })
-          .where(eq(schema.player.id, 1));
-        await logActivity(db, "jam", `Bor macet saat mengebor urat ${ore?.name ?? vein.oreId} di ${exp.name} — urat hilang, mata bor harus diganti.`, null);
+          .where(eq(schema.player.id, p.id));
+        await logActivity(db, p.id, "jam", `Bor macet saat mengebor urat ${ore?.name ?? vein.oreId} di ${exp.name} — urat hilang, mata bor harus diganti.`, null);
         return {
           ok: true, error: null, kind: "mine" as const,
           oreId: vein.oreId, oreName: ore?.name ?? null, qty: 0,
@@ -1327,16 +1480,16 @@ export const gameActions = {
       await db
         .update(schema.player)
         .set({ expedition: JSON.stringify(exp), job: null, totalDigs: p.totalDigs + 1 })
-        .where(eq(schema.player.id, 1));
+        .where(eq(schema.player.id, p.id));
       await db
         .insert(schema.inventory)
-        .values({ oreId: vein.oreId, qty })
+        .values({ playerId: p.id, oreId: vein.oreId, qty })
         .onConflictDoUpdate({
-          target: schema.inventory.oreId,
+          target: [schema.inventory.playerId, schema.inventory.oreId],
           set: { qty: sql`${schema.inventory.qty} + ${qty}` },
         });
       if (ore && RARE_IDS.has(ore.id)) {
-        await logActivity(db, "rare_find", `Menambang ${ore.name} ×${qty} dari ${exp.name}!`, null);
+        await logActivity(db, p.id, "rare_find", `Menambang ${ore.name} ×${qty} dari ${exp.name}!`, null);
       }
       // Tantangan peta: lambung kapal terkena serpihan — hasil tambang
       // tetap didapat, tapi biaya perbaikan dipotong dari saldo KT.
@@ -1347,9 +1500,9 @@ export const gameActions = {
           await db
             .update(schema.player)
             .set({ ktBalance: p.ktBalance - repairFeeKt })
-            .where(eq(schema.player.id, 1));
+            .where(eq(schema.player.id, p.id));
         }
-        await logActivity(db, "hull_damage", `Lambung kapal terkena serpihan di ${map.name} — biaya perbaikan ${repairFeeKt} KT.`, -repairFeeKt);
+        await logActivity(db, p.id, "hull_damage", `Lambung kapal terkena serpihan di ${map.name} — biaya perbaikan ${repairFeeKt} KT.`, -repairFeeKt);
       }
       return {
         ok: true,
@@ -1372,12 +1525,11 @@ export const gameActions = {
       "Cancels the running timed scan/mining job. Spent energy is not refunded and the target vein stays unmined.",
     request: z.object({}),
     response: resultShape,
-    async handler() {
+    async handler(_args, session) {
       const db = getDb();
-      const levels = await loadLevels(db);
-      const p = await loadPlayer(db, levels);
+      const p = await loadPlayer(db, session);
       if (!parseJob(p.job)) return { ok: false, error: "Tidak ada operasi yang sedang berjalan." };
-      await db.update(schema.player).set({ job: null }).where(eq(schema.player.id, 1));
+      await db.update(schema.player).set({ job: null }).where(eq(schema.player.id, p.id));
       return { ok: true, error: null };
     },
   }),
@@ -1391,10 +1543,10 @@ export const gameActions = {
       bonusKt: z.number(),
       ktBalance: z.number(),
     }),
-    async handler() {
+    async handler(_args, session) {
       const db = getDb();
-      const levels = await loadLevels(db);
-      const p = await loadPlayer(db, levels);
+      const p = await loadPlayer(db, session);
+      const levels = await loadLevels(db, p.id);
       const fail = (error: string) => ({ ok: false, error, layer: p.layer, bonusKt: 0, ktBalance: p.ktBalance });
       const exp = parseExpedition(p.expedition);
       if (!exp) return fail("Data asteroid tidak valid, coba muat ulang.");
@@ -1412,9 +1564,10 @@ export const gameActions = {
           ktBalance: p.ktBalance + bonus,
           totalKtEarned: p.totalKtEarned + bonus,
         })
-        .where(eq(schema.player.id, 1));
+        .where(eq(schema.player.id, p.id));
       await logActivity(
         db,
+        p.id,
         "expedition_bonus",
         `Ekspedisi ${exp.name} tuntas. Bonus ${bonus} KT, warp ke Sektor ${p.layer + 1}: ${newExp.name}.`,
         bonus,
@@ -1428,10 +1581,10 @@ export const gameActions = {
       "Leaves the current asteroid without completing it (costs fuel energy, no bonus, no sector advance) and warps to a freshly generated asteroid in the same sector.",
     request: z.object({}),
     response: resultShape.extend({ asteroidName: z.string().nullable() }),
-    async handler() {
+    async handler(_args, session) {
       const db = getDb();
-      const levels = await loadLevels(db);
-      const p = await loadPlayer(db, levels);
+      const p = await loadPlayer(db, session);
+      const levels = await loadLevels(db, p.id);
       const fail = (error: string) => ({ ok: false, error, asteroidName: null as string | null });
       if (parseJob(p.job)) return fail("Batalkan operasi yang sedang berjalan dulu sebelum pindah asteroid.");
       if (p.energy < ABANDON_ENERGY_COST)
@@ -1441,8 +1594,8 @@ export const gameActions = {
       await db
         .update(schema.player)
         .set({ ...spend, expedition: JSON.stringify(newExp) })
-        .where(eq(schema.player.id, 1));
-      await logActivity(db, "travel", `Meninggalkan asteroid lama, warp ke ${newExp.name}.`, null);
+        .where(eq(schema.player.id, p.id));
+      await logActivity(db, p.id, "travel", `Meninggalkan asteroid lama, warp ke ${newExp.name}.`, null);
       return { ok: true, error: null, asteroidName: newExp.name };
     },
   }),
@@ -1455,10 +1608,10 @@ export const gameActions = {
       mapName: z.string().nullable(),
       asteroidName: z.string().nullable(),
     }),
-    async handler(args) {
+    async handler(args, session) {
       const db = getDb();
-      const levels = await loadLevels(db);
-      const p = await loadPlayer(db, levels);
+      const p = await loadPlayer(db, session);
+      const levels = await loadLevels(db, p.id);
       const fail = (error: string) => ({ ok: false, error, mapName: null as string | null, asteroidName: null as string | null });
       if (args.zoneIndex >= MAPS.length) return fail("Peta itu tidak ada di bagan navigasi stasiun.");
       const target = mapByIndex(args.zoneIndex);
@@ -1476,8 +1629,8 @@ export const gameActions = {
       await db
         .update(schema.player)
         .set({ ...spend, currentZone: args.zoneIndex, expedition: JSON.stringify(newExp) })
-        .where(eq(schema.player.id, 1));
-      await logActivity(db, "travel", `Perjalanan antar-peta ke ${target.name}. Asteroid baru: ${newExp.name}.`, null);
+        .where(eq(schema.player.id, p.id));
+      await logActivity(db, p.id, "travel", `Perjalanan antar-peta ke ${target.name}. Asteroid baru: ${newExp.name}.`, null);
       return { ok: true, error: null, mapName: target.name, asteroidName: newExp.name };
     },
   }),
@@ -1490,28 +1643,32 @@ export const gameActions = {
       orderId: z.number().nullable(),
       stars: z.number(),
     }),
-    async handler(args) {
+    async handler(args, session) {
       const db = getDb();
-      const levels = await loadLevels(db);
       // Creates the player row (and applies regen) if this is the
-      // first ever action — the order itself has no player column.
-      await loadPlayer(db, levels);
+      // first ever action.
+      const p = await loadPlayer(db, session);
       const plan = PREMIUM_PLANS[args.plan];
       const fail = (error: string) => ({ ok: false, error, orderId: null as number | null, stars: plan.stars });
       const pending = await db
         .select()
         .from(schema.premiumOrders)
-        .where(eq(schema.premiumOrders.status, "pending"))
+        .where(
+          and(
+            eq(schema.premiumOrders.status, "pending"),
+            eq(schema.premiumOrders.playerId, p.id),
+          ),
+        )
         .limit(1);
       if (pending[0])
         return fail("Masih ada pesanan Premium yang menunggu konfirmasi pemilik. Selesaikan pembayaran Stars untuk pesanan itu dulu, atau tunggu pemilik memprosesnya.");
       const inserted = await db
         .insert(schema.premiumOrders)
-        .values({ plan: args.plan, stars: plan.stars, days: plan.days, tier: plan.tier, status: "pending" })
+        .values({ playerId: p.id, plan: args.plan, stars: plan.stars, days: plan.days, tier: plan.tier, status: "pending" })
         .returning({ id: schema.premiumOrders.id });
       const row = inserted[0];
       if (!row) return fail("Gagal membuat pesanan Premium, coba lagi.");
-      await logActivity(db, "premium_order", `Pesanan Premium ${plan.label} dibuat (${plan.stars} Telegram Stars) — menunggu pembayaran & konfirmasi pemilik.`, null);
+      await logActivity(db, p.id, "premium_order", `Pesanan Premium ${plan.label} dibuat (${plan.stars} Telegram Stars) — menunggu pembayaran & konfirmasi pemilik.`, null);
       return { ok: true, error: null, orderId: row.id, stars: plan.stars };
     },
   }),
@@ -1523,24 +1680,26 @@ export const gameActions = {
     response: resultShape.extend({
       premiumUntil: z.string().nullable(),
     }),
-    async handler(args) {
+    async handler(args, _session) {
       const db = getDb();
-      const levels = await loadLevels(db);
-      const p = await loadPlayer(db, levels);
       const rows = await db
         .select()
         .from(schema.premiumOrders)
         .where(eq(schema.premiumOrders.id, args.orderId))
         .limit(1);
       const order = rows[0];
-      if (!order) return { ok: false, error: "Pesanan Premium tidak ditemukan.", premiumUntil: p.premiumUntil ? p.premiumUntil.toISOString() : null };
+      if (!order) return { ok: false, error: "Pesanan Premium tidak ditemukan.", premiumUntil: null };
       if (order.status !== "pending")
-        return { ok: false, error: "Pesanan ini sudah diproses.", premiumUntil: p.premiumUntil ? p.premiumUntil.toISOString() : null };
-      const base = p.premiumUntil && p.premiumUntil.getTime() > Date.now() ? p.premiumUntil.getTime() : Date.now();
+        return { ok: false, error: "Pesanan ini sudah diproses.", premiumUntil: null };
+      // Premium diaktifkan untuk PEMILIK pesanan, bukan untuk admin
+      // yang mengonfirmasi.
+      const target = await loadPlayerRowOrNull(db, order.playerId);
+      if (!target) return { ok: false, error: "Pemain pemilik pesanan tidak ditemukan.", premiumUntil: null };
+      const base = target.premiumUntil && target.premiumUntil.getTime() > Date.now() ? target.premiumUntil.getTime() : Date.now();
       const until = new Date(base + order.days * 24 * 60 * 60 * 1000);
       // Tier: a Pro order always sets Pro; a Standard order never
       // downgrades an active Pro pass.
-      const tier: PremiumTier = order.tier === "pro" || (isPremium(p) && p.premiumTier === "pro") ? "pro" : "standard";
+      const tier: PremiumTier = order.tier === "pro" || (isPremium(target) && target.premiumTier === "pro") ? "pro" : "standard";
       await db
         .update(schema.premiumOrders)
         .set({ status: "confirmed", processedAt: new Date() })
@@ -1548,8 +1707,8 @@ export const gameActions = {
       await db
         .update(schema.player)
         .set({ premiumUntil: until, premiumTier: tier })
-        .where(eq(schema.player.id, 1));
-      await logActivity(db, "premium_confirm", `Pembayaran ${order.stars} Telegram Stars terkonfirmasi — Premium ${tier === "pro" ? "Pro (bor ganda)" : "Standard"} ${order.days} hari aktif sampai ${until.toLocaleDateString("id-ID")}.`, null);
+        .where(eq(schema.player.id, target.id));
+      await logActivity(db, order.playerId, "premium_confirm", `Pembayaran ${order.stars} Telegram Stars terkonfirmasi — Premium ${tier === "pro" ? "Pro (bor ganda)" : "Standard"} ${order.days} hari aktif sampai ${until.toLocaleDateString("id-ID")}.`, null);
       return { ok: true, error: null, premiumUntil: until.toISOString() };
     },
   }),
@@ -1559,10 +1718,8 @@ export const gameActions = {
       "Owner action: rejects a pending Telegram Stars premium order (e.g. the Stars payment never arrived). The pass is not activated; the player can create a new order afterwards.",
     request: z.object({ orderId: z.number().int().positive() }),
     response: resultShape,
-    async handler(args) {
+    async handler(args, _session) {
       const db = getDb();
-      const levels = await loadLevels(db);
-      await loadPlayer(db, levels);
       const rows = await db
         .select()
         .from(schema.premiumOrders)
@@ -1575,7 +1732,7 @@ export const gameActions = {
         .update(schema.premiumOrders)
         .set({ status: "rejected", processedAt: new Date() })
         .where(eq(schema.premiumOrders.id, order.id));
-      await logActivity(db, "premium_reject", `Pesanan Premium #${order.id} (${order.stars} Stars) ditolak pemilik — pembayaran tidak terkonfirmasi.`, null);
+      await logActivity(db, order.playerId, "premium_reject", `Pesanan Premium #${order.id} (${order.stars} Stars) ditolak pemilik — pembayaran tidak terkonfirmasi.`, null);
       return { ok: true, error: null };
     },
   }),
@@ -1586,22 +1743,32 @@ export const gameActions = {
     request: z.object({
       days: z.number().int().min(1).max(365),
       tier: z.enum(["standard", "pro"]),
+      // Admin bisa memberi Premium ke pemain tertentu (id internal
+      // pemain); tanpa ini Premium diberikan ke pemanggil sendiri
+      // (dipakai asnit saat menguji dari web).
+      playerId: z.number().int().positive().optional(),
     }),
     response: resultShape.extend({
       premiumUntil: z.string().nullable(),
     }),
-    async handler(args) {
+    async handler(args, session) {
       const db = getDb();
-      const levels = await loadLevels(db);
-      const p = await loadPlayer(db, levels);
-      const base = p.premiumUntil && p.premiumUntil.getTime() > Date.now() ? p.premiumUntil.getTime() : Date.now();
+      let target: PlayerRow;
+      if (args.playerId) {
+        const found = await loadPlayerRowOrNull(db, args.playerId);
+        if (!found) return { ok: false, error: "Pemain tidak ditemukan.", premiumUntil: null };
+        target = found;
+      } else {
+        target = await loadPlayer(db, session);
+      }
+      const base = target.premiumUntil && target.premiumUntil.getTime() > Date.now() ? target.premiumUntil.getTime() : Date.now();
       const until = new Date(base + args.days * 24 * 60 * 60 * 1000);
-      const tier: PremiumTier = args.tier === "pro" || (isPremium(p) && p.premiumTier === "pro") ? "pro" : "standard";
+      const tier: PremiumTier = args.tier === "pro" || (isPremium(target) && target.premiumTier === "pro") ? "pro" : "standard";
       await db
         .update(schema.player)
         .set({ premiumUntil: until, premiumTier: tier })
-        .where(eq(schema.player.id, 1));
-      await logActivity(db, "premium_grant", `Pemilik mengaktifkan Premium ${tier === "pro" ? "Pro (bor ganda)" : "Standard"} ${args.days} hari (pembayaran di luar game) — aktif sampai ${until.toLocaleDateString("id-ID")}.`, null);
+        .where(eq(schema.player.id, target.id));
+      await logActivity(db, target.id, "premium_grant", `Pemilik mengaktifkan Premium ${tier === "pro" ? "Pro (bor ganda)" : "Standard"} ${args.days} hari (pembayaran di luar game) — aktif sampai ${until.toLocaleDateString("id-ID")}.`, null);
       return { ok: true, error: null, premiumUntil: until.toISOString() };
     },
   }),
@@ -1614,11 +1781,10 @@ export const gameActions = {
       bonusKt: z.number(),
       ktBalance: z.number(),
     }),
-    async handler() {
+    async handler(_args, session) {
       const db = getDb();
-      const levels = await loadLevels(db);
-      const p = await loadPlayer(db, levels);
-      if (!(await canClaimDailyBonus(db))) {
+      const p = await loadPlayer(db, session);
+      if (!(await canClaimDailyBonus(db, p.id))) {
         return {
           ok: false,
           error: "Bonus harian sudah diklaim hari ini. Kembali lagi besok!",
@@ -1632,8 +1798,8 @@ export const gameActions = {
           ktBalance: p.ktBalance + DAILY_BONUS_KT,
           totalKtEarned: p.totalKtEarned + DAILY_BONUS_KT,
         })
-        .where(eq(schema.player.id, 1));
-      await logActivity(db, "daily_bonus", `Bonus harian ${DAILY_BONUS_KT} KT diklaim.`, DAILY_BONUS_KT);
+        .where(eq(schema.player.id, p.id));
+      await logActivity(db, p.id, "daily_bonus", `Bonus harian ${DAILY_BONUS_KT} KT diklaim.`, DAILY_BONUS_KT);
       return {
         ok: true,
         error: null,
@@ -1654,11 +1820,10 @@ export const gameActions = {
       remainingToday: z.number(),
       cooldownRemainingSec: z.number(),
     }),
-    async handler() {
+    async handler(_args, session) {
       const db = getDb();
-      const levels = await loadLevels(db);
-      const p = await loadPlayer(db, levels);
-      const stats = await getAdStats(db);
+      const p = await loadPlayer(db, session);
+      const stats = await getAdStats(db, p.id);
       const fail = (error: string) => ({
         ok: false,
         error,
@@ -1678,8 +1843,8 @@ export const gameActions = {
           ktBalance: p.ktBalance + AD_REWARD_KT,
           totalKtEarned: p.totalKtEarned + AD_REWARD_KT,
         })
-        .where(eq(schema.player.id, 1));
-      await logActivity(db, "ad_reward", `Menonton iklan sponsor — hadiah ${AD_REWARD_KT} KT masuk ke saldo.`, AD_REWARD_KT);
+        .where(eq(schema.player.id, p.id));
+      await logActivity(db, p.id, "ad_reward", `Menonton iklan sponsor — hadiah ${AD_REWARD_KT} KT masuk ke saldo.`, AD_REWARD_KT);
       return {
         ok: true,
         error: null,
@@ -1703,17 +1868,22 @@ export const gameActions = {
       ktGained: z.number(),
       ktBalance: z.number(),
     }),
-    async handler(args) {
+    async handler(args, session) {
       const db = getDb();
-      const levels = await loadLevels(db);
-      const p = await loadPlayer(db, levels);
+      const p = await loadPlayer(db, session);
+      const levels = await loadLevels(db, p.id);
       const ore = oreById(args.oreId);
       const fail = (error: string) => ({ ok: false, error, ktGained: 0, ktBalance: p.ktBalance });
       if (!ore) return fail("Jenis mineral tidak dikenal.");
       const inv = await db
         .select()
         .from(schema.inventory)
-        .where(eq(schema.inventory.oreId, args.oreId))
+        .where(
+          and(
+            eq(schema.inventory.playerId, p.id),
+            eq(schema.inventory.oreId, args.oreId),
+          ),
+        )
         .limit(1);
       const held = inv[0]?.qty ?? 0;
       if (held < args.qty) return fail(`Bijih tidak cukup — kamu hanya punya ${held} ${ore.name}.`);
@@ -1722,15 +1892,20 @@ export const gameActions = {
       await db
         .update(schema.inventory)
         .set({ qty: held - args.qty })
-        .where(eq(schema.inventory.oreId, args.oreId));
+        .where(
+          and(
+            eq(schema.inventory.playerId, p.id),
+            eq(schema.inventory.oreId, args.oreId),
+          ),
+        );
       await db
         .update(schema.player)
         .set({
           ktBalance: p.ktBalance + gained,
           totalKtEarned: p.totalKtEarned + gained,
         })
-        .where(eq(schema.player.id, 1));
-      await logActivity(db, "sell", `Menjual ${args.qty} ${ore.name} seharga ${gained} KT.`, gained);
+        .where(eq(schema.player.id, p.id));
+      await logActivity(db, p.id, "sell", `Menjual ${args.qty} ${ore.name} seharga ${gained} KT.`, gained);
       return { ok: true, error: null, ktGained: gained, ktBalance: p.ktBalance + gained };
     },
   }),
@@ -1743,11 +1918,14 @@ export const gameActions = {
       ktGained: z.number(),
       ktBalance: z.number(),
     }),
-    async handler() {
+    async handler(_args, session) {
       const db = getDb();
-      const levels = await loadLevels(db);
-      const p = await loadPlayer(db, levels);
-      const invRows = await db.select().from(schema.inventory);
+      const p = await loadPlayer(db, session);
+      const levels = await loadLevels(db, p.id);
+      const invRows = await db
+        .select()
+        .from(schema.inventory)
+        .where(eq(schema.inventory.playerId, p.id));
       const mult = sellMultiplier(levels, isPremium(p));
       let gained = 0;
       let count = 0;
@@ -1765,7 +1943,12 @@ export const gameActions = {
           await db
             .update(schema.inventory)
             .set({ qty: 0 })
-            .where(eq(schema.inventory.oreId, row.oreId));
+            .where(
+              and(
+                eq(schema.inventory.playerId, p.id),
+                eq(schema.inventory.oreId, row.oreId),
+              ),
+            );
         }
       }
       await db
@@ -1774,8 +1957,8 @@ export const gameActions = {
           ktBalance: p.ktBalance + gained,
           totalKtEarned: p.totalKtEarned + gained,
         })
-        .where(eq(schema.player.id, 1));
-      await logActivity(db, "sell", `Menjual semua mineral (${count} unit) seharga ${gained} KT.`, gained);
+        .where(eq(schema.player.id, p.id));
+      await logActivity(db, p.id, "sell", `Menjual semua mineral (${count} unit) seharga ${gained} KT.`, gained);
       return { ok: true, error: null, ktGained: gained, ktBalance: p.ktBalance + gained };
     },
   }),
@@ -1789,10 +1972,10 @@ export const gameActions = {
       costPaid: z.number(),
       ktBalance: z.number(),
     }),
-    async handler(args) {
+    async handler(args, session) {
       const db = getDb();
-      const levels = await loadLevels(db);
-      const p = await loadPlayer(db, levels);
+      const p = await loadPlayer(db, session);
+      const levels = await loadLevels(db, p.id);
       const def = upgradeById(args.upgradeId);
       const fail = (error: string) => ({ ok: false, error, newLevel: null as number | null, costPaid: 0, ktBalance: p.ktBalance });
       if (!def) return fail("Upgrade tidak dikenal.");
@@ -1804,21 +1987,33 @@ export const gameActions = {
       const existing = await db
         .select()
         .from(schema.upgrades)
-        .where(eq(schema.upgrades.upgradeId, def.id))
+        .where(
+          and(
+            eq(schema.upgrades.playerId, p.id),
+            eq(schema.upgrades.upgradeId, def.id),
+          ),
+        )
         .limit(1);
       if (existing[0]) {
         await db
           .update(schema.upgrades)
           .set({ level: level + 1 })
-          .where(eq(schema.upgrades.upgradeId, def.id));
+          .where(
+            and(
+              eq(schema.upgrades.playerId, p.id),
+              eq(schema.upgrades.upgradeId, def.id),
+            ),
+          );
       } else {
-        await db.insert(schema.upgrades).values({ upgradeId: def.id, level: 1 });
+        await db
+          .insert(schema.upgrades)
+          .values({ playerId: p.id, upgradeId: def.id, level: 1 });
       }
       await db
         .update(schema.player)
         .set({ ktBalance: p.ktBalance - cost })
-        .where(eq(schema.player.id, 1));
-      await logActivity(db, "upgrade", `${def.name} naik ke level ${level + 1}.`, -cost);
+        .where(eq(schema.player.id, p.id));
+      await logActivity(db, p.id, "upgrade", `${def.name} naik ke level ${level + 1}.`, -cost);
       return {
         ok: true,
         error: null,
@@ -1840,16 +2035,15 @@ export const gameActions = {
       wdId: z.number().nullable(),
       ktBalance: z.number(),
     }),
-    async handler(args) {
+    async handler(args, session) {
       const db = getDb();
-      const levels = await loadLevels(db);
-      const p = await loadPlayer(db, levels);
+      const p = await loadPlayer(db, session);
       const amountKt = args.amountKt;
       const amountGram = amountKt / KT_PER_GRAM;
       const fail = (error: string) => ({ ok: false, error, wdId: null as number | null, ktBalance: p.ktBalance });
       if (amountKt % WD_STEP_KT !== 0)
         return fail(`Jumlah WD harus kelipatan ${WD_STEP_KT} KT (0,5 GRAM) — ${amountKt} KT tidak valid.`);
-      const paidCount = await countPaidWithdrawals(db);
+      const paidCount = await countPaidWithdrawals(db, p.id);
       const minKt = wdMinKtForPaidCount(paidCount);
       if (amountKt < minKt)
         return fail(
@@ -1864,6 +2058,7 @@ export const gameActions = {
       const inserted = await db
         .insert(schema.wdRequests)
         .values({
+          playerId: p.id,
           walletAddress: args.walletAddress,
           amountKt,
           amountGram,
@@ -1875,9 +2070,10 @@ export const gameActions = {
       await db
         .update(schema.player)
         .set({ ktBalance: p.ktBalance - amountKt })
-        .where(eq(schema.player.id, 1));
+        .where(eq(schema.player.id, p.id));
       await logActivity(
         db,
+        p.id,
         "wd_request",
         `Permintaan WD ${amountGram} GRAM (${amountKt} KT) dibuat — menunggu diproses pemilik.`,
         -amountKt,
@@ -1891,14 +2087,20 @@ export const gameActions = {
       "Cancels a still-pending withdrawal request and refunds its locked KT to the player's balance.",
     request: z.object({ wdId: z.number().int().positive() }),
     response: resultShape.extend({ ktBalance: z.number() }),
-    async handler(args) {
+    async handler(args, session) {
       const db = getDb();
-      const levels = await loadLevels(db);
-      const p = await loadPlayer(db, levels);
+      const p = await loadPlayer(db, session);
+      // Hanya WD milik sendiri yang bisa dibatalkan — id WD orang
+      // lain tidak akan ketemu di sini.
       const rows = await db
         .select()
         .from(schema.wdRequests)
-        .where(eq(schema.wdRequests.id, args.wdId))
+        .where(
+          and(
+            eq(schema.wdRequests.id, args.wdId),
+            eq(schema.wdRequests.playerId, p.id),
+          ),
+        )
         .limit(1);
       const wd = rows[0];
       if (!wd) return { ok: false, error: "Permintaan WD tidak ditemukan.", ktBalance: p.ktBalance };
@@ -1911,8 +2113,8 @@ export const gameActions = {
       await db
         .update(schema.player)
         .set({ ktBalance: p.ktBalance + wd.amountKt })
-        .where(eq(schema.player.id, 1));
-      await logActivity(db, "wd_cancel", `WD #${wd.id} dibatalkan pemain — ${wd.amountKt} KT dikembalikan.`, wd.amountKt);
+        .where(eq(schema.player.id, p.id));
+      await logActivity(db, p.id, "wd_cancel", `WD #${wd.id} dibatalkan pemain — ${wd.amountKt} KT dikembalikan.`, wd.amountKt);
       return { ok: true, error: null, ktBalance: p.ktBalance + wd.amountKt };
     },
   }),
@@ -1931,10 +2133,8 @@ export const gameActions = {
         .enum(["pending", "approved", "paid", "rejected", "cancelled"])
         .nullable(),
     }),
-    async handler(args) {
+    async handler(args, _session) {
       const db = getDb();
-      const levels = await loadLevels(db);
-      const p = await loadPlayer(db, levels);
       const rows = await db
         .select()
         .from(schema.wdRequests)
@@ -1942,6 +2142,9 @@ export const gameActions = {
         .limit(1);
       const wd = rows[0];
       if (!wd) return { ok: false, error: "Permintaan WD tidak ditemukan.", status: null };
+      // Saldo yang berubah adalah saldo PEMILIK WD, bukan saldo admin.
+      const target = await loadPlayerRowOrNull(db, wd.playerId);
+      if (!target) return { ok: false, error: "Pemain pemilik WD tidak ditemukan.", status: wd.status };
 
       if (args.action === "approve") {
         if (wd.status !== "pending")
@@ -1950,7 +2153,7 @@ export const gameActions = {
           .update(schema.wdRequests)
           .set({ status: "approved", adminNote: args.adminNote ?? wd.adminNote })
           .where(eq(schema.wdRequests.id, wd.id));
-        await logActivity(db, "wd_approve", `WD #${wd.id} (${wd.amountGram} GRAM) disetujui — siap kirim GRAM manual.`, null);
+        await logActivity(db, wd.playerId, "wd_approve", `WD #${wd.id} (${wd.amountGram} GRAM) disetujui — siap kirim GRAM manual.`, null);
         return { ok: true, error: null, status: "approved" as const };
       }
 
@@ -1968,9 +2171,9 @@ export const gameActions = {
           .where(eq(schema.wdRequests.id, wd.id));
         await db
           .update(schema.player)
-          .set({ totalWdPaidGram: p.totalWdPaidGram + wd.amountGram })
-          .where(eq(schema.player.id, 1));
-        await logActivity(db, "wd_paid", `WD #${wd.id} selesai — ${wd.amountGram} GRAM telah dikirim manual ke dompet pemain.`, null);
+          .set({ totalWdPaidGram: target.totalWdPaidGram + wd.amountGram })
+          .where(eq(schema.player.id, target.id));
+        await logActivity(db, wd.playerId, "wd_paid", `WD #${wd.id} selesai — ${wd.amountGram} GRAM telah dikirim manual ke dompet pemain.`, null);
         return { ok: true, error: null, status: "paid" as const };
       }
 
@@ -1987,12 +2190,13 @@ export const gameActions = {
         .where(eq(schema.wdRequests.id, wd.id));
       await db
         .update(schema.player)
-        .set({ ktBalance: p.ktBalance + wd.amountKt })
-        .where(eq(schema.player.id, 1));
-      await logActivity(db, "wd_reject", `WD #${wd.id} ditolak — ${wd.amountKt} KT dikembalikan ke saldo pemain.`, wd.amountKt);
+        .set({ ktBalance: target.ktBalance + wd.amountKt })
+        .where(eq(schema.player.id, target.id));
+      await logActivity(db, wd.playerId, "wd_reject", `WD #${wd.id} ditolak — ${wd.amountKt} KT dikembalikan ke saldo pemain.`, wd.amountKt);
       return { ok: true, error: null, status: "rejected" as const };
     },
   }),
+
 };
 
 /** The action map — the client imports this TYPE only (import type),
@@ -2008,16 +2212,42 @@ export type ActionName = keyof Actions;
 export async function dispatchGameAction(
   action: string,
   input: unknown,
+  initData?: string | null,
 ): Promise<unknown> {
   const entry = (
     gameActions as Record<
       string,
-      { request: z.ZodTypeAny; handler: (args: never) => Promise<unknown> }
+      {
+        request: z.ZodTypeAny;
+        handler: (args: never, session: Session) => Promise<unknown>;
+      }
     >
   )[action];
   if (!entry) {
     throw new Error(`Aksi tidak dikenal: ${action}`);
   }
+  // Sesi diputuskan dulu dari initData — initData palsu/kedaluwarsa
+  // ditolak sebelum handler apa pun berjalan.
+  const resolved = resolveSession(initData ?? null);
+  // NB: `=== false`, bukan `!resolved.ok` — lihat catatan yang sama
+  // di api/_lib/telegram.ts (Vercel typecheck tanpa strictNullChecks).
+  if (resolved.ok === false) {
+    return { ok: false, error: resolved.error };
+  }
+  // Aksi Kendali hanya untuk pemilik — dijaga di sini (satu pintu)
+  // supaya tidak ada handler admin yang lupa memeriksa: sesi web
+  // lama (tanpa initData) dianggap pemilik, sesi Telegram harus
+  // cocok dengan ADMIN_TELEGRAM_ID. Gagal tertutup: bukan admin →
+  // ok:false, aksi TIDAK dijalankan.
+  const ADMIN_ACTIONS = new Set([
+    "updateWithdrawal",
+    "confirmPremiumOrder",
+    "rejectPremiumOrder",
+    "grantPremium",
+  ]);
+  if (ADMIN_ACTIONS.has(action) && !resolved.session.isAdmin) {
+    return { ok: false, error: "Aksi ini hanya bisa dilakukan pemilik." };
+  }
   const args = entry.request.parse(input ?? {});
-  return entry.handler(args as never);
+  return entry.handler(args as never, resolved.session);
 }

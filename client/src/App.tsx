@@ -632,8 +632,13 @@ export function App() {
     { id: "pasar", label: "Stasiun Jual", icon: <SatelliteIcon size={16} />, badge: totalOreQty > 0 ? totalOreQty : undefined },
     { id: "upgrade", label: "Hanggar", icon: <WrenchIcon size={16} /> },
     { id: "wd", label: "WD GRAM", icon: <GemIcon size={16} /> },
-    { id: "admin", label: "Kendali", icon: <DishIcon size={16} />, badge: adminCount > 0 ? adminCount : undefined },
   ];
+  // Tab Kendali hanya untuk pemilik — pemain biasa tidak pernah
+  // melihatnya (server tetap yang menegakkan: aksi Kendali ditolak
+  // untuk non-admin walau tab-nya dipanggil langsung).
+  if (p.isAdmin) {
+    tabs.push({ id: "admin", label: "Kendali", icon: <DishIcon size={16} />, badge: adminCount > 0 ? adminCount : undefined });
+  }
 
   return (
     <div className="min-h-screen bg-[var(--bg)] text-[var(--text)] starfield">
@@ -859,7 +864,7 @@ export function App() {
         )}
 
         {tab === "wd" && (<WdTab data={data} onCancel={(id) => cancelWd.mutate(id)} cancelling={cancelWd.isPending} onDone={(ok, err, good) => { showResult(ok, err, good); refresh(); }} />)}
-        {tab === "admin" && (<AdminTab data={data} onDone={(ok, err, good) => { showResult(ok, err, good); refresh(); }} />)}
+        {tab === "admin" && p.isAdmin && (<AdminTab data={data} onDone={(ok, err, good) => { showResult(ok, err, good); refresh(); }} />)}
         </div>
       </main>
     </div>
@@ -1165,7 +1170,7 @@ function AdminTab({ data, onDone }: { data: GameState; onDone: (ok: boolean, err
   const queue = [...data.withdrawals].sort((a, b) => order[a.status] - order[b.status] || b.id - a.id);
   const lockedKt = data.withdrawals.filter((w) => w.status === "pending" || w.status === "approved").reduce((a, w) => a + w.amountKt, 0);
   const owedGram = data.withdrawals.filter((w) => w.status === "approved").reduce((a, w) => a + w.amountGram, 0);
-  return (<section className="mt-4 space-y-4"><GrantPremiumCard data={data} onDone={onDone} /><div className="rounded-2xl bg-[var(--surface)] border border-[var(--border)] p-4"><h2 className="font-display text-base">Pusat Kendali — Antrean WD Pemilik</h2><p className="mt-1 text-sm text-[var(--dim)]">Alur manual: periksa dompet → Setujui → kirim GRAM dari dompetmu sendiri → Tandai Dibayar (isi referensi transaksi). Tolak bila alamat tidak valid; KT pemain kembali otomatis.</p><div className="mt-3 grid grid-cols-3 gap-2 text-center"><div className="rounded-xl bg-[var(--surface2)] px-2 py-3"><p className="font-display text-base">{fmt(lockedKt)} KT</p><p className="text-[11px] font-semibold text-[var(--dim)]">KT terkunci</p></div><div className="rounded-xl bg-[var(--surface2)] px-2 py-3"><p className="font-display text-base">{fmt(owedGram)} GRAM</p><p className="text-[11px] font-semibold text-[var(--dim)]">Siap kirim</p></div><div className="rounded-xl bg-[var(--surface2)] px-2 py-3"><p className="font-display text-base">{fmt(data.player.totalWdPaidGram)} GRAM</p><p className="text-[11px] font-semibold text-[var(--dim)]">Sudah dibayar</p></div></div></div>{queue.length === 0 ? (<p className="rounded-2xl bg-[var(--surface)] border border-[var(--border)] p-4 text-sm text-[var(--dim)]">Antrean kosong — belum ada penambang yang mengajukan WD.</p>) : (queue.map((w) => <AdminWdCard key={w.id} wd={w} onDone={onDone} />))}</section>);
+  return (<section className="mt-4 space-y-4"><GrantPremiumCard data={data} onDone={onDone} /><div className="rounded-2xl bg-[var(--surface)] border border-[var(--border)] p-4"><h2 className="font-display text-base">Pusat Kendali — Antrean WD Pemilik</h2><p className="mt-1 text-sm text-[var(--dim)]">Alur manual: periksa dompet → Setujui → kirim GRAM dari dompetmu sendiri → Tandai Dibayar (isi referensi transaksi). Tolak bila alamat tidak valid; KT pemain kembali otomatis.</p><div className="mt-3 grid grid-cols-3 gap-2 text-center"><div className="rounded-xl bg-[var(--surface2)] px-2 py-3"><p className="font-display text-base">{fmt(lockedKt)} KT</p><p className="text-[11px] font-semibold text-[var(--dim)]">KT terkunci</p></div><div className="rounded-xl bg-[var(--surface2)] px-2 py-3"><p className="font-display text-base">{fmt(owedGram)} GRAM</p><p className="text-[11px] font-semibold text-[var(--dim)]">Siap kirim</p></div><div className="rounded-xl bg-[var(--surface2)] px-2 py-3"><p className="font-display text-base">{fmt(data.adminStats?.totalWdPaidGram ?? data.player.totalWdPaidGram)} GRAM</p><p className="text-[11px] font-semibold text-[var(--dim)]">Sudah dibayar</p></div></div></div>{queue.length === 0 ? (<p className="rounded-2xl bg-[var(--surface)] border border-[var(--border)] p-4 text-sm text-[var(--dim)]">Antrean kosong — belum ada penambang yang mengajukan WD.</p>) : (queue.map((w) => <AdminWdCard key={w.id} wd={w} onDone={onDone} />))}</section>);
 }
 
 function AdminWdCard({ wd, onDone }: { wd: Wd; onDone: (ok: boolean, error: string | null, good: string) => void }) {

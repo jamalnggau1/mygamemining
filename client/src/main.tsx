@@ -4,6 +4,17 @@ import { createRoot } from "react-dom/client";
 import { App } from "./App";
 import "./theme.css";
 
+// Telegram Mini App: tell Telegram the app is ready and ask for the
+// full-height view. Guarded — in a plain browser window.Telegram is
+// absent and the game runs exactly as before.
+try {
+  const tg = window.Telegram?.WebApp;
+  tg?.ready();
+  tg?.expand();
+} catch {
+  // Bukan di dalam Telegram — abaikan.
+}
+
 // Standalone build (no Muse SDK): a plain shared QueryClient.
 const queryClient = new QueryClient({
   defaultOptions: {

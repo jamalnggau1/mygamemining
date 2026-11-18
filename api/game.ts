@@ -1,7 +1,13 @@
 // Vercel serverless game API for the ASTRA MINING deployment.
 //
 // POST /api/game
-//   Body: { "action": "<name>", "args": { ... } }
+//   Body: { "action": "<name>", "args": { ... }, "initData": "<telegram-initdata>" }
+//   `initData` is optional: Telegram WebApp clients send
+//   window.Telegram.WebApp.initData so the server can identify the
+//   player; plain web browsers send nothing and play as the legacy
+//   player (id=1). The initData is validated server-side in
+//   api/_lib/telegram.ts — a client-supplied Telegram id or username
+//   is never trusted on its own.
 //   Returns the action's response object (always JSON).
 //
 // This is the standalone replacement for the Muse runtime's action
@@ -54,12 +60,26 @@ export default async function handler(req: Req, res: Res): Promise<void> {
     body !== null && typeof body === "object" && "args" in body
       ? (body as { args?: unknown }).args
       : {};
+  // Raw Telegram WebApp initData (opaque signed string). It is only
+  // ever validated server-side (api/_lib/telegram.ts) — never parsed
+  // for an id here, never logged. Diketik eksplisit sebagai string |
+  // undefined supaya typecheck Vercel (tanpa strictNullChecks) tidak
+  // gagal mempersempit `unknown` dari body.
+  const initDataRaw =
+    body !== null && typeof body === "object" && "initData" in body
+      ? (body as { initData?: unknown }).initData
+      : undefined;
+  if (initDataRaw !== undefined && typeof initDataRaw !== "string") {
+    res.status(400).json({ ok: false, error: "Field 'initData' tidak valid." });
+    return;
+  }
+  const initData = typeof initDataRaw === "string" ? initDataRaw : undefined;
   if (typeof action !== "string" || action.length === 0) {
     res.status(400).json({ ok: false, error: "Field 'action' wajib diisi." });
     return;
   }
   try {
-    const result = await dispatchGameAction(action, args ?? {});
+    const result = await dispatchGameAction(action, args ?? {}, initData);
     res.status(200).json(result);
   } catch (e) {
     if (e instanceof ZodError) {

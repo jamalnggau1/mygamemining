@@ -8,6 +8,12 @@
          lives outside the space's routes and fails auth. -->
     <link rel="icon" href="data:," />
     <title>ASTRA MINING — Tambang Luar Angkasa P2E</title>
+    <!-- Telegram WebApp JS: menyediakan window.Telegram.WebApp
+         (initData, ready/expand) saat game dibuka sebagai Mini App.
+         Di browser biasa script ini tetap dimuat tapi window.Telegram
+         tidak dipakai — semua akses ke WebApp dijaga (guard) di
+         client/src/api.ts dan main.tsx. -->
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="./src/main.tsx" type="module"></script>
   </head>
   <body>
