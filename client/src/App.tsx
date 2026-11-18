@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { SafeAreaTopScrim } from "@hatch/space-sdk/client";
 import { api, type ApiResponse } from "./api";
 import heroImg from "./assets/hero.webp";
 import asteroidImg from "./assets/asteroid.webp";
@@ -617,8 +616,8 @@ export function App() {
   const buy = useMutation({ mutationFn: (upgradeId: string) => api.buyUpgrade({ upgradeId }), onSuccess: (r) => { showResult(r.ok, r.error, `Upgrade terpasang (level ${r.newLevel ?? "?"}) seharga ${fmt(r.costPaid)} KT.`); refresh(); } });
   const cancelWd = useMutation({ mutationFn: (wdId: number) => api.cancelWithdrawal({ wdId }), onSuccess: (r) => { showResult(r.ok, r.error, "WD dibatalkan — KT dikembalikan ke saldo."); refresh(); } });
 
-  if (state.isPending) return (<div className="min-h-screen bg-[var(--bg)] text-[var(--text)]"><SafeAreaTopScrim backgroundColor="var(--bg)" /><main className="mx-auto max-w-3xl px-4 py-16 text-center"><p className="font-display text-2xl tracking-widest">ASTRA MINING</p><p className="mt-2 text-sm text-[var(--dim)]">Menghubungkan ke stasiun orbital…</p></main></div>);
-  if (state.error || !state.data) return (<div className="min-h-screen bg-[var(--bg)] text-[var(--text)]"><SafeAreaTopScrim backgroundColor="var(--bg)" /><main className="mx-auto max-w-3xl px-4 py-16 text-center"><p className="font-display text-xl">Sinyal stasiun terputus</p><p className="mt-2 text-sm text-[var(--dim)]">Koneksi ke server misi gagal. Coba muat ulang.</p><button type="button" onClick={() => state.refetch()} className="btn-press mt-4 rounded-xl bg-cyan-500 px-5 py-2 font-bold text-black">Coba Lagi</button></main></div>);
+  if (state.isPending) return (<div className="min-h-screen bg-[var(--bg)] text-[var(--text)]"><div aria-hidden="true" className="bg-[var(--bg)] pt-safe" /><main className="mx-auto max-w-3xl px-4 py-16 text-center"><p className="font-display text-2xl tracking-widest">ASTRA MINING</p><p className="mt-2 text-sm text-[var(--dim)]">Menghubungkan ke stasiun orbital…</p></main></div>);
+  if (state.error || !state.data) return (<div className="min-h-screen bg-[var(--bg)] text-[var(--text)]"><div aria-hidden="true" className="bg-[var(--bg)] pt-safe" /><main className="mx-auto max-w-3xl px-4 py-16 text-center"><p className="font-display text-xl">Sinyal stasiun terputus</p><p className="mt-2 text-sm text-[var(--dim)]">Koneksi ke server misi gagal. Coba muat ulang.</p><button type="button" onClick={() => state.refetch()} className="btn-press mt-4 rounded-xl bg-cyan-500 px-5 py-2 font-bold text-black">Coba Lagi</button></main></div>);
 
   const data = state.data; const p = data.player; const exp = data.expedition; const job = data.job;
   const pendingCount = data.withdrawals.filter((w) => w.status === "pending").length;
@@ -638,7 +637,7 @@ export function App() {
 
   return (
     <div className="min-h-screen bg-[var(--bg)] text-[var(--text)] starfield">
-      <SafeAreaTopScrim backgroundColor="var(--bg)" />
+      <div aria-hidden="true" className="bg-[var(--bg)] pt-safe" />
       {burst && <ConfettiLayer burst={burst} />}
       {/* HERO REALISTIS */}
       <div className="relative overflow-hidden">

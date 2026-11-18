@@ -7,8 +7,8 @@
 --     (DATABASE_URL dibaca dari environment — jangan pernah menulis
 --      string koneksi asli ke file, kode, atau log.)
 --
--- File ini adalah padanan Postgres dari skema game di
--- server/src/schema.ts (SQLite): tabel player, inventory, upgrades,
+-- File ini adalah skema Postgres untuk game ini (dulu cermin dari
+-- skema SQLite di runtime Muse): tabel player, inventory, upgrades,
 -- wd_requests, premium_orders, activity. Perbedaan dialect saja:
 --   - timestamp mode "timestamp_ms"  → TIMESTAMPTZ
 --   - amount_gram / total_wd_paid_gram (REAL, langkah 0,5 GRAM)

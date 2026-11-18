@@ -1,5 +1,5 @@
-// Postgres (Neon) mirror of server/src/schema.ts for the Vercel
-// deployment. Same table names, same column property names, same game
+// Postgres (Neon) schema for the Vercel deployment. Same table
+// names, same column property names, same game
 // semantics — only the dialect differs:
 //   - SQLite integer "timestamp_ms" columns become TIMESTAMPTZ
 //     (mode: "date", so handlers keep working with Date objects).
@@ -7,7 +7,7 @@
 //     WD amounts move in 0,5 GRAM steps.
 //   - AUTOINCREMENT ids become BIGSERIAL identities.
 // The DDL twin of this file is deploy/neon/init.sql — keep them in
-// sync. The game handlers in server/src/actions.ts are written against
+// sync. The game handlers in api/_lib/game.ts are written against
 // the Drizzle query builder, so porting them to Neon means pointing
 // the same queries at a drizzle-orm/neon-http database built from
 // this schema (see deploy/README.md).

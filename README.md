@@ -14,6 +14,13 @@ time, earn Koin Tambang (KT), and withdraw GRAM manually.
 
 ## Deploy (Vercel + Neon Postgres)
 
+This copy is the **standalone port**: the game no longer depends on
+the Muse runtime. Gameplay runs on `POST /api/game` backed by Neon
+Postgres (`api/_lib/game.ts`, `api/_lib/store.ts`), and the client is
+built with esbuild + Tailwind CLI (`client/build.mjs`). See
+`PORT_NOTES.md` for what changed, what was tested, and the limits
+(single player, no auth — same as the Muse version).
+
 Full step-by-step guide: see `deploy/README.md`.
 
 1. Create the tables in an empty Neon Postgres database:
