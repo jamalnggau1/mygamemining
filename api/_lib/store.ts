@@ -19,7 +19,7 @@
 
 import { drizzle, type NeonHttpDatabase } from "drizzle-orm/neon-http";
 import { neon } from "@neondatabase/serverless";
-import * as schema from "../../deploy/neon/schema.pg";
+import * as schema from "../../deploy/neon/schema.pg.js";
 
 export { schema };
 

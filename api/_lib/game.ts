@@ -128,8 +128,8 @@
 
 import { z } from "zod";
 import { desc, eq, sql } from "drizzle-orm";
-import * as schema from "../../deploy/neon/schema.pg";
-import { getDb, type Db } from "./store";
+import * as schema from "../../deploy/neon/schema.pg.js";
+import { getDb, type Db } from "./store.js";
 
 // ---------------------------------------------------------------------------
 // Game design constants

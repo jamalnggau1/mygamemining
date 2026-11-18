@@ -19,7 +19,7 @@
 //   message (never a connection string or stack trace).
 
 import { ZodError } from "zod";
-import { dispatchGameAction } from "./_lib/game";
+import { dispatchGameAction } from "./_lib/game.js";
 
 type Req = {
   method?: string;

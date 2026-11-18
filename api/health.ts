@@ -8,7 +8,7 @@
 //        empty Neon database to create them).
 //   Returns 200 when everything is ready, 503 otherwise.
 
-import { GAME_TABLES, neonQuery } from "./_lib/db";
+import { GAME_TABLES, neonQuery } from "./_lib/db.js";
 
 type Req = { method?: string };
 type Res = {
