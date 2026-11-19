@@ -14,6 +14,7 @@
 //     type GameState = ApiResponse<typeof api, "getGameState">;
 
 import type { Actions } from "../../api/_lib/game";
+import { getCurrentLang, t } from "./i18n.js";
 
 /** Turns one server action entry into its call signature. The
  *  server handler takes (args, session) — the client only ever
@@ -79,7 +80,14 @@ async function callAction<K extends keyof Actions>(
     headers: { "Content-Type": "application/json" },
     // initData accompanies every call so the server can resolve the
     // calling player (or reject a forged one) on every action.
-    body: JSON.stringify({ action, args, initData: getTelegramInitData() }),
+    // `lang` travels with it so server-written messages (errors,
+    // activity log entries) come back in the player's language.
+    body: JSON.stringify({
+      action,
+      args,
+      initData: getTelegramInitData(),
+      lang: getCurrentLang(),
+    }),
   });
   const data = (await res.json().catch(() => ({}))) as {
     ok?: boolean;
@@ -89,7 +97,7 @@ async function callAction<K extends keyof Actions>(
     throw new Error(
       typeof data?.error === "string"
         ? data.error
-        : `Server game error (${res.status}).`,
+        : t("serverErrorStatus", { status: res.status }),
     );
   }
   return data as Awaited<ReturnType<Api[K]>>;

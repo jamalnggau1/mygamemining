@@ -26,6 +26,7 @@
 //   parameterisasi (Drizzle menangani itu di game.ts).
 
 import { createHmac, timingSafeEqual } from "node:crypto";
+import { normalizeLang, serverStrings, type Lang } from "./i18n.js";
 
 /** Umur maksimum initData yang masih diterima: 24 jam. */
 const MAX_INITDATA_AGE_SECONDS = 24 * 60 * 60;
@@ -56,6 +57,11 @@ export type Session = {
    *  dipasang Vercel edge — TIDAK PERNAH dari kiriman klien).
    *  Dipakai anti-cheat aturan multi-akun; null bila tidak ada. */
   ip?: string | null;
+  /** Bahasa yang diminta klien untuk string yang ditampilkan ke
+   *  pengguna (hanya tampilan — tidak pernah memengaruhi logika).
+   *  Default "id" bila klien tidak mengirim / mengirim yang tidak
+   *  didukung. */
+  lang: Lang;
 };
 
 export type SessionResolution =
@@ -69,7 +75,9 @@ export type SessionResolution =
  *  dianggap pemain web lama. */
 export function resolveSession(
   initData?: string | null,
+  lang?: unknown,
 ): SessionResolution {
+  const sessionLang = normalizeLang(lang);
   if (!initData) {
     // Browser web biasa — pemain lama id=1, pemain BIASA (bukan
     // admin). Kendali hanya untuk ADMIN_TELEGRAM_ID lewat Telegram,
@@ -79,10 +87,15 @@ export function resolveSession(
     // bermain penuh; hanya aksi Kendali yang ditolak.
     return {
       ok: true,
-      session: { telegramId: null, username: null, isAdmin: false },
+      session: {
+        telegramId: null,
+        username: null,
+        isAdmin: false,
+        lang: sessionLang,
+      },
     };
   }
-  const validated = validateTelegramInitData(initData);
+  const validated = validateTelegramInitData(initData, sessionLang);
   // NB: `=== false`, bukan `!validated.ok` — Vercel me-typecheck tanpa
   // strictNullChecks, dan di pengaturan itu `!x.ok` tidak
   // mempersempit discriminated union (perilaku tsc yang sama juga
@@ -97,6 +110,7 @@ export function resolveSession(
       username: validated.identity.username,
       isAdmin:
         Number.isFinite(adminId) && adminId === validated.identity.id,
+      lang: sessionLang,
     },
   };
 }
@@ -120,45 +134,47 @@ function hmacSha256Hex(key: string | Buffer, message: string): string {
  *  ditampilkan ke klien bila tidak. */
 export function validateTelegramInitData(
   initData: string,
+  lang: Lang = "id",
 ): InitDataValidation {
+  const S = serverStrings(lang);
   const token = botToken();
   if (!token) {
     // Fail closed: tanpa BOT_TOKEN server tidak bisa membedakan
     // initData asli dari palsu — tolak semuanya.
     return {
       ok: false,
-      error: "Login Telegram belum dikonfigurasi di server.",
+      error: S.tgNoBotToken,
     };
   }
   if (!initData || typeof initData !== "string") {
-    return { ok: false, error: "Data login Telegram tidak ditemukan." };
+    return { ok: false, error: S.tgNoInitData };
   }
 
   let params: URLSearchParams;
   try {
     params = new URLSearchParams(initData);
   } catch {
-    return { ok: false, error: "Data login Telegram tidak valid." };
+    return { ok: false, error: S.tgInvalid };
   }
 
   const receivedHash = params.get("hash");
   const authDateRaw = params.get("auth_date");
   if (!receivedHash || !authDateRaw) {
-    return { ok: false, error: "Data login Telegram tidak lengkap." };
+    return { ok: false, error: S.tgIncomplete };
   }
 
   const authDate = Number(authDateRaw);
   if (!Number.isFinite(authDate) || authDate <= 0) {
-    return { ok: false, error: "Data login Telegram tidak valid." };
+    return { ok: false, error: S.tgInvalid };
   }
   const nowSec = Math.floor(Date.now() / 1000);
   if (authDate > nowSec + FUTURE_SKEW_SECONDS) {
-    return { ok: false, error: "Data login Telegram tidak valid." };
+    return { ok: false, error: S.tgInvalid };
   }
   if (nowSec - authDate > MAX_INITDATA_AGE_SECONDS) {
     return {
       ok: false,
-      error: "Sesi Telegram sudah kedaluwarsa — tutup dan buka lagi Mini App-nya.",
+      error: S.tgExpired,
     };
   }
 
@@ -182,25 +198,25 @@ export function validateTelegramInitData(
     receivedBuf = Buffer.from(receivedHash, "hex");
     expectedBuf = Buffer.from(expectedHash, "hex");
   } catch {
-    return { ok: false, error: "Data login Telegram tidak valid." };
+    return { ok: false, error: S.tgInvalid };
   }
   if (
     receivedBuf.length !== expectedBuf.length ||
     !timingSafeEqual(receivedBuf, expectedBuf)
   ) {
-    return { ok: false, error: "Data login Telegram tidak valid." };
+    return { ok: false, error: S.tgInvalid };
   }
 
   // Hash cocok — `user` bisa dipercaya sekarang.
   const userRaw = params.get("user");
   if (!userRaw) {
-    return { ok: false, error: "Data login Telegram tidak lengkap." };
+    return { ok: false, error: S.tgIncomplete };
   }
   let user: unknown;
   try {
     user = JSON.parse(userRaw) as unknown;
   } catch {
-    return { ok: false, error: "Data login Telegram tidak valid." };
+    return { ok: false, error: S.tgInvalid };
   }
   if (
     typeof user !== "object" ||
@@ -209,7 +225,7 @@ export function validateTelegramInitData(
     !Number.isInteger((user as { id: number }).id) ||
     (user as { id: number }).id <= 0
   ) {
-    return { ok: false, error: "Data login Telegram tidak valid." };
+    return { ok: false, error: S.tgInvalid };
   }
   const u = user as { id: number; username?: unknown; first_name?: unknown };
   return {

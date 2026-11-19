@@ -48,6 +48,7 @@ import { and, desc, eq, gt, gte, inArray, sql } from "drizzle-orm";
 import * as schema from "../../deploy/neon/schema.pg.js";
 import type { Db } from "./store.js";
 import type { Session } from "./telegram.js";
+import { serverStrings, type Lang } from "./i18n.js";
 
 type PlayerRow = typeof schema.player.$inferSelect;
 
@@ -169,6 +170,9 @@ export async function evaluateAntiCheat(
   player: PlayerRow,
   session: Session,
 ): Promise<void> {
+  // Flag reasons are user-facing (the owner reads them in Kendali),
+  // so they follow the request's language; default "id".
+  const S = serverStrings(session.lang);
   const hour = Math.floor(Date.now() / 3600000);
   if (player.lastEvalHour === hour) return;
   try {
@@ -187,7 +191,7 @@ export async function evaluateAntiCheat(
         db,
         player.id,
         "nonstop",
-        `Bermain di ${hours} jam berbeda dalam 24 jam terakhir — manusia tidur, bot tidak.`,
+        S.flagNonstop(hours),
         ANTICHEAT_RULES.nonstop.points,
       );
     }
@@ -205,7 +209,7 @@ export async function evaluateAntiCheat(
           db,
           player.id,
           "multi_account",
-          `${n} akun Telegram berbeda dari IP yang sama dalam 24 jam terakhir (batas: ${ANTICHEAT_RULES.multi_account.maxAccountsPerIp}).`,
+          S.flagMulti(n, ANTICHEAT_RULES.multi_account.maxAccountsPerIp),
           ANTICHEAT_RULES.multi_account.points,
         );
       }
@@ -222,7 +226,9 @@ export async function recordCollectLatency(
   db: Db,
   player: PlayerRow,
   delayMs: number,
+  lang: Lang = "id",
 ): Promise<void> {
+  const S = serverStrings(lang);
   try {
     const streak = player.instantCollectStreak ?? 0;
     if (delayMs <= ANTICHEAT_RULES.instant_collect.windowMs) {
@@ -236,7 +242,7 @@ export async function recordCollectLatency(
           db,
           player.id,
           "instant_collect",
-          `10× ambil hasil berturut-turut dalam ≤10 detik setelah operasi selesai — timing metronom seperti bot; manusia bervariasi.`,
+          S.flagInstant,
           ANTICHEAT_RULES.instant_collect.points,
         );
       } else {
@@ -263,7 +269,9 @@ export async function recordTamperAttempt(
   db: Db,
   player: PlayerRow,
   detail: string,
+  lang: Lang = "id",
 ): Promise<void> {
+  const S = serverStrings(lang);
   try {
     const now = new Date();
     const since = player.tamperSince;
@@ -281,7 +289,7 @@ export async function recordTamperAttempt(
         db,
         player.id,
         "tamper",
-        `5+ percobaan aksi mustahil dalam 24 jam (contoh: ${detail}) — aksinya sudah ditolak server, tapi polanya dicatat.`,
+        S.flagTamper(detail),
         ANTICHEAT_RULES.tamper.points,
       );
     } else {
@@ -301,7 +309,8 @@ export async function recordTamperAttempt(
 /** Membersihkan flag pemain (aksi admin Kendali): skor kembali 0,
  *  alasan + counter direset, dan pembersihan dicatat di audit trail
  *  (baris flag_cleared) supaya ada jejaknya. */
-export async function clearPlayerFlag(db: Db, playerId: number): Promise<void> {
+export async function clearPlayerFlag(db: Db, playerId: number, lang: Lang = "id"): Promise<void> {
+  const S = serverStrings(lang);
   await db
     .update(schema.player)
     .set({
@@ -316,7 +325,7 @@ export async function clearPlayerFlag(db: Db, playerId: number): Promise<void> {
   await db.insert(schema.securityFlags).values({
     playerId,
     rule: "flag_cleared",
-    reason: "Bendera dibersihkan oleh pemilik dari Kendali setelah ditinjau.",
+    reason: S.flagCleared,
     points: 0,
   });
 }

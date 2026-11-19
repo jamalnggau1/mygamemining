@@ -1,7 +1,11 @@
 // Vercel serverless game API for the ASTRA MINING deployment.
 //
 // POST /api/game
-//   Body: { "action": "<name>", "args": { ... }, "initData": "<telegram-initdata>" }
+//   Body: { "action": "<name>", "args": { ... }, "initData": "<telegram-initdata>", "lang": "id" | "en" }
+//   `lang` is optional (default "id") — the client sends the player's
+//   selected language on every request; the server uses it ONLY for
+//   user-facing strings (error messages, activity log entries), never
+//   for game logic, numbers, or rules.
 //   `initData` is optional: Telegram WebApp clients send
 //   window.Telegram.WebApp.initData so the server can identify the
 //   player; plain web browsers send nothing and play as the legacy
@@ -26,6 +30,7 @@
 
 import { ZodError } from "zod";
 import { dispatchGameAction } from "./_lib/game.js";
+import { normalizeLang, serverStrings } from "./_lib/i18n.js";
 
 type Req = {
   method?: string;
@@ -53,6 +58,16 @@ export default async function handler(req: Req, res: Res): Promise<void> {
       return;
     }
   }
+  // Language is read here (after the body is parsed) so even the
+  // route's own 400/500 messages come back in the player's language
+  // (default "id"). The unparseable-JSON error above stays
+  // Indonesian — there is no language to read from a broken body.
+  const langRaw =
+    body !== null && typeof body === "object" && "lang" in body
+      ? (body as { lang?: unknown }).lang
+      : undefined;
+  const lang = normalizeLang(langRaw);
+  const S = serverStrings(lang);
   const action =
     body !== null && typeof body === "object" && "action" in body
       ? (body as { action?: unknown }).action
@@ -71,12 +86,12 @@ export default async function handler(req: Req, res: Res): Promise<void> {
       ? (body as { initData?: unknown }).initData
       : undefined;
   if (initDataRaw !== undefined && typeof initDataRaw !== "string") {
-    res.status(400).json({ ok: false, error: "Field 'initData' tidak valid." });
+    res.status(400).json({ ok: false, error: S.routeInvalidInitData });
     return;
   }
   const initData = typeof initDataRaw === "string" ? initDataRaw : undefined;
   if (typeof action !== "string" || action.length === 0) {
-    res.status(400).json({ ok: false, error: "Field 'action' wajib diisi." });
+    res.status(400).json({ ok: false, error: S.routeActionRequired });
     return;
   }
   // IP request untuk anti-cheat aturan multi-akun: diambil dari
@@ -90,16 +105,16 @@ export default async function handler(req: Req, res: Res): Promise<void> {
       ? (xffFirst.split(",")[0]?.trim() ?? undefined)
       : undefined;
   try {
-    const result = await dispatchGameAction(action, args ?? {}, initData, ip);
+    const result = await dispatchGameAction(action, args ?? {}, initData, ip, lang);
     res.status(200).json(result);
   } catch (e) {
     if (e instanceof ZodError) {
-      res.status(400).json({ ok: false, error: "Argumen tidak valid." });
+      res.status(400).json({ ok: false, error: S.routeInvalidArgs });
       return;
     }
     res.status(500).json({
       ok: false,
-      error: e instanceof Error ? e.message : "Terjadi kesalahan server.",
+      error: e instanceof Error ? e.message : S.routeServerError,
     });
   }
 }

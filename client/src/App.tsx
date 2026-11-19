@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNod
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, getTelegramSessionInfo, type ApiResponse } from "./api";
 import { isAdsConfigured, showRewardedAd } from "./ads";
+import { fmt, fmtDate, fmtDateLong, fmtDateTime, fmtDur, LanguagePicker, t, trich, useLang } from "./i18n.js";
 import heroImg from "./assets/hero.webp";
 import asteroidImg from "./assets/asteroid.webp";
 import oresImg from "./assets/ores.webp";
@@ -21,19 +22,19 @@ const MAP_IMAGES: Record<string, string> = {
 
 type GameState = ApiResponse<typeof api, "getGameState">;
 type Wd = GameState["withdrawals"][number];
-// KT is fractional since rebalance #5 (Regolith 0,1 KT): every KT
-// number is shown with at most 1 decimal ("0,3 KT", never
-// "0.30000000000000004 KT" — client-side products like qty × price
-// can also produce float dust, and the server rounds every credit
-// to 1 decimal, so 1 decimal is the display precision everywhere).
-const fmt = (n: number) => n.toLocaleString("id-ID", { maximumFractionDigits: 3 });
-const STATUS_LABEL: Record<Wd["status"], string> = {
-  pending: "Menunggu",
-  approved: "Disetujui — kirim USDT",
-  paid: "Sudah Dibayar",
-  rejected: "Ditolak",
-  cancelled: "Dibatalkan",
-};
+// i18n: every user-visible string (and the KT/date/duration
+// formatting) lives in client/src/i18n.ts — Indonesian + English
+// dictionaries. The local fmt/fmtDate/fmtDur helpers were deleted so
+// the two languages can never drift apart.
+function statusLabel(status: Wd["status"]): string {
+  switch (status) {
+    case "pending": return t("wdStatusPending");
+    case "approved": return t("wdStatusApproved");
+    case "paid": return t("wdStatusPaid");
+    case "rejected": return t("wdStatusRejected");
+    default: return t("wdStatusCancelled");
+  }
+}
 function statusClass(status: Wd["status"]): string {
   switch (status) {
     case "pending": return "bg-amber-500/20 text-amber-300 border-amber-500/40";
@@ -42,20 +43,6 @@ function statusClass(status: Wd["status"]): string {
     case "rejected": return "bg-red-500/20 text-red-300 border-red-500/40";
     default: return "bg-slate-500/20 text-slate-300 border-slate-500/40";
   }
-}
-function fmtDate(iso: string): string {
-  return new Date(iso).toLocaleString("id-ID", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
-}
-function fmtDur(sec: number): string {
-  if (sec < 60) return `${sec} dtk`;
-  if (sec < 3600) {
-    const m = Math.floor(sec / 60);
-    const s = sec % 60;
-    return s > 0 ? `${m} mnt ${s} dtk` : `${m} mnt`;
-  }
-  const h = Math.floor(sec / 3600);
-  const m = Math.floor((sec % 3600) / 60);
-  return m > 0 ? `${h} jam ${m} mnt` : `${h} jam`;
 }
 /** Ticks once per second while `active` so job countdowns stay live. */
 function useNow(active: boolean): number {
@@ -533,6 +520,9 @@ function ConfettiLayer({ burst }: { burst: Burst }) {
 type Tab = "tambang" | "peta" | "pasar" | "upgrade" | "wd" | "admin";
 
 export function App() {
+  // Subscribe to the language context so the whole game re-renders
+  // when the player switches ID/EN (t() reads the current language).
+  useLang();
   const queryClient = useQueryClient();
   const [tab, setTab] = useState<Tab>("tambang");
   const [banner, setBanner] = useState<{ kind: "good" | "bad" | "info"; text: ReactNode } | null>(null);
@@ -553,11 +543,11 @@ export function App() {
   // "ID ..." = initData ada dan akun sudah terpisah.
   const sessionInfo = getTelegramSessionInfo();
   const sessionLabel = !sessionInfo.inTelegram
-    ? "Sesi: Web — tanpa login Telegram (akun bersama)"
+    ? t("sessionWeb")
     : !sessionInfo.hasInitData
-      ? "Sesi: Telegram — login kosong (buka lewat tombol Mini App, bukan link)"
-      : `Sesi: Telegram • ID ${sessionInfo.userId ?? "?"}`;
-  const showResult = (ok: boolean, error: string | null, goodText: ReactNode) => showBanner(ok ? "good" : "bad", ok ? goodText : (error ?? "Gagal, coba lagi."));
+      ? t("sessionEmpty")
+      : t("sessionTelegram", { id: sessionInfo.userId ?? "?" });
+  const showResult = (ok: boolean, error: string | null, goodText: ReactNode) => showBanner(ok ? "good" : "bad", ok ? goodText : (error ?? t("genericFail")));
   const fireBurst = (kind: BurstKind, oreColor?: string) => setBurst({ id: Date.now(), kind, oreColor });
 
   // Confetti auto-dismiss (longer for the big rare / expedition bursts).
@@ -583,54 +573,54 @@ export function App() {
 
   const startScan = useMutation({
     mutationFn: () => api.startScan({}),
-    onSuccess: (r) => { showResult(r.ok, r.error, <>Spektrometer mulai memindai asteroid — operasi selesai dalam {fmtDur(r.durationSec)}. Sensor bekerja dengan waktu nyata.</>); refresh(); },
+    onSuccess: (r) => { showResult(r.ok, r.error, <>{t("scanStarted", { dur: fmtDur(r.durationSec) })}</>); refresh(); },
   });
   const startMine = useMutation({
     mutationFn: (veinIndex: number) => api.startMine({ veinIndex }),
-    onSuccess: (r) => { showResult(r.ok, r.error, <>Lengan bor mulai mengebor urat {r.oreName ?? "mineral"} — selesai dalam {fmtDur(r.durationSec)}. Kamu boleh menutup halaman, bor tetap bekerja.</>); refresh(); },
+    onSuccess: (r) => { showResult(r.ok, r.error, <>{t("mineStarted", { ore: r.oreName ?? t("oreFallback"), dur: fmtDur(r.durationSec) })}</>); refresh(); },
   });
   const collect = useMutation({
     mutationFn: () => api.collectJob({}),
     onSuccess: (r) => {
-      if (!r.ok) { showBanner("bad", r.error ?? "Belum bisa diambil."); refresh(); return; }
+      if (!r.ok) { showBanner("bad", r.error ?? t("collectFail")); refresh(); return; }
       if (r.kind === "scan") {
-        showBanner("good", "Scan selesai — komposisi urat mineral asteroid terbuka. Pilih urat yang mau dibor.");
+        showBanner("good", t("collectScanDone"));
         fireBurst("scan");
       } else if (r.jammed) {
-        showBanner("bad", (<span className="inline-flex items-center gap-1.5"><AlertIcon size={15} /> BOR MACET! Mata bor patah saat mengebor urat {r.oreName} — urat ini hilang tanpa hasil. Risiko khas peta ini; coba urat berikutnya.</span>));
+        showBanner("bad", (<span className="inline-flex items-center gap-1.5"><AlertIcon size={15} /> {t("collectJammed", { ore: r.oreName ?? t("oreFallback") })}</span>));
       } else if (r.isRare) {
-        showBanner("good", (<span className="inline-flex items-center gap-1.5"><SparkleIcon size={15} /> LANGKA! Dapat {r.oreName} ×{r.qty} dari urat asteroid!{r.hullHit ? ` Tapi lambung kapal terkena serpihan — biaya perbaikan ${fmt(r.repairFeeKt)} KT dipotong dari saldo.` : ""}</span>));
+        showBanner("good", (<span className="inline-flex items-center gap-1.5"><SparkleIcon size={15} /> {t("collectRare", { ore: r.oreName ?? t("oreFallback"), qty: r.qty })}{r.hullHit ? t("collectRareHull", { fee: fmt(r.repairFeeKt) }) : ""}</span>));
         fireBurst("rare");
       } else if (r.hullHit) {
-        showBanner("bad", `Hasil tambang masuk kargo: ${r.oreName} ×${r.qty}. Tapi lambung kapal terkena serpihan tajam — biaya perbaikan ${fmt(r.repairFeeKt)} KT dipotong dari saldo.`);
+        showBanner("bad", t("collectHull", { ore: r.oreName ?? t("oreFallback"), qty: r.qty, fee: fmt(r.repairFeeKt) }));
         fireBurst("mine");
       } else {
-        showBanner("info", `Hasil tambang masuk kargo: ${r.oreName} ×${r.qty}.`);
+        showBanner("info", t("collectOk", { ore: r.oreName ?? t("oreFallback"), qty: r.qty }));
         fireBurst("mine");
       }
       refresh();
     },
   });
-  const cancelJob = useMutation({ mutationFn: () => api.cancelJob({}), onSuccess: (r) => { showResult(r.ok, r.error, "Operasi dibatalkan. Daya yang sudah terpakai tidak kembali."); refresh(); } });
+  const cancelJob = useMutation({ mutationFn: () => api.cancelJob({}), onSuccess: (r) => { showResult(r.ok, r.error, t("jobCancelled")); refresh(); } });
   const complete = useMutation({
     mutationFn: () => api.completeExpedition({}),
     onSuccess: (r) => {
-      showResult(r.ok, r.error, <>Ekspedisi tuntas! Bonus +{fmt(r.bonusKt)} KT. Warp ke Sektor {r.layer} — asteroid baru menanti.</>);
+      showResult(r.ok, r.error, <>{t("expeditionDone", { bonus: fmt(r.bonusKt), layer: r.layer })}</>);
       if (r.ok) fireBurst("expedition");
       refresh();
     },
   });
-  const abandon = useMutation({ mutationFn: () => api.abandonAsteroid({}), onSuccess: (r) => { showResult(r.ok, r.error, `Warp ke ${r.asteroidName ?? "asteroid baru"} di sektor yang sama.`); refresh(); } });
+  const abandon = useMutation({ mutationFn: () => api.abandonAsteroid({}), onSuccess: (r) => { showResult(r.ok, r.error, t("abandoned", { name: r.asteroidName ?? t("asteroidNew") })); refresh(); } });
   const travel = useMutation({
     mutationFn: (zoneIndex: number) => api.travelToMap({ zoneIndex }),
-    onSuccess: (r) => { showResult(r.ok, r.error, <>Perjalanan selesai — kamu tiba di peta {r.mapName}. Asteroid baru: {r.asteroidName}. Batu mulia &amp; tantangan peta ini sekarang berlaku.</>); if (r.ok) setTab("tambang"); refresh(); },
+    onSuccess: (r) => { showResult(r.ok, r.error, <>{t("travelDone", { map: r.mapName ?? "", name: r.asteroidName ?? t("asteroidNew") })}</>); if (r.ok) setTab("tambang"); refresh(); },
   });
   const orderPremium = useMutation({
     mutationFn: (plan: "standard" | "pro") => api.createPremiumOrder({ plan }),
-    onSuccess: (r) => { showResult(r.ok, r.error, <>Pesanan Premium #{r.orderId ?? ""} dibuat — bayar <b>{fmt(r.stars)} Telegram Stars</b> ke pemilik di Telegram, lalu pemilik mengonfirmasi pesananmu dan Premium langsung aktif.</>); refresh(); },
+    onSuccess: (r) => { showResult(r.ok, r.error, <>{trich("premiumOrderCreated", { id: r.orderId ?? "", stars: fmt(r.stars) })}</>); refresh(); },
   });
-  const claimBonus = useMutation({ mutationFn: () => api.claimDailyBonus({}), onSuccess: (r) => { showResult(r.ok, r.error, `Bonus misi harian +${fmt(r.bonusKt)} KT masuk ke saldo!`); refresh(); } });
-  const watchAd = useMutation({ mutationFn: () => api.watchAd({}), onSuccess: (r) => { showResult(r.ok, r.error, <>Iklan selesai — hadiah +{fmt(r.rewardKt)} KT masuk ke saldo! Sisa kuota iklan hari ini: {r.remainingToday}×.</>); if (r.ok) fireBurst("mine"); refresh(); } });
+  const claimBonus = useMutation({ mutationFn: () => api.claimDailyBonus({}), onSuccess: (r) => { showResult(r.ok, r.error, t("dailyBonusClaimed", { bonus: fmt(r.bonusKt) })); refresh(); } });
+  const watchAd = useMutation({ mutationFn: () => api.watchAd({}), onSuccess: (r) => { showResult(r.ok, r.error, <>{t("adRewarded", { reward: fmt(r.rewardKt), remaining: r.remainingToday })}</>); if (r.ok) fireBurst("mine"); refresh(); } });
   /** "Tonton Iklan": when a blockId is configured, a real AdsGram
    *  rewarded ad must be watched to the end FIRST — KT is granted
    *  only on success, via the unchanged server watchAd action. With
@@ -643,7 +633,7 @@ export function App() {
       try {
         const watched = await showRewardedAd();
         if (!watched) {
-          showBanner("bad", "Iklan belum tersedia, coba lagi nanti");
+          showBanner("bad", t("adUnavailable"));
           return;
         }
       } finally {
@@ -652,13 +642,13 @@ export function App() {
     }
     watchAd.mutate();
   };
-  const sellAll = useMutation({ mutationFn: () => api.sellAllOre({}), onSuccess: (r) => { showResult(r.ok, r.error, `Semua mineral terjual di Stasiun Orbital: +${fmt(r.ktGained)} KT.`); refresh(); } });
-  const sellOne = useMutation({ mutationFn: (args: { oreId: string; qty: number }) => api.sellOre(args), onSuccess: (r) => { showResult(r.ok, r.error, `Terjual: +${fmt(r.ktGained)} KT.`); refresh(); } });
-  const buy = useMutation({ mutationFn: (upgradeId: string) => api.buyUpgrade({ upgradeId }), onSuccess: (r) => { showResult(r.ok, r.error, `Upgrade terpasang (level ${r.newLevel ?? "?"}) seharga ${fmt(r.costPaid)} KT.`); refresh(); } });
-  const cancelWd = useMutation({ mutationFn: (wdId: number) => api.cancelWithdrawal({ wdId }), onSuccess: (r) => { showResult(r.ok, r.error, "WD dibatalkan — KT dikembalikan ke saldo."); refresh(); } });
+  const sellAll = useMutation({ mutationFn: () => api.sellAllOre({}), onSuccess: (r) => { showResult(r.ok, r.error, t("sellAllDone", { kt: fmt(r.ktGained) })); refresh(); } });
+  const sellOne = useMutation({ mutationFn: (args: { oreId: string; qty: number }) => api.sellOre(args), onSuccess: (r) => { showResult(r.ok, r.error, t("sellOneDone", { kt: fmt(r.ktGained) })); refresh(); } });
+  const buy = useMutation({ mutationFn: (upgradeId: string) => api.buyUpgrade({ upgradeId }), onSuccess: (r) => { showResult(r.ok, r.error, t("upgradeBought", { level: r.newLevel ?? "?", cost: fmt(r.costPaid) })); refresh(); } });
+  const cancelWd = useMutation({ mutationFn: (wdId: number) => api.cancelWithdrawal({ wdId }), onSuccess: (r) => { showResult(r.ok, r.error, t("wdCancelled")); refresh(); } });
 
-  if (state.isPending) return (<div className="min-h-screen bg-[var(--bg)] text-[var(--text)]"><div aria-hidden="true" className="bg-[var(--bg)] pt-safe" /><main className="mx-auto max-w-3xl px-4 py-16 text-center"><p className="font-display text-2xl tracking-widest">ASTRA MINING</p><p className="mt-2 text-sm text-[var(--dim)]">Menghubungkan ke stasiun orbital…</p><p className="mt-2 text-[11px] text-[var(--dim)]">{sessionLabel}</p></main></div>);
-  if (state.error || !state.data) return (<div className="min-h-screen bg-[var(--bg)] text-[var(--text)]"><div aria-hidden="true" className="bg-[var(--bg)] pt-safe" /><main className="mx-auto max-w-3xl px-4 py-16 text-center"><p className="font-display text-xl">Sinyal stasiun terputus</p><p className="mt-2 text-sm text-[var(--dim)]">Koneksi ke server misi gagal. Coba muat ulang.</p><p className="mt-2 text-[11px] text-[var(--dim)]">{sessionLabel}</p><button type="button" onClick={() => state.refetch()} className="btn-press mt-4 rounded-xl bg-cyan-500 px-5 py-2 font-bold text-black">Coba Lagi</button></main></div>);
+  if (state.isPending) return (<div className="min-h-screen bg-[var(--bg)] text-[var(--text)]"><div aria-hidden="true" className="bg-[var(--bg)] pt-safe" /><main className="mx-auto max-w-3xl px-4 py-16 text-center"><p className="font-display text-2xl tracking-widest">ASTRA MINING</p><p className="mt-2 text-sm text-[var(--dim)]">{t("loading")}</p><p className="mt-2 text-[11px] text-[var(--dim)]">{sessionLabel}</p></main></div>);
+  if (state.error || !state.data) return (<div className="min-h-screen bg-[var(--bg)] text-[var(--text)]"><div aria-hidden="true" className="bg-[var(--bg)] pt-safe" /><main className="mx-auto max-w-3xl px-4 py-16 text-center"><p className="font-display text-xl">{t("connLost")}</p><p className="mt-2 text-sm text-[var(--dim)]">{t("connLostDesc")}</p><p className="mt-2 text-[11px] text-[var(--dim)]">{sessionLabel}</p><button type="button" onClick={() => state.refetch()} className="btn-press mt-4 rounded-xl bg-cyan-500 px-5 py-2 font-bold text-black">{t("retry")}</button></main></div>);
 
   const data = state.data; const p = data.player; const exp = data.expedition; const job = data.job;
 
@@ -669,17 +659,17 @@ export function App() {
   const totalOreQty = data.ores.reduce((a, o) => a + o.qty, 0);
   const ktToNextUsdt = p.ktBalance >= p.wdMinKt ? 0 : p.wdMinKt - p.ktBalance;
   const tabs: { id: Tab; label: string; icon: ReactNode; badge?: number }[] = [
-    { id: "tambang", label: "Jelajah Asteroid", icon: <RocketIcon size={16} /> },
-    { id: "peta", label: "Peta Tambang", icon: <MapIcon size={16} /> },
-    { id: "pasar", label: "Stasiun Jual", icon: <SatelliteIcon size={16} />, badge: totalOreQty > 0 ? totalOreQty : undefined },
-    { id: "upgrade", label: "Hanggar", icon: <WrenchIcon size={16} /> },
-    { id: "wd", label: "WD USDT", icon: <GemIcon size={16} /> },
+    { id: "tambang", label: t("tabMine"), icon: <RocketIcon size={16} /> },
+    { id: "peta", label: t("tabMaps"), icon: <MapIcon size={16} /> },
+    { id: "pasar", label: t("tabMarket"), icon: <SatelliteIcon size={16} />, badge: totalOreQty > 0 ? totalOreQty : undefined },
+    { id: "upgrade", label: t("tabHangar"), icon: <WrenchIcon size={16} /> },
+    { id: "wd", label: t("tabWd"), icon: <GemIcon size={16} /> },
   ];
   // Tab Kendali hanya untuk pemilik — pemain biasa tidak pernah
   // melihatnya (server tetap yang menegakkan: aksi Kendali ditolak
   // untuk non-admin walau tab-nya dipanggil langsung).
   if (p.isAdmin) {
-    tabs.push({ id: "admin", label: "Kendali", icon: <DishIcon size={16} />, badge: adminCount > 0 ? adminCount : undefined });
+    tabs.push({ id: "admin", label: t("tabAdmin"), icon: <DishIcon size={16} />, badge: adminCount > 0 ? adminCount : undefined });
   }
 
   return (
@@ -688,13 +678,13 @@ export function App() {
       {burst && <ConfettiLayer burst={burst} />}
       {/* HERO REALISTIS */}
       <div className="relative overflow-hidden">
-        <img src={heroImg} alt="Rig tambang raksasa mengebor permukaan asteroid di luar angkasa dengan Bumi terlihat di kejauhan" className="animate-hero-zoom h-[300px] w-full object-cover sm:h-[380px]" />
+        <img src={heroImg} alt={t("heroImgAlt")} className="animate-hero-zoom h-[300px] w-full object-cover sm:h-[380px]" />
         <div className="absolute inset-0 bg-gradient-to-t from-[#050810] via-[#050810]/35 to-transparent" />
         <div className="absolute inset-x-0 bottom-0 mx-auto max-w-3xl px-4 pb-4">
-          <p className="text-[11px] font-bold uppercase tracking-[0.3em] text-cyan-300">Play-to-Earn • Jelajah Asteroid • Dapatkan USDT</p>
-          <p className="mt-1 text-[11px] text-[var(--dim)]">{sessionLabel}</p>
+          <p className="text-[11px] font-bold uppercase tracking-[0.3em] text-cyan-300">{t("heroEyebrow")}</p>
+          <div className="mt-1 flex flex-wrap items-center gap-2"><p className="text-[11px] text-[var(--dim)]">{sessionLabel}</p><LanguagePicker /></div>
           <h1 className="font-display title-shine mt-1 text-3xl font-black leading-none sm:text-5xl">ASTRA MINING</h1>
-          <p className="mt-2 max-w-xl text-[15px] leading-snug text-slate-200">Jelajahi asteroid satu per satu: <b>scan</b> komposisinya, <b>bor urat mineralnya</b> — setiap operasi butuh waktu nyata — jual hasilnya jadi <b>Kredit Tambang Antariksa (KT)</b>, lalu tarik jadi <b>USDT</b> asli.</p>
+          <p className="mt-2 max-w-xl text-[15px] leading-snug text-slate-200">{trich("heroDesc")}</p>
         </div>
       </div>
 
@@ -702,47 +692,47 @@ export function App() {
         <section className="-mt-1 rounded-2xl border border-[var(--border)] bg-[var(--surface)]/95 p-4 shadow-2xl backdrop-blur">
           <div className="flex flex-wrap items-end justify-between gap-4">
             <div>
-              <p className="text-[11px] font-bold uppercase tracking-[0.25em] text-[var(--dim)]">Saldo Kredit Antariksa</p>
+              <p className="text-[11px] font-bold uppercase tracking-[0.25em] text-[var(--dim)]">{t("balTitle")}</p>
               <div className="mt-1 flex items-center gap-3">
-                <img src={ktLogoImg} alt="Logo token KT — koin emas bertuliskan KT dikelilingi kristal dan asteroid dengan latar luar angkasa biru tua" className="h-14 w-14 shrink-0 rounded-2xl object-cover shadow-lg shadow-amber-500/20 ring-2 ring-amber-400/50" />
+                <img src={ktLogoImg} alt={t("ktLogoAlt")} className="h-14 w-14 shrink-0 rounded-2xl object-cover shadow-lg shadow-amber-500/20 ring-2 ring-amber-400/50" />
                 <p className="font-display text-4xl leading-tight text-cyan-300"><span className={balanceGlow ? "balance-glow" : undefined}>{fmt(p.ktBalance)}</span> <span className="text-xl">KT</span></p>
               </div>
-              <p className="text-sm text-[var(--dim)]">≈ {p.usdtEquivalent.toLocaleString("id-ID", { maximumFractionDigits: 3 })} USDT · {ktToNextUsdt > 0 ? `kurang ${fmt(ktToNextUsdt)} KT lagi untuk WD` : (<span className="inline-flex items-center gap-1 font-bold text-emerald-300"><CheckIcon size={14} /> sudah bisa WD!</span>)}</p>
+              <p className="text-sm text-[var(--dim)]">{ktToNextUsdt > 0 ? t("balNeed", { usdt: fmt(p.usdtEquivalent), kt: fmt(ktToNextUsdt) }) : (<span className="inline-flex items-center gap-1 font-bold text-emerald-300"><CheckIcon size={14} /> {t("balReady")}</span>)}</p>
               {p.premium.active ? (
-                <p className="mt-1.5 inline-flex items-center gap-1.5 rounded-full border border-amber-400/50 bg-amber-400/15 px-2.5 py-0.5 text-xs font-bold text-amber-300"><CrownIcon size={13} /> PREMIUM {p.premium.tier === "pro" ? "PRO · BOR GANDA" : "STANDARD"} AKTIF{p.premium.until ? ` — s/d ${new Date(p.premium.until).toLocaleDateString("id-ID", { day: "numeric", month: "short" })}` : ""}</p>
+                <p className="mt-1.5 inline-flex items-center gap-1.5 rounded-full border border-amber-400/50 bg-amber-400/15 px-2.5 py-0.5 text-xs font-bold text-amber-300"><CrownIcon size={13} /> {t("premiumActive", { tier: p.premium.tier === "pro" ? t("dualDrillTag") : t("standardTag") })}{p.premium.until ? t("premiumUntilShort", { date: fmtDate(p.premium.until) }) : ""}</p>
               ) : (
-                <button type="button" onClick={() => setTab("upgrade")} className="btn-press mt-1.5 inline-flex items-center gap-1.5 rounded-full border border-amber-400/40 bg-amber-400/10 px-2.5 py-0.5 text-xs font-bold text-amber-200"><CrownIcon size={13} /> Aktifkan Premium — bor lebih cepat, harga jual +15%</button>
+                <button type="button" onClick={() => setTab("upgrade")} className="btn-press mt-1.5 inline-flex items-center gap-1.5 rounded-full border border-amber-400/40 bg-amber-400/10 px-2.5 py-0.5 text-xs font-bold text-amber-200"><CrownIcon size={13} /> {t("activatePremium")}</button>
               )}
             </div>
             <div className="text-right">
-              <p className="text-[11px] font-bold uppercase tracking-[0.25em] text-[var(--dim)]">Posisi Misi</p>
-              <p className="font-display text-xl leading-tight">SEKTOR {p.layer}</p>
-              <p className="text-sm text-[var(--dim)]">{fmt(p.depthMeters)} km dari Bumi</p>
+              <p className="text-[11px] font-bold uppercase tracking-[0.25em] text-[var(--dim)]">{t("missionPos")}</p>
+              <p className="font-display text-xl leading-tight">{t("sector", { n: p.layer })}</p>
+              <p className="text-sm text-[var(--dim)]">{t("kmFromEarth", { km: fmt(p.depthMeters) })}</p>
             </div>
           </div>
           <div className="mt-4">
-            <div className="flex justify-between text-xs font-bold"><span className="inline-flex items-center gap-1"><ZapIcon size={13} /> Daya Kapal {p.energy}/{p.maxEnergy}</span><span className="text-[var(--dim)]">isi ulang 1 per {fmtDur(p.regenSeconds)}{p.energy < p.maxEnergy ? ` · penuh ±${fmtDur(p.regenSeconds * (p.maxEnergy - p.energy))}` : ""}</span></div>
-            <div className="energy-shimmer mt-1 h-3 overflow-hidden rounded-full bg-[var(--surface2)]" role="progressbar" aria-valuenow={p.energy} aria-valuemin={0} aria-valuemax={p.maxEnergy} aria-label="Daya kapal"><div className="h-full rounded-full bg-gradient-to-r from-cyan-400 to-sky-600 transition-all" style={{ width: `${p.maxEnergy ? (p.energy / p.maxEnergy) * 100 : 0}%` }} /></div>
+            <div className="flex justify-between text-xs font-bold"><span className="inline-flex items-center gap-1"><ZapIcon size={13} /> {t("shipPower", { e: p.energy, m: p.maxEnergy })}</span><span className="text-[var(--dim)]">{t("regenOne", { dur: fmtDur(p.regenSeconds) })}{p.energy < p.maxEnergy ? t("fullIn", { dur: fmtDur(p.regenSeconds * (p.maxEnergy - p.energy)) }) : ""}</span></div>
+            <div className="energy-shimmer mt-1 h-3 overflow-hidden rounded-full bg-[var(--surface2)]" role="progressbar" aria-valuenow={p.energy} aria-valuemin={0} aria-valuemax={p.maxEnergy} aria-label={t("energyAria")}><div className="h-full rounded-full bg-gradient-to-r from-cyan-400 to-sky-600 transition-all" style={{ width: `${p.maxEnergy ? (p.energy / p.maxEnergy) * 100 : 0}%` }} /></div>
           </div>
-          {p.canClaimDailyBonus && (<button type="button" onClick={() => claimBonus.mutate()} disabled={claimBonus.isPending} className="btn-press mt-3 inline-flex w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-cyan-400 bg-cyan-400/10 px-4 py-2 font-bold text-cyan-200"><GiftIcon size={17} /> Klaim Bonus Misi Harian +{fmt(p.dailyBonusKt)} KT</button>)}
+          {p.canClaimDailyBonus && (<button type="button" onClick={() => claimBonus.mutate()} disabled={claimBonus.isPending} className="btn-press mt-3 inline-flex w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-cyan-400 bg-cyan-400/10 px-4 py-2 font-bold text-cyan-200"><GiftIcon size={17} /> {t("claimDaily", { kt: fmt(p.dailyBonusKt) })}</button>)}
           <div className="mt-3">
-            <button type="button" onClick={handleWatchAd} disabled={watchAd.isPending || adPlaying || !p.ads.canWatch} aria-label={`Tonton iklan sponsor dan dapatkan ${fmt(p.ads.rewardKt)} KT, sisa ${p.ads.remainingToday} dari ${p.ads.dailyCap} kali hari ini`} className="btn-press inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-amber-400 to-yellow-500 px-4 py-2.5 font-display text-sm text-black shadow-lg shadow-amber-500/20 disabled:opacity-40">
+            <button type="button" onClick={handleWatchAd} disabled={watchAd.isPending || adPlaying || !p.ads.canWatch} aria-label={t("adAriaFull", { reward: fmt(p.ads.rewardKt), remaining: p.ads.remainingToday, cap: p.ads.dailyCap })} className="btn-press inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-amber-400 to-yellow-500 px-4 py-2.5 font-display text-sm text-black shadow-lg shadow-amber-500/20 disabled:opacity-40">
               <PlayIcon size={18} />
               {adPlaying
-                ? "Memutar Iklan…"
+                ? t("adPlaying")
                 : p.ads.remainingToday <= 0
-                  ? "Kuota Iklan Hari Ini Habis"
+                  ? t("adQuotaOut")
                   : p.ads.cooldownRemainingSec > 0
-                    ? `Iklan Berikutnya dalam ${p.ads.cooldownRemainingSec} dtk…`
-                    : `Tonton Iklan — Dapat +${fmt(p.ads.rewardKt)} KT`}
+                    ? t("adNextIn", { s: p.ads.cooldownRemainingSec })
+                    : t("watchAdBtn", { kt: fmt(p.ads.rewardKt) })}
             </button>
             <p className="mt-1.5 text-center text-xs text-[var(--dim)]">
-              Iklan sponsor AdsGram — aktif setelah pemilik memasukkan blockId dari partner.adsgram.ai; sampai saat itu tombol memberi hadiah langsung seperti biasa. Hadiah {fmt(p.ads.rewardKt)} KT per tontonan, maks {p.ads.dailyCap}× sehari ({p.ads.watchedToday}/{p.ads.dailyCap} terpakai), jeda {p.ads.cooldownSeconds} detik antar-iklan — semua batas dihitung &amp; divalidasi server.
+              {t("adNote", { reward: fmt(p.ads.rewardKt), cap: p.ads.dailyCap, watched: p.ads.watchedToday, cooldown: p.ads.cooldownSeconds })}
             </p>
           </div>
         </section>
 
-        <nav aria-label="Menu misi" className="sticky top-0 z-20 mt-4 grid grid-cols-3 gap-2 bg-[var(--bg)]/95 py-2 backdrop-blur">
+        <nav aria-label={t("navLabel")} className="sticky top-0 z-20 mt-4 grid grid-cols-3 gap-2 bg-[var(--bg)]/95 py-2 backdrop-blur">
           {tabs.map((t) => (<button key={t.id} type="button" onClick={() => setTab(t.id)} aria-pressed={tab === t.id} className={`btn-press relative inline-flex min-h-11 w-full min-w-0 items-center justify-center gap-1.5 rounded-2xl px-2 py-2 text-center text-[13px] font-bold leading-tight ${tab === t.id ? "bg-cyan-400 text-black" : "bg-[var(--surface)] text-[var(--text)] border border-[var(--border)]"}`}><span className="shrink-0">{t.icon}</span><span className="min-w-0">{t.label}</span>{t.badge != null && (<span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-[11px] font-bold text-white">{t.badge}</span>)}</button>))}
         </nav>
 
@@ -754,13 +744,13 @@ export function App() {
           <section className="mt-4 space-y-4">
             <div className="overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface)]">
               <div className="relative h-44 overflow-hidden">
-                <img src={MAP_IMAGES[data.maps[exp.zoneIndex]?.image ?? "asteroid"] ?? asteroidImg} alt={`Pemandangan peta tambang ${exp.zoneName}`} className="animate-drift h-full w-full object-cover" />
+                <img src={MAP_IMAGES[data.maps[exp.zoneIndex]?.image ?? "asteroid"] ?? asteroidImg} alt={t("mapImgAlt", { zone: exp.zoneName })} className="animate-drift h-full w-full object-cover" />
                 <div className="absolute inset-0 bg-gradient-to-t from-[var(--surface)] to-transparent" />
                 <div className="absolute bottom-2 left-4 right-4">
                   <div className="flex items-end justify-between gap-3">
                     <div>
                       <h2 className="font-display text-lg leading-tight">{exp.name}</h2>
-                      <p className="text-xs text-slate-300">{exp.klass} · ⌀ {exp.diameterKm.toLocaleString("id-ID")} km · {exp.zoneName}</p>
+                      <p className="text-xs text-slate-300">{exp.klass} · ⌀ {fmt(exp.diameterKm)} km · {exp.zoneName}</p>
                     </div>
                     <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-black/60 px-3 py-1 text-[11px] font-bold text-cyan-300 border border-cyan-500/40"><span className="h-1.5 w-1.5 animate-pulse rounded-full bg-red-400" /> LIVE FEED • CAM 04</span>
                   </div>
@@ -769,28 +759,28 @@ export function App() {
               <div className="p-4">
                 <p className="text-sm text-[var(--dim)]">{p.zoneDesc}</p>
                 {(() => { const cm = data.maps[exp.zoneIndex]; if (!cm) return null; const chips: ReactNode[] = [];
-                  if (cm.jamChancePct > 0) chips.push(<span key="jam" className="inline-flex items-center gap-1 rounded-full border border-red-400/40 bg-red-400/10 px-2 py-0.5 text-[11px] font-bold text-red-300"><AlertIcon size={12} /> Bor macet {cm.jamChancePct}%</span>);
-                  if (cm.damageChancePct > 0) chips.push(<span key="dmg" className="inline-flex items-center gap-1 rounded-full border border-orange-400/40 bg-orange-400/10 px-2 py-0.5 text-[11px] font-bold text-orange-300"><ShieldIcon size={12} /> Risiko lambung {cm.damageChancePct}% · perbaikan {fmt(cm.damageFeeKt)} KT</span>);
-                  if (cm.radiation > 0) chips.push(<span key="rad" className="inline-flex items-center gap-1 rounded-full border border-violet-400/40 bg-violet-400/10 px-2 py-0.5 text-[11px] font-bold text-violet-300"><RadiationIcon size={12} /> Radiasi +{cm.radiation} daya/operasi</span>);
-                  if (cm.timeFactor > 1) chips.push(<span key="time" className="inline-flex items-center gap-1 rounded-full border border-sky-400/40 bg-sky-400/10 px-2 py-0.5 text-[11px] font-bold text-sky-300">Jarak jauh — scan &amp; bor {Math.round((cm.timeFactor - 1) * 100)}% lebih lama</span>);
-                  return chips.length > 0 ? (<div className="mt-2 flex flex-wrap gap-1.5" aria-label="Tantangan peta aktif">{chips}</div>) : (<p className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-emerald-400/40 bg-emerald-400/10 px-2 py-0.5 text-[11px] font-bold text-emerald-300"><ShieldIcon size={12} /> Peta aman — tanpa tantangan, cocok untuk pemula</p>);
+                  if (cm.jamChancePct > 0) chips.push(<span key="jam" className="inline-flex items-center gap-1 rounded-full border border-red-400/40 bg-red-400/10 px-2 py-0.5 text-[11px] font-bold text-red-300"><AlertIcon size={12} /> {t("chipJam", { pct: cm.jamChancePct })}</span>);
+                  if (cm.damageChancePct > 0) chips.push(<span key="dmg" className="inline-flex items-center gap-1 rounded-full border border-orange-400/40 bg-orange-400/10 px-2 py-0.5 text-[11px] font-bold text-orange-300"><ShieldIcon size={12} /> {t("chipDamage", { pct: cm.damageChancePct, fee: fmt(cm.damageFeeKt) })}</span>);
+                  if (cm.radiation > 0) chips.push(<span key="rad" className="inline-flex items-center gap-1 rounded-full border border-violet-400/40 bg-violet-400/10 px-2 py-0.5 text-[11px] font-bold text-violet-300"><RadiationIcon size={12} /> {t("chipRadiation", { n: cm.radiation })}</span>);
+                  if (cm.timeFactor > 1) chips.push(<span key="time" className="inline-flex items-center gap-1 rounded-full border border-sky-400/40 bg-sky-400/10 px-2 py-0.5 text-[11px] font-bold text-sky-300">{t("chipTime", { pct: Math.round((cm.timeFactor - 1) * 100) })}</span>);
+                  return chips.length > 0 ? (<div className="mt-2 flex flex-wrap gap-1.5" aria-label={t("chipsAria")}>{chips}</div>) : (<p className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-emerald-400/40 bg-emerald-400/10 px-2 py-0.5 text-[11px] font-bold text-emerald-300"><ShieldIcon size={12} /> {t("chipSafe")}</p>);
                 })()}
-                {exp.scanned && (<p className="mt-2 text-sm font-bold">Urat tertambang: {exp.minedCount} dari {exp.veinCount}{exp.allMined ? " — asteroid ini sudah tandas." : ""}</p>)}
+                {exp.scanned && (<p className="mt-2 text-sm font-bold">{t("veinsMined", { mined: exp.minedCount, count: exp.veinCount })}{exp.allMined ? t("asteroidDone") : ""}</p>)}
 
                 {job ? (
                   <JobPanel job={job} dualDrill={p.premium.dualDrill} onCollect={() => collect.mutate()} collecting={collect.isPending} onCancel={() => cancelJob.mutate()} cancelling={cancelJob.isPending} onRefresh={refresh} />
                 ) : !exp.scanned ? (
                   <div className="mt-4 rounded-xl border border-cyan-500/30 bg-[var(--surface2)] p-4">
-                    <h3 className="font-display inline-flex items-center gap-2 text-sm"><span className="text-cyan-300"><TelescopeIcon size={17} /></span> Komposisi Belum Dipindai</h3>
-                    <p className="mt-1 text-sm text-[var(--dim)]">Radar pasif menangkap pantulan dari <b className="text-[var(--text)]">{exp.veinCount} urat mineral</b>, tapi jenis dan jumlahnya belum diketahui. Jalankan scan spektrometer untuk membuka komposisi asteroid ini — tanpa scan, lengan bor tidak bisa dikunci ke urat mana pun.</p>
+                    <h3 className="font-display inline-flex items-center gap-2 text-sm"><span className="text-cyan-300"><TelescopeIcon size={17} /></span> {t("notScannedTitle")}</h3>
+                    <p className="mt-1 text-sm text-[var(--dim)]">{trich("notScannedDesc", { count: exp.veinCount })}</p>
                     <button type="button" onClick={() => startScan.mutate()} disabled={startScan.isPending || p.energy < exp.scanEnergyCost} className="btn-press mt-3 w-full rounded-xl bg-cyan-400 px-4 py-3 font-display text-sm text-black disabled:opacity-40">
-                      {p.energy < exp.scanEnergyCost ? `Daya kurang — scan butuh ${exp.scanEnergyCost} daya` : `Mulai Scan Spektrometer — ${exp.scanEnergyCost} daya • ±${fmtDur(exp.scanDurationSec)}`}
+                      {p.energy < exp.scanEnergyCost ? t("scanNoEnergy", { cost: exp.scanEnergyCost }) : t("startScanBtn", { cost: exp.scanEnergyCost, dur: fmtDur(exp.scanDurationSec) })}
                     </button>
-                    <p className="mt-2 text-xs text-[var(--dim)]">Scan adalah operasi berwaktu nyata yang dicatat di server misi — sengaja dibuat lama, dan klik berulang tidak mempercepatnya. Mau scan lebih cepat? Naikkan <b className="text-[var(--text)]">Spektrometer Inti</b> di Hanggar (−7% waktu scan per level).</p>
+                    <p className="mt-2 text-xs text-[var(--dim)]">{trich("scanNote")}</p>
                   </div>
                 ) : (
                   <div className="mt-4 space-y-3">
-                    {exp.anomalyText && (<p className="flex items-start gap-2 rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm font-semibold text-amber-200"><span className="mt-0.5 shrink-0"><AlertIcon size={15} /></span> Anomali terdeteksi: {exp.anomalyText}</p>)}
+                    {exp.anomalyText && (<p className="flex items-start gap-2 rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm font-semibold text-amber-200"><span className="mt-0.5 shrink-0"><AlertIcon size={15} /></span> {t("anomalyDetected", { text: exp.anomalyText })}</p>)}
                     <ul className="space-y-3">
                       {exp.veins.map((v) => {
                         const rare = RARE_ORE_IDS.has(v.oreId);
@@ -799,17 +789,17 @@ export function App() {
                             <div className="flex items-start gap-3">
                               <span aria-hidden="true" className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-white/20 ${v.mined ? "" : "ore-glow"} ${rare && !v.mined ? "crystal-shine" : ""}`} style={{ backgroundColor: v.color + "33" }}><OreIcon id={v.icon} color={v.color} size={26} /></span>
                               <div className="min-w-0 flex-1">
-                                <p className="font-bold leading-tight">{v.name} <span className="text-sm font-semibold text-[var(--dim)]">×{v.qty} unit</span></p>
+                                <p className="font-bold leading-tight">{v.name} <span className="text-sm font-semibold text-[var(--dim)]">{t("veinQty", { qty: v.qty, s: v.qty === 1 ? "" : "s" })}</span></p>
                                 <p className="mt-0.5 text-xs text-[var(--dim)]">
-                                  Kekerasan batuan {"●".repeat(v.hardness)}{"○".repeat(4 - v.hardness)} · Kekayaan urat {v.richness}%{v.richness >= 85 ? " (urat kaya: +1 unit bonus)" : ""}
+                                  {t("veinHardness", { dots: "●".repeat(v.hardness) + "○".repeat(4 - v.hardness), rich: v.richness })}{v.richness >= 85 ? t("richBonus") : ""}
                                 </p>
-                                <p className="text-xs text-[var(--dim)]">Perkiraan nilai jual ≈ {fmt(v.qty * (data.ores.find((o) => o.id === v.oreId)?.sellPrice ?? 0))} KT</p>
+                                <p className="text-xs text-[var(--dim)]">{t("veinValue", { kt: fmt(v.qty * (data.ores.find((o) => o.id === v.oreId)?.sellPrice ?? 0)) })}</p>
                               </div>
-                              {v.mined && (<span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-emerald-500/20 border border-emerald-500/40 px-2 py-0.5 text-[11px] font-bold text-emerald-300"><CheckIcon size={12} /> Sudah Ditambang</span>)}
+                              {v.mined && (<span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-emerald-500/20 border border-emerald-500/40 px-2 py-0.5 text-[11px] font-bold text-emerald-300"><CheckIcon size={12} /> {t("veinMined")}</span>)}
                             </div>
                             {!v.mined && (
-                              <button type="button" onClick={() => startMine.mutate(v.index)} disabled={startMine.isPending || p.energy < v.energyCost} aria-label={`Bor urat ${v.name}, butuh ${v.energyCost} daya dan waktu ${fmtDur(v.durationSec)}`} className="btn-press mt-3 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-cyan-400 px-4 py-2.5 font-bold text-black disabled:opacity-40">
-                                <DrillIcon size={16} /> {p.energy < v.energyCost ? `Daya kurang — bor butuh ${v.energyCost} daya` : `Bor Urat Ini — ${v.energyCost} daya • ±${fmtDur(v.durationSec)}`}
+                              <button type="button" onClick={() => startMine.mutate(v.index)} disabled={startMine.isPending || p.energy < v.energyCost} aria-label={t("mineAria", { name: v.name, cost: v.energyCost, dur: fmtDur(v.durationSec) })} className="btn-press mt-3 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-cyan-400 px-4 py-2.5 font-bold text-black disabled:opacity-40">
+                                <DrillIcon size={16} /> {p.energy < v.energyCost ? t("mineNoEnergy", { cost: v.energyCost }) : t("mineBtn", { cost: v.energyCost, dur: fmtDur(v.durationSec) })}
                               </button>
                             )}
                           </li>
@@ -817,46 +807,46 @@ export function App() {
                       })}
                     </ul>
                     {exp.allMined ? (
-                      <button type="button" onClick={() => complete.mutate()} disabled={complete.isPending} className="btn-press inline-flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-400 px-4 py-3 font-display text-sm text-black disabled:opacity-40"><RocketIcon size={16} /> Selesaikan Ekspedisi &amp; Warp ke Asteroid Berikutnya — Bonus +{fmt(exp.completionBonusKt)} KT</button>
+                      <button type="button" onClick={() => complete.mutate()} disabled={complete.isPending} className="btn-press inline-flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-400 px-4 py-3 font-display text-sm text-black disabled:opacity-40"><RocketIcon size={16} /> {t("completeBtn", { bonus: fmt(exp.completionBonusKt) })}</button>
                     ) : (
-                      <p className="text-xs text-[var(--dim)]">Tambang semua urat untuk menyelesaikan ekspedisi dan menerima bonus {fmt(exp.completionBonusKt)} KT.</p>
+                      <p className="text-xs text-[var(--dim)]">{t("completeHint", { bonus: fmt(exp.completionBonusKt) })}</p>
                     )}
                   </div>
                 )}
 
                 {!job && (
                   <button type="button" onClick={() => abandon.mutate()} disabled={abandon.isPending || p.energy < exp.abandonEnergyCost} className="btn-press inline-flex w-full items-center justify-center gap-2 rounded-xl border border-[var(--border)] px-4 py-2 text-sm font-bold text-[var(--dim)] disabled:opacity-40">
-                    <SatelliteIcon size={15} /> Tinggalkan asteroid ini &amp; warp ke asteroid lain ({exp.abandonEnergyCost} daya, tanpa bonus)
+                    <SatelliteIcon size={15} /> {t("abandonBtn", { cost: exp.abandonEnergyCost })}
                   </button>
                 )}
-                {p.energy < 5 && !job && (<p className="mt-3 text-sm font-bold text-red-300">Daya hampir habis — reaktor sedang mengisi ulang, 1 daya per {fmtDur(p.regenSeconds)}. Isi ulang memang sengaja lambat; naikkan Reaktor Fusi Mini di Hanggar untuk mempercepatnya, atau Tangki O₂ &amp; Baterai Surya untuk kapasitas yang lebih besar.</p>)}
+                {p.energy < 5 && !job && (<p className="mt-3 text-sm font-bold text-red-300">{t("lowEnergy", { dur: fmtDur(p.regenSeconds) })}</p>)}
               </div>
             </div>
 
             <div className="grid grid-cols-3 gap-2 text-center">
-              {[{ label: "Operasi tambang selesai", value: fmt(p.totalDigs) }, { label: "Asteroid dituntaskan", value: fmt(p.asteroidsDone) }, { label: "USDT sudah dibayar", value: fmt(p.totalWdPaidUsdt) }].map((s, i) => (<div key={s.label} className="animate-float-slow rounded-xl bg-[var(--surface)] border border-[var(--border)] px-2 py-3" style={{ animationDelay: `${i * 0.9}s` }}><p className="font-display text-lg">{s.value}</p><p className="text-[11px] font-semibold text-[var(--dim)]">{s.label}</p></div>))}
+              {[{ label: t("statDigs"), value: fmt(p.totalDigs) }, { label: t("statAsteroids"), value: fmt(p.asteroidsDone) }, { label: t("statUsdtPaid"), value: fmt(p.totalWdPaidUsdt) }].map((s, i) => (<div key={s.label} className="animate-float-slow rounded-xl bg-[var(--surface)] border border-[var(--border)] px-2 py-3" style={{ animationDelay: `${i * 0.9}s` }}><p className="font-display text-lg">{s.value}</p><p className="text-[11px] font-semibold text-[var(--dim)]">{s.label}</p></div>))}
             </div>
 
             <details className="rounded-2xl bg-[var(--surface)] border border-[var(--border)] p-4">
-              <summary className="font-display inline-flex cursor-pointer items-center gap-2 text-sm"><BookIcon size={15} /> Aturan Misi &amp; Ekonomi Antariksa</summary>
+              <summary className="font-display inline-flex cursor-pointer items-center gap-2 text-sm"><BookIcon size={15} /> {t("rulesTitle")}</summary>
               <ol className="mt-3 list-decimal space-y-2 pl-5 text-sm leading-relaxed">
-                <li>Kapalmu mengorbit <strong>satu asteroid dalam satu waktu</strong>. Setiap asteroid punya komposisi urat mineral yang berbeda — tidak ada dua asteroid yang sama.</li>
-                <li><strong>Scan dulu, baru bor.</strong> Scan spektrometer membuka jenis, jumlah, kekerasan, dan kekayaan tiap urat. Tanpa scan, urat tidak bisa dibor.</li>
-                <li><strong>Semua operasi memakai waktu nyata.</strong> Scan butuh ±{fmtDur(exp.scanDurationSec)}, pengeboran urat butuh waktu sesuai kekerasan batuannya (urat keras &amp; besar = lebih lama). Waktu berjalan di server misi — klik berulang tidak mempercepat apa pun, dan operasi tetap selesai walau halaman ditutup.</li>
-                <li>Satu operasi dalam satu waktu. Membatalkan operasi tidak mengembalikan daya yang sudah terpakai.</li>
-                <li><strong>Daya kapal adalah rem utama ekonomi misi.</strong> Setiap scan &amp; bor memakai daya, dan isi ulangnya <strong>sengaja lambat: 1 daya per {fmtDur(p.regenSeconds)}</strong> (tangki penuh {p.maxEnergy} daya butuh ±{fmtDur(p.regenSeconds * p.maxEnergy)}). Jadi tidak ada yang bisa menambang tanpa henti — semua penambang dibatasi kecepatan isi ulang yang sama.</li>
-                <li><strong>Bedakan dua upgrade daya di Hanggar.</strong> <strong>Tangki O₂ &amp; Baterai Surya</strong> menaikkan <em>kapasitas</em> (+6 daya maksimum per level): napas misi lebih panjang, lebih banyak operasi dalam satu sesi, dan daya yang terisi selama kamu pergi tidak terbuang karena tangki cepat penuh — tapi upgrade ini tidak mempercepat isi ulang. <strong>Reaktor Fusi Mini</strong> menaikkan <em>kecepatan</em> isi ulang (−10% waktu per level). Mau menunggu lebih singkat? Naikkan Reaktor. Mau sesi menambang lebih panjang? Naikkan Tangki.</li>
-                <li>Jual mineral di Stasiun Orbital untuk mendapat <strong>Kredit Tambang Antariksa (KT)</strong>. KT dipakai untuk upgrade kapal &amp; alat di Hanggar, atau ditarik jadi USDT.</li>
-                <li>Tambang semua urat dalam satu asteroid untuk menyelesaikan ekspedisi: bonus KT + warp ke sektor yang lebih jauh, tempat mineral langka lebih sering muncul.</li>
-                <li>Rasio tetap: <strong>1.000 KT = 1 USDT</strong>, dan jumlah WD bergerak dalam kelipatan 100 KT (0,1 USDT). <strong>Minimum WD dua tingkat:</strong> WD pertamamu 100 KT (0,1 USDT), WD berikutnya minimum 5.000 KT (5 USDT). <strong>Maksimum per WD: 5.000 KT (5 USDT)</strong> — jadi WD ulang selalu tepat 5.000 KT. <strong>Tidak ada batas waktu antar-WD:</strong> seberapa cepat kamu bisa WD tergantung seberapa cepat kamu mengumpulkan KT — makin rajin menambang &amp; makin bagus upgrade-mu, makin cepat 5.000 KT terkumpul. Minimum &amp; maksimum yang berlaku untukmu selalu dihitung server dari riwayat WD terbayarmu, dan tertulis di tab WD USDT.</li>
-                <li>WD diproses <strong>manual oleh pemilik misi</strong>. KT dikunci saat pengajuan, pemilik mengirim USDT ke dompetmu lalu menandai Dibayar di Pusat Kendali.</li>
-                <li>WD ditolak/dibatalkan = KT kembali utuh. <strong>Anti-cheat:</strong> semua saldo, waktu operasi, harga, dan minimum WD dihitung &amp; divalidasi di server misi — browser hanya mengirim perintah (scan, bor, jual, WD), tidak pernah menentukan hasilnya. Mengedit tampilan atau mengirim angka palsu dari browser tidak mengubah apa pun di server.</li>
-                <li>Bonus ekspedisi tiap asteroid tuntas, dan bonus harian {fmt(p.dailyBonusKt)} KT sekali sehari — sengaja kecil, karena sumber KT utama memang hasil tambang, bukan bonus gratis.</li>
-                <li><strong>Iklan sponsor:</strong> tombol Tonton Iklan di kartu saldo memberi +{fmt(p.ads.rewardKt)} KT per tontonan, dibatasi server maks {p.ads.dailyCap}× sehari dengan jeda {p.ads.cooldownSeconds} detik antar-iklan (maks {fmt(p.ads.rewardKt * p.ads.dailyCap)} KT/hari) — cukup untuk membantu, tidak cukup untuk menggantikan menambang.</li>
-                <li><strong>Lima peta tambang</strong> terbuka bertahap mengikuti sektormu: Orbit Rendah (Sektor 1) → Sabuk Asteroid (3) → Bulan (6) → Psyche (10) → Sabuk Kuiper (15). Peta yang sudah terbuka bisa dikunjungi lagi kapan pun dari tab Peta Tambang (biaya perjalanan naik mengikuti jarak peta — {data.maps[0]?.travelCost ?? 4} daya untuk peta terdekat sampai {data.maps[4]?.travelCost ?? 12} daya untuk yang terjauh; gratis untuk Premium) — tapi asteroid yang sedang kamu tambang akan ditinggalkan tanpa bonus.</li>
-                <li><strong>Setiap peta punya batu mulia khas</strong> yang tidak ditemukan di peta lain — dari Opal Pelangi &amp; Topaz Emas di Orbit Rendah sampai Opal Es Hitam &amp; Kristal Voidium di Sabuk Kuiper. Harga jualnya jauh di atas mineral biasa.</li>
-                <li><strong>Semakin jauh peta, semakin lama semua operasi.</strong> Jarak dan kekerasan batuan membuat scan &amp; pengeboran di Sabuk Asteroid 30% lebih lama dari Orbit Rendah, di Bulan 60%, di Psyche 2× lipat, dan di Sabuk Kuiper 2,5× lipat — waktu pastinya tertulis di kartu setiap peta. <strong>Tantangan juga naik bersama peta.</strong> Peta pertama aman sepenuhnya. Peta berikutnya membawa risiko bor macet (urat hilang), serpihan yang merusak lambung kapal (biaya perbaikan KT), dan radiasi yang menguras daya ekstra. Persentase pastinya tertulis di kartu setiap peta — risiko diputuskan server saat pengeboran dimulai, bukan saat tombol ditekan.</li>
-                <li><strong>Premium Pass</strong> (di Hanggar) dibayar dengan <strong>Telegram Stars</strong>: Standard (150 Stars / 7 hari) memberi regen daya 2× lebih cepat, scan &amp; bor 25% lebih cepat, harga jual +15%, dan perjalanan antar-peta gratis; Pro (500 Stars / 30 hari) menambahkan <strong>Bor Ganda</strong> — dua lengan bor bekerja bersamaan sehingga pengeboran 2× lebih cepat. Premium tidak mengubah rasio WD.</li>
+                <li>{trich("rule1")}</li>
+                <li>{trich("rule2")}</li>
+                <li>{trich("rule3", { scanDur: fmtDur(exp.scanDurationSec) })}</li>
+                <li>{t("rule4")}</li>
+                <li>{trich("rule5", { regen: fmtDur(p.regenSeconds), maxEnergy: p.maxEnergy, fullDur: fmtDur(p.regenSeconds * p.maxEnergy) })}</li>
+                <li>{trich("rule6")}</li>
+                <li>{trich("rule7")}</li>
+                <li>{t("rule8")}</li>
+                <li>{trich("rule9")}</li>
+                <li>{trich("rule10")}</li>
+                <li>{trich("rule11")}</li>
+                <li>{t("rule12", { dailyBonus: fmt(p.dailyBonusKt) })}</li>
+                <li>{trich("rule13", { adReward: fmt(p.ads.rewardKt), adCap: p.ads.dailyCap, adCooldown: p.ads.cooldownSeconds, adDailyMax: fmt(p.ads.rewardKt * p.ads.dailyCap) })}</li>
+                <li>{trich("rule14", { travelNear: data.maps[0]?.travelCost ?? 4, travelFar: data.maps[4]?.travelCost ?? 12 })}</li>
+                <li>{trich("rule15")}</li>
+                <li>{trich("rule16")}</li>
+                <li>{trich("rule17")}</li>
               </ol>
             </details>
 
@@ -864,18 +854,18 @@ export function App() {
               const missionLog = data.activity.filter((a) => a.category === "mission").slice(0, 8);
               const economyLog = data.activity.filter((a) => a.category === "economy").slice(0, 8);
               const renderLog = (items: typeof data.activity) => items.length === 0
-                ? (<p className="mt-2 text-sm text-[var(--dim)]">Belum ada catatan.</p>)
-                : (<ul className="mt-2 space-y-2">{items.map((a) => (<li key={a.id} className="flex items-baseline justify-between gap-3 text-sm"><span>{a.message}{a.amountKt != null && (<span className={`ml-1.5 whitespace-nowrap font-bold ${a.amountKt >= 0 ? "text-emerald-300" : "text-red-300"}`}>{a.amountKt >= 0 ? "+" : ""}{fmt(a.amountKt)} KT</span>)}</span><span className="shrink-0 text-xs text-[var(--dim)]">{fmtDate(a.createdAt)}</span></li>))}</ul>);
+                ? (<p className="mt-2 text-sm text-[var(--dim)]">{t("logEmpty")}</p>)
+                : (<ul className="mt-2 space-y-2">{items.map((a) => (<li key={a.id} className="flex items-baseline justify-between gap-3 text-sm"><span>{a.message}{a.amountKt != null && (<span className={`ml-1.5 whitespace-nowrap font-bold ${a.amountKt >= 0 ? "text-emerald-300" : "text-red-300"}`}>{a.amountKt >= 0 ? "+" : ""}{fmt(a.amountKt)} KT</span>)}</span><span className="shrink-0 text-xs text-[var(--dim)]">{fmtDateTime(a.createdAt)}</span></li>))}</ul>);
               return (
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div className="rounded-2xl bg-[var(--surface)] border border-[var(--border)] p-4">
-                    <h3 className="font-display inline-flex items-center gap-2 text-sm"><span className="text-cyan-300"><RocketIcon size={15} /></span> Log Misi</h3>
-                    <p className="mt-0.5 text-xs text-[var(--dim)]">Scan, pengeboran, temuan langka, dan ekspedisi.</p>
+                    <h3 className="font-display inline-flex items-center gap-2 text-sm"><span className="text-cyan-300"><RocketIcon size={15} /></span>{t("logMission")}</h3>
+                    <p className="mt-0.5 text-xs text-[var(--dim)]">{t("logMissionDesc")}</p>
                     {renderLog(missionLog)}
                   </div>
                   <div className="rounded-2xl bg-[var(--surface)] border border-[var(--border)] p-4">
-                    <h3 className="font-display inline-flex items-center gap-2 text-sm"><span className="text-emerald-300"><GemIcon size={15} /></span> Log Ekonomi</h3>
-                    <p className="mt-0.5 text-xs text-[var(--dim)]">Penjualan mineral, upgrade, bonus, iklan, Premium, dan WD.</p>
+                    <h3 className="font-display inline-flex items-center gap-2 text-sm"><span className="text-emerald-300"><GemIcon size={15} /></span>{t("logEconomy")}</h3>
+                    <p className="mt-0.5 text-xs text-[var(--dim)]">{t("logEconomyDesc")}</p>
                     {renderLog(economyLog)}
                   </div>
                 </div>
@@ -890,12 +880,12 @@ export function App() {
 
         {tab === "pasar" && (
           <section className="mt-4 overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface)]">
-            <img src={oresImg} alt="Kristal dan mineral berharga hasil tambang asteroid di nampan laboratorium stasiun luar angkasa" className="h-44 w-full object-cover" />
+            <img src={oresImg} alt={t("oresImgAlt")} className="h-44 w-full object-cover" />
             <div className="p-4">
-              <div className="flex items-center justify-between gap-3"><h2 className="font-display text-base">Stasiun Orbital — Jual Mineral</h2><button type="button" onClick={() => sellAll.mutate()} disabled={sellAll.isPending || totalOreQty === 0} className="btn-press rounded-xl bg-cyan-400 px-4 py-2 font-bold text-black disabled:opacity-40">Jual Semua</button></div>
-              <p className="mt-1 text-sm text-[var(--dim)]">Harga sudah termasuk bonus Negosiator Stasiun{p.premium.active ? " dan bonus Premium +15%" : ""}. Mineral terjual berubah jadi KT.</p>
-              <ul className="mt-3 divide-y divide-[var(--border)]">{data.ores.map((o) => { const rare = RARE_ORE_IDS.has(o.id); return (<li key={o.id} className="flex items-center gap-3 py-3"><span aria-hidden="true" className={`ore-glow flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-white/20 ${rare ? "crystal-shine" : ""}`} style={{ backgroundColor: o.color + "33" }}><OreIcon id={o.icon} color={o.color} size={24} /></span><div className="min-w-0 flex-1"><p className="font-bold leading-tight">{o.name}</p><p className="text-xs text-[var(--dim)]">{fmt(o.sellPrice)} KT/unit · di kargo {fmt(o.qty)}</p></div><p className="font-display text-sm">{fmt(o.sellPrice * o.qty)} KT</p><button type="button" onClick={() => sellOne.mutate({ oreId: o.id, qty: o.qty })} disabled={sellOne.isPending || o.qty === 0} aria-label={`Jual semua ${o.name}`} className="btn-press rounded-lg bg-[var(--surface2)] px-3 py-2 text-sm font-bold disabled:opacity-40">Jual</button></li>); })}</ul>
-              {totalOreQty === 0 && (<p className="py-4 text-center text-sm text-[var(--dim)]">Kargo kosong. Jelajahi asteroid di tab Jelajah Asteroid, lalu kembali ke sini untuk menjual.</p>)}
+              <div className="flex items-center justify-between gap-3"><h2 className="font-display text-base">{t("marketTitle")}</h2><button type="button" onClick={() => sellAll.mutate()} disabled={sellAll.isPending || totalOreQty === 0} className="btn-press rounded-xl bg-cyan-400 px-4 py-2 font-bold text-black disabled:opacity-40">{t("sellAll")}</button></div>
+              <p className="mt-1 text-sm text-[var(--dim)]">{t("marketNote", { premium: p.premium.active ? t("marketNotePremium") : "" })}</p>
+              <ul className="mt-3 divide-y divide-[var(--border)]">{data.ores.map((o) => { const rare = RARE_ORE_IDS.has(o.id); return (<li key={o.id} className="flex items-center gap-3 py-3"><span aria-hidden="true" className={`ore-glow flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-white/20 ${rare ? "crystal-shine" : ""}`} style={{ backgroundColor: o.color + "33" }}><OreIcon id={o.icon} color={o.color} size={24} /></span><div className="min-w-0 flex-1"><p className="font-bold leading-tight">{o.name}</p><p className="text-xs text-[var(--dim)]">{fmt(o.sellPrice)} {t("perUnitCargo", { qty: fmt(o.qty) })}</p></div><p className="font-display text-sm">{fmt(o.sellPrice * o.qty)} KT</p><button type="button" onClick={() => sellOne.mutate({ oreId: o.id, qty: o.qty })} disabled={sellOne.isPending || o.qty === 0} aria-label={t("sellAllAria", { name: o.name })} className="btn-press rounded-lg bg-[var(--surface2)] px-3 py-2 text-sm font-bold disabled:opacity-40">{t("sell")}</button></li>); })}</ul>
+              {totalOreQty === 0 && (<p className="py-4 text-center text-sm text-[var(--dim)]">{t("cargoEmpty", { tab: t("tabMine") })}</p>)}
             </div>
           </section>
         )}
@@ -903,8 +893,8 @@ export function App() {
         {tab === "upgrade" && (
           <section className="mt-4 space-y-3">
             <PremiumCard data={data} onOrder={(plan) => orderPremium.mutate(plan)} ordering={orderPremium.isPending} />
-            <div className="relative overflow-hidden rounded-2xl border border-[var(--border)]"><img src={stationImg} alt="Astronot di dalam stasiun luar angkasa menyerahkan kontainer mineral ke lengan robot" className="h-40 w-full object-cover" /><div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent flex items-end p-4"><p className="text-sm font-semibold text-white">Hanggar Stasiun — KT yang dibelanjakan tidak bisa di-WD, tapi alat yang lebih canggih membuat scan &amp; bor jauh lebih cepat dan misimu lebih jauh.</p></div></div>
-            {data.upgrades.map((u) => (<div key={u.id} className="vein-tile rounded-2xl bg-[var(--surface)] border border-[var(--border)] p-4"><div className="flex items-start justify-between gap-3"><div className="flex items-start gap-3"><span aria-hidden="true" className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-[var(--border)] bg-[var(--surface2)]"><UpgradeIcon id={u.id} size={22} /></span><div><h3 className="font-display text-sm">{u.name}</h3><p className="mt-1 text-sm text-[var(--dim)]">{u.desc}</p><div className="mt-2 flex gap-1" aria-label={`Level ${u.level} dari ${u.maxLevel}`}>{Array.from({ length: u.maxLevel }, (_, i) => (<span key={i} className={`h-2 w-4 rounded-full ${i < u.level ? "bg-cyan-400" : "bg-[var(--surface2)]"}`} />))}</div></div></div><div className="shrink-0 text-right"><p className="text-xs font-semibold text-[var(--dim)]">Level</p><p className="font-display text-xl">{u.level}<span className="text-sm text-[var(--dim)]">/{u.maxLevel}</span></p></div></div>{u.nextCost != null ? (<button type="button" onClick={() => buy.mutate(u.id)} disabled={buy.isPending || p.ktBalance < u.nextCost} aria-label={`Beli ${u.name} level ${u.level + 1} seharga ${fmt(u.nextCost)} KT`} className="btn-press mt-3 w-full rounded-xl bg-cyan-400 px-4 py-2 font-bold text-black disabled:opacity-40">{p.ktBalance < u.nextCost ? `Butuh ${fmt(u.nextCost)} KT — saldo kurang` : `Pasang Upgrade — ${fmt(u.nextCost)} KT`}</button>) : (<p className="mt-3 rounded-xl bg-[var(--surface2)] px-4 py-2 text-center font-bold">Level Maksimum</p>)}</div>))}
+            <div className="relative overflow-hidden rounded-2xl border border-[var(--border)]"><img src={stationImg} alt={t("stationImgAlt")} className="h-40 w-full object-cover" /><div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent flex items-end p-4"><p className="text-sm font-semibold text-white">{t("hanggarCaption")}</p></div></div>
+            {data.upgrades.map((u) => (<div key={u.id} className="vein-tile rounded-2xl bg-[var(--surface)] border border-[var(--border)] p-4"><div className="flex items-start justify-between gap-3"><div className="flex items-start gap-3"><span aria-hidden="true" className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-[var(--border)] bg-[var(--surface2)]"><UpgradeIcon id={u.id} size={22} /></span><div><h3 className="font-display text-sm">{u.name}</h3><p className="mt-1 text-sm text-[var(--dim)]">{u.desc}</p><div className="mt-2 flex gap-1" aria-label={t("levelAria", { l: u.level, m: u.maxLevel })}>{Array.from({ length: u.maxLevel }, (_, i) => (<span key={i} className={`h-2 w-4 rounded-full ${i < u.level ? "bg-cyan-400" : "bg-[var(--surface2)]"}`} />))}</div></div></div><div className="shrink-0 text-right"><p className="text-xs font-semibold text-[var(--dim)]">{t("levelLabel")}</p><p className="font-display text-xl">{u.level}<span className="text-sm text-[var(--dim)]">/{u.maxLevel}</span></p></div></div>{u.nextCost != null ? (<button type="button" onClick={() => buy.mutate(u.id)} disabled={buy.isPending || p.ktBalance < u.nextCost} aria-label={t("buyAria", { name: u.name, l: u.level + 1, cost: fmt(u.nextCost) })} className="btn-press mt-3 w-full rounded-xl bg-cyan-400 px-4 py-2 font-bold text-black disabled:opacity-40">{p.ktBalance < u.nextCost ? t("needKt", { cost: fmt(u.nextCost) }) : t("installUpgrade", { cost: fmt(u.nextCost) })}</button>) : (<p className="mt-3 rounded-xl bg-[var(--surface2)] px-4 py-2 text-center font-bold">{t("maxLevel")}</p>)}</div>))}
           </section>
         )}
 
@@ -919,42 +909,37 @@ export function App() {
 function PremiumCard({ data, onOrder, ordering }: { data: GameState; onOrder: (plan: "standard" | "pro") => void; ordering: boolean }) {
   const p = data.player;
   const pendingOrder = data.premiumOrders.find((o) => o.status === "pending");
-  const benefits = [
-    "Regen daya 2× lebih cepat — lebih sedikit menunggu, lebih banyak menambang",
-    "Scan & pengeboran 25% lebih cepat di semua peta",
-    "Harga jual semua mineral & batu mulia +15% di Stasiun Orbital",
-    "Perjalanan antar-peta gratis, tanpa biaya daya",
-  ];
+  const benefits = [t("ben1"), t("ben2"), t("ben3"), t("ben4")];
   return (
     <div className="overflow-hidden rounded-2xl border-2 border-amber-400/60 bg-gradient-to-b from-amber-400/15 to-[var(--surface)] p-4">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h3 className="font-display inline-flex items-center gap-2 text-base text-amber-300"><CrownIcon size={19} /> Premium Pass</h3>
-          <p className="mt-1 text-sm text-[var(--dim)]">Lisensi penambang prioritas stasiun orbital, dibayar dengan <b className="text-amber-200">Telegram Stars</b> — mata uang resmi Telegram, tempat game ini diluncurkan. Premium mempercepat semua yang kamu lakukan — tanpa mengubah rasio WD 1.000 KT = 1 USDT.</p>
+          <h3 className="font-display inline-flex items-center gap-2 text-base text-amber-300"><CrownIcon size={19} /> {t("premiumTitle")}</h3>
+          <p className="mt-1 text-sm text-[var(--dim)]">{trich("premiumDesc")}</p>
         </div>
-        {p.premium.active && (<span className="shrink-0 rounded-full border border-amber-400/60 bg-amber-400/20 px-2.5 py-1 text-[11px] font-bold text-amber-200">{p.premium.tier === "pro" ? "PRO" : "STANDARD"} AKTIF{p.premium.until ? ` s/d ${new Date(p.premium.until).toLocaleDateString("id-ID", { day: "numeric", month: "short" })}` : ""}</span>)}
+        {p.premium.active && (<span className="shrink-0 rounded-full border border-amber-400/60 bg-amber-400/20 px-2.5 py-1 text-[11px] font-bold text-amber-200">{t("premiumBadge", { tier: p.premium.tier === "pro" ? "PRO" : "STANDARD" })}{p.premium.until ? t("premiumBadgeUntil", { date: fmtDate(p.premium.until) }) : ""}</span>)}
       </div>
       <ul className="mt-3 space-y-1.5">
         {benefits.map((b) => (<li key={b} className="flex items-start gap-2 text-sm"><span className="mt-0.5 shrink-0 text-amber-300"><CheckIcon size={14} /></span>{b}</li>))}
-        <li className="flex items-start gap-2 text-sm"><span className="mt-0.5 shrink-0 text-amber-300"><DrillIcon size={14} /></span><span><b className="text-amber-200">Khusus Pro — Bor Ganda:</b> dua lengan bor bekerja bersamaan, waktu pengeboran setiap urat jadi 2× lebih cepat.</span></li>
+        <li className="flex items-start gap-2 text-sm"><span className="mt-0.5 shrink-0 text-amber-300"><DrillIcon size={14} /></span><span>{trich("proDual")}</span></li>
       </ul>
       {pendingOrder ? (
         <div className="mt-4 rounded-xl border border-amber-400/50 bg-amber-400/10 px-4 py-3">
-          <p className="font-display text-sm text-amber-200">Pesanan #{pendingOrder.id} — Premium {pendingOrder.tier === "pro" ? "Pro" : "Standard"} · {fmt(pendingOrder.stars)} Stars</p>
-          <p className="mt-1 text-sm text-[var(--dim)]">Status: <b className="text-amber-300">menunggu pembayaran &amp; konfirmasi pemilik</b>. Bayar {fmt(pendingOrder.stars)} Telegram Stars ke pemilik di Telegram (kirim tangkapan layar bukti bayar + nomor pesanan #{pendingOrder.id}), lalu pemilik mengonfirmasinya dari Pusat Kendali dan Premium-mu langsung aktif.</p>
+          <p className="font-display text-sm text-amber-200">{t("pendingOrderTitle", { id: pendingOrder.id, tier: pendingOrder.tier === "pro" ? "Pro" : "Standard", stars: fmt(pendingOrder.stars) })}</p>
+          <p className="mt-1 text-sm text-[var(--dim)]">{trich("pendingOrderDesc", { stars: fmt(pendingOrder.stars), id: pendingOrder.id })}</p>
         </div>
       ) : (
         <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
           {p.premium.plans.map((plan) => (
-            <button key={plan.id} type="button" onClick={() => onOrder(plan.id as "standard" | "pro")} disabled={ordering} aria-label={`Pesan Premium ${plan.label} seharga ${fmt(plan.stars)} Telegram Stars`} className={`btn-press rounded-xl px-3 py-3 text-black disabled:opacity-40 ${plan.tier === "pro" ? "bg-gradient-to-b from-amber-300 to-amber-500 ring-2 ring-amber-200/60" : "bg-amber-400"}`}>
-              <span className="block font-display text-sm">{plan.tier === "pro" ? "PRO" : "STANDARD"} · {plan.days} hari</span>
-              <span className="mt-0.5 flex items-center justify-center gap-1 text-sm font-bold"><SparkleIcon size={14} /> {fmt(plan.stars)} Telegram Stars</span>
-              <span className="block text-xs font-semibold">{plan.tier === "pro" ? "Semua benefit Standard + BOR GANDA" : "Regen 2× · operasi 25% lebih cepat · jual +15%"}</span>
+            <button key={plan.id} type="button" onClick={() => onOrder(plan.id as "standard" | "pro")} disabled={ordering} aria-label={t("orderPlanAria", { label: plan.label, stars: fmt(plan.stars) })} className={`btn-press rounded-xl px-3 py-3 text-black disabled:opacity-40 ${plan.tier === "pro" ? "bg-gradient-to-b from-amber-300 to-amber-500 ring-2 ring-amber-200/60" : "bg-amber-400"}`}>
+              <span className="block font-display text-sm">{t("planLine", { tier: plan.tier === "pro" ? "PRO" : "STANDARD", days: plan.days })}</span>
+              <span className="mt-0.5 flex items-center justify-center gap-1 text-sm font-bold"><SparkleIcon size={14} /> {t("planStars", { stars: fmt(plan.stars) })}</span>
+              <span className="block text-xs font-semibold">{plan.tier === "pro" ? t("planProTag") : t("planStdTag")}</span>
             </button>
           ))}
         </div>
       )}
-      <p className="mt-3 text-xs text-[var(--dim)]">Cara beli: tekan paketnya untuk membuat pesanan, bayar Stars-nya ke pemilik lewat Telegram, dan pemilik mengaktifkan Premium-mu setelah pembayaran terkonfirmasi. Premium tidak bisa dibeli pakai KT — KT murni untuk upgrade kapal dan WD USDT.</p>
+      <p className="mt-3 text-xs text-[var(--dim)]">{t("premiumHint")}</p>
     </div>
   );
 }
@@ -964,60 +949,60 @@ function PetaTab({ data, onTravel, travelling, jobActive, onGoPremium }: { data:
   return (
     <section className="mt-4 space-y-4">
       <div className="rounded-2xl bg-[var(--surface)] border border-[var(--border)] p-4">
-        <h2 className="font-display text-base">Bagan Navigasi — Lima Peta Tambang</h2>
-        <p className="mt-1 text-sm text-[var(--dim)]">Setiap peta punya batu mulia khas dan tantangannya sendiri. Peta terbuka mengikuti sektormu (sekarang <b className="text-[var(--text)]">Sektor {p.layer}</b>); pindah peta meninggalkan asteroid yang sedang kamu tambang tanpa bonus. Ingat: <b className="text-[var(--text)]">semakin jauh petanya, semakin lama scan &amp; pengeborannya</b> — tapi batu mulianya juga semakin mahal.</p>
-        {jobActive && (<p className="mt-2 flex items-start gap-2 rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm font-semibold text-amber-200"><span className="mt-0.5 shrink-0"><AlertIcon size={15} /></span> Ada operasi yang sedang berjalan — selesaikan atau batalkan dulu sebelum pindah peta.</p>)}
+        <h2 className="font-display text-base">{t("mapsTitle")}</h2>
+        <p className="mt-1 text-sm text-[var(--dim)]">{trich("mapsIntro", { layer: p.layer })}</p>
+        {jobActive && (<p className="mt-2 flex items-start gap-2 rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm font-semibold text-amber-200"><span className="mt-0.5 shrink-0"><AlertIcon size={15} /></span> {t("mapsJobActive")}</p>)}
       </div>
       {data.maps.map((m) => {
         const img = MAP_IMAGES[m.image] ?? asteroidImg;
         return (
           <article key={m.index} className={`vein-tile overflow-hidden rounded-2xl border bg-[var(--surface)] ${m.isCurrent ? "border-cyan-400/70" : "border-[var(--border)]"}`}>
             <div className="relative h-36 overflow-hidden">
-              <img src={img} alt={`Pemandangan peta ${m.name}`} className={`h-full w-full object-cover ${m.unlocked ? "" : "opacity-50 saturate-50"}`} loading="lazy" />
+              <img src={img} alt={t("mapCardImgAlt", { name: m.name })} className={`h-full w-full object-cover ${m.unlocked ? "" : "opacity-50 saturate-50"}`} loading="lazy" />
               <div className="absolute inset-0 bg-gradient-to-t from-[var(--surface)] via-transparent to-transparent" />
               <div className="absolute bottom-2 left-4 right-4 flex items-end justify-between gap-2">
                 <div>
-                  <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-cyan-300">Peta {m.index + 1} · {m.tagline}</p>
+                  <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-cyan-300">{t("mapTaglineLine", { n: m.index + 1, tagline: m.tagline })}</p>
                   <h3 className="font-display text-base leading-tight">{m.name}</h3>
                 </div>
                 {m.isCurrent ? (
-                  <span className="shrink-0 rounded-full border border-cyan-400/60 bg-cyan-400/20 px-2.5 py-1 text-[11px] font-bold text-cyan-200">SEDANG DITAMBANG</span>
+                  <span className="shrink-0 rounded-full border border-cyan-400/60 bg-cyan-400/20 px-2.5 py-1 text-[11px] font-bold text-cyan-200">{t("mapCurrent")}</span>
                 ) : !m.unlocked ? (
-                  <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-slate-400/50 bg-black/60 px-2.5 py-1 text-[11px] font-bold text-slate-300"><LockIcon size={12} /> Sektor {m.minLayer}</span>
+                  <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-slate-400/50 bg-black/60 px-2.5 py-1 text-[11px] font-bold text-slate-300"><LockIcon size={12} /> {t("mapMinSector", { sector: m.minLayer })}</span>
                 ) : null}
               </div>
             </div>
             <div className="p-4">
               <p className="text-sm text-[var(--dim)]">{m.desc}</p>
-              <p className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-sky-400/40 bg-sky-400/10 px-2.5 py-1 text-[11px] font-bold text-sky-200"><SatelliteIcon size={12} /> {m.distanceLabel} · scan ±{fmtDur(m.scanSeconds)}</p>
-              <h4 className="mt-3 text-xs font-bold uppercase tracking-[0.18em] text-[var(--dim)]">Mineral &amp; batu mulia di peta ini</h4>
+              <p className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-sky-400/40 bg-sky-400/10 px-2.5 py-1 text-[11px] font-bold text-sky-200"><SatelliteIcon size={12} /> {t("mapScanPill", { dist: m.distanceLabel, dur: fmtDur(m.scanSeconds) })}</p>
+              <h4 className="mt-3 text-xs font-bold uppercase tracking-[0.18em] text-[var(--dim)]">{t("mapMineralsTitle")}</h4>
               <ul className="mt-2 flex flex-wrap gap-1.5">
                 {m.gems.map((g) => (
                   <li key={g.id} className="inline-flex items-center gap-1.5 rounded-full border border-[var(--border)] bg-[var(--surface2)] py-1 pl-1.5 pr-2.5 text-xs font-semibold">
-                    <OreIcon id={g.icon} color={g.color} size={16} /> {g.name} <span className="text-[var(--dim)]">· {fmt(g.price)} KT</span>
+                    <OreIcon id={g.icon} color={g.color} size={16} /> {g.name} <span className="text-[var(--dim)]">{t("gemPrice", { price: fmt(g.price) })}</span>
                   </li>
                 ))}
               </ul>
-              <h4 className="mt-3 text-xs font-bold uppercase tracking-[0.18em] text-[var(--dim)]">Tantangan peta</h4>
+              <h4 className="mt-3 text-xs font-bold uppercase tracking-[0.18em] text-[var(--dim)]">{t("mapChallengesTitle")}</h4>
               <ul className="mt-2 space-y-1 text-sm">
                 {m.jamChancePct === 0 && m.damageChancePct === 0 && m.radiation === 0 && m.timeFactor <= 1 ? (
-                  <li className="flex items-center gap-2 text-emerald-300"><ShieldIcon size={14} /> Aman — tanpa risiko bor macet, kerusakan lambung, atau radiasi. Scan tercepat (±{fmtDur(m.scanSeconds)}). Peta belajar terbaik.</li>
+                  <li className="flex items-center gap-2 text-emerald-300"><ShieldIcon size={14} /> {t("mapSafe", { dur: fmtDur(m.scanSeconds) })}</li>
                 ) : (
                   <>
-                    {m.jamChancePct > 0 && (<li className="flex items-center gap-2"><span className="text-red-300"><AlertIcon size={14} /></span> Bor macet {m.jamChancePct}% per pengeboran — urat yang sedang dibor hilang tanpa hasil.</li>)}
-                    {m.damageChancePct > 0 && (<li className="flex items-center gap-2"><span className="text-orange-300"><ShieldIcon size={14} /></span> Lambung terkena serpihan {m.damageChancePct}% — biaya perbaikan {fmt(m.damageFeeKt)} KT dipotong dari saldo.</li>)}
-                    {m.radiation > 0 && (<li className="flex items-center gap-2"><span className="text-violet-300"><RadiationIcon size={14} /></span> Radiasi +{m.radiation} daya untuk setiap scan &amp; pengeboran.</li>)}
-                    {m.timeFactor > 1 && (<li className="flex items-center gap-2"><span className="text-sky-300"><DrillIcon size={14} /></span> Jarak jauh &amp; batuan keras — scan ±{fmtDur(m.scanSeconds)} dan semua operasi {Math.round((m.timeFactor - 1) * 100)}% lebih lama dari peta pertama.</li>)}
+                    {m.jamChancePct > 0 && (<li className="flex items-center gap-2"><span className="text-red-300"><AlertIcon size={14} /></span> {t("mapJam", { pct: m.jamChancePct })}</li>)}
+                    {m.damageChancePct > 0 && (<li className="flex items-center gap-2"><span className="text-orange-300"><ShieldIcon size={14} /></span> {t("mapDamage", { pct: m.damageChancePct, fee: fmt(m.damageFeeKt) })}</li>)}
+                    {m.radiation > 0 && (<li className="flex items-center gap-2"><span className="text-violet-300"><RadiationIcon size={14} /></span> {t("mapRadiation", { n: m.radiation })}</li>)}
+                    {m.timeFactor > 1 && (<li className="flex items-center gap-2"><span className="text-sky-300"><DrillIcon size={14} /></span> {t("mapTime", { dur: fmtDur(m.scanSeconds), pct: Math.round((m.timeFactor - 1) * 100) })}</li>)}
                   </>
                 )}
               </ul>
               {!m.isCurrent && (
                 m.unlocked ? (
-                  <button type="button" onClick={() => onTravel(m.index)} disabled={travelling || jobActive || p.energy < m.travelCost} aria-label={`Terbang ke peta ${m.name}`} className="btn-press mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-cyan-400 px-4 py-2.5 font-bold text-black disabled:opacity-40">
-                    <RocketIcon size={16} /> {jobActive ? "Operasi sedang berjalan — tidak bisa pindah" : p.energy < m.travelCost ? `Daya kurang — perjalanan butuh ${m.travelCost} daya` : m.travelCost === 0 ? "Terbang ke Peta Ini — Gratis (Premium)" : `Terbang ke Peta Ini — ${m.travelCost} daya`}
+                  <button type="button" onClick={() => onTravel(m.index)} disabled={travelling || jobActive || p.energy < m.travelCost} aria-label={t("travelAria", { name: m.name })} className="btn-press mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-cyan-400 px-4 py-2.5 font-bold text-black disabled:opacity-40">
+                    <RocketIcon size={16} /> {jobActive ? t("travelBusy") : p.energy < m.travelCost ? t("travelNeedPower", { cost: fmt(m.travelCost) }) : m.travelCost === 0 ? t("travelFree") : t("travelGo", { cost: fmt(m.travelCost) })}
                   </button>
                 ) : (
-                  <p className="mt-4 rounded-xl bg-[var(--surface2)] px-4 py-2.5 text-center text-sm font-bold text-[var(--dim)]">Terkunci — selesaikan ekspedisi sampai Sektor {m.minLayer} untuk membuka peta ini</p>
+                  <p className="mt-4 rounded-xl bg-[var(--surface2)] px-4 py-2.5 text-center text-sm font-bold text-[var(--dim)]">{t("mapLockedText", { sector: m.minLayer })}</p>
                 )
               )}
             </div>
@@ -1027,7 +1012,7 @@ function PetaTab({ data, onTravel, travelling, jobActive, onGoPremium }: { data:
       {!p.premium.active && (
         <button type="button" onClick={onGoPremium} className="btn-press flex w-full items-center gap-3 rounded-2xl border-2 border-amber-400/50 bg-amber-400/10 p-4 text-left">
           <span className="text-amber-300"><CrownIcon size={26} /></span>
-          <span><span className="block font-display text-sm text-amber-200">Premium Pass — perjalanan antar-peta GRATIS</span><span className="block text-sm text-[var(--dim)]">Plus regen daya 2× lebih cepat, operasi 25% lebih cepat, dan harga jual +15%. Lihat di Hanggar.</span></span>
+          <span><span className="block font-display text-sm text-amber-200">{t("mapsPromoTitle")}</span><span className="block text-sm text-[var(--dim)]">{t("mapsPromoDesc")}</span></span>
         </button>
       )}
     </section>
@@ -1044,17 +1029,17 @@ function JobPanel({ job, dualDrill, onCollect, collecting, onCancel, cancelling,
   useEffect(() => { if (ready) onRefresh(); }, [ready, onRefresh]);
   const isScan = job.kind === "scan";
   const title = ready
-    ? (<span className="inline-flex items-center gap-2"><span className="text-emerald-300"><CheckIcon size={16} /></span> Operasi Selesai!</span>)
+    ? (<span className="inline-flex items-center gap-2"><span className="text-emerald-300"><CheckIcon size={16} /></span> {t("jobDone")}</span>)
     : isScan
-      ? (<span className="inline-flex items-center gap-2"><span className="text-cyan-300"><TelescopeIcon size={16} /></span> Spektrometer sedang memindai asteroid…</span>)
-      : (<span className="inline-flex items-center gap-2"><span className="text-amber-300"><DrillIcon size={16} /></span> {dualDrill ? "Dua lengan bor (BOR GANDA)" : "Lengan bor"} sedang mengebor urat {job.oreName ?? "mineral"}…</span>);
+      ? (<span className="inline-flex items-center gap-2"><span className="text-cyan-300"><TelescopeIcon size={16} /></span> {t("jobScanning")}</span>)
+      : (<span className="inline-flex items-center gap-2"><span className="text-amber-300"><DrillIcon size={16} /></span> {dualDrill ? t("jobDrillingDual", { ore: job.oreName ?? "mineral" }) : t("jobDrilling", { ore: job.oreName ?? "mineral" })}</span>);
   const sparks = [
     { left: "18%", top: "62%", sx: "-16px", sy: "12px", delay: "0s" },
     { left: "30%", top: "70%", sx: "-8px", sy: "18px", delay: "0.28s" },
     { left: "24%", top: "78%", sx: "-20px", sy: "8px", delay: "0.55s" },
   ];
   return (
-    <div className="mt-4 rounded-xl border border-cyan-500/30 bg-[var(--surface2)] p-4" role="status" aria-label="Operasi sedang berjalan">
+    <div className="mt-4 rounded-xl border border-cyan-500/30 bg-[var(--surface2)] p-4" role="status" aria-label={t("jobAria")}>
       <div className="flex items-center gap-4">
         {!ready && isScan && (
           <div className="relative h-24 w-24 shrink-0 overflow-hidden rounded-full border border-cyan-400/50 bg-[#04121f]" aria-hidden="true">
@@ -1087,25 +1072,25 @@ function JobPanel({ job, dualDrill, onCollect, collecting, onCancel, cancelling,
         )}
         <div className="min-w-0 flex-1">
           <h3 className="font-display text-sm">{title}</h3>
-          {!ready && (<p className="mt-1 text-sm font-bold">Sisa waktu: {fmtDur(remaining)}</p>)}
+          {!ready && (<p className="mt-1 text-sm font-bold">{t("jobTimeLeft", { dur: fmtDur(remaining) })}</p>)}
           <p className="mt-1 text-xs text-[var(--dim)]">{ready
             ? (isScan
-              ? "Hasil scan sudah siap — buka komposisi urat mineral asteroid ini."
+              ? t("jobReadyScan")
               : job.jammed
-                ? "Ada yang tidak beres — suara bor berhenti mendadak di tengah jalan. Ambil laporannya untuk melihat apa yang terjadi."
+                ? t("jobReadyJammed")
                 : job.hullHit
-                  ? "Pengeboran selesai, tapi teknisi melaporkan lambung kapal terkena serpihan selama operasi. Ambil hasil tambang dan laporan perbaikannya."
-                  : "Pengeboran selesai — ambil hasil tambangnya ke kargo.")
-            : "Operasi ini berjalan dengan waktu nyata di server misi. Kamu boleh menutup halaman ini — alat tetap bekerja dan hasilnya bisa diambil saat kamu kembali."}</p>
+                  ? t("jobReadyHull")
+                  : t("jobReadyMine"))
+            : t("jobRunning")}</p>
         </div>
       </div>
-      <div className="mt-3 h-3 overflow-hidden rounded-full bg-black/40" role="progressbar" aria-valuenow={Math.round(progress)} aria-valuemin={0} aria-valuemax={100} aria-label="Kemajuan operasi">
+      <div className="mt-3 h-3 overflow-hidden rounded-full bg-black/40" role="progressbar" aria-valuenow={Math.round(progress)} aria-valuemin={0} aria-valuemax={100} aria-label={t("jobProgress")}>
         <div className={`h-full rounded-full transition-all ${ready ? "bg-emerald-400" : "job-working"}`} style={{ width: `${ready ? 100 : progress}%` }} />
       </div>
       {ready ? (
-        <button type="button" onClick={onCollect} disabled={collecting} className="btn-press collect-pop mt-3 w-full rounded-xl bg-emerald-400 px-4 py-3 font-display text-sm text-black disabled:opacity-40">{isScan ? "Buka Hasil Scan" : "Ambil Hasil Tambang"}</button>
+        <button type="button" onClick={onCollect} disabled={collecting} className="btn-press collect-pop mt-3 w-full rounded-xl bg-emerald-400 px-4 py-3 font-display text-sm text-black disabled:opacity-40">{isScan ? t("jobCollectScan") : t("jobCollectMine")}</button>
       ) : (
-        <button type="button" onClick={onCancel} disabled={cancelling} className="btn-press mt-3 rounded-xl border border-red-400 px-4 py-2 text-sm font-bold text-red-300 disabled:opacity-40">Batalkan Operasi</button>
+        <button type="button" onClick={onCancel} disabled={cancelling} className="btn-press mt-3 rounded-xl border border-red-400 px-4 py-2 text-sm font-bold text-red-300 disabled:opacity-40">{t("jobCancel")}</button>
       )}
     </div>
   );
@@ -1116,27 +1101,27 @@ function WdTab({ data, onCancel, cancelling, onDone }: { data: GameState; onCanc
   const ktCost = Math.round(usdt * p.ktPerUsdt); const enough = p.ktBalance >= ktCost;
   const belowMin = ktCost < p.wdMinKt; const offStep = ktCost % p.wdStepKt !== 0;
   const aboveMax = ktCost > p.wdMaxKt;
-  const request = useMutation({ mutationFn: () => api.requestWithdrawal({ walletAddress: wallet.trim(), amountKt: ktCost }), onSuccess: (r) => { if (r.ok) setWallet(""); onDone(r.ok, r.error, `Permintaan WD #${r.wdId ?? ""} terkirim — ${fmt(ktCost)} KT dikunci dan masuk antrean Pusat Kendali.`); } });
+  const request = useMutation({ mutationFn: () => api.requestWithdrawal({ walletAddress: wallet.trim(), amountKt: ktCost }), onSuccess: (r) => { if (r.ok) setWallet(""); onDone(r.ok, r.error, t("wdRequestSent", { id: r.wdId ?? "", kt: fmt(ktCost) })); } });
   return (
     <section className="mt-4 space-y-4">
-      <div className="overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface)]"><img src={stationImg} alt="Interior stasiun luar angkasa tempat penukaran mineral" className="h-36 w-full object-cover" /><div className="p-4">
+      <div className="overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface)]"><img src={stationImg} alt={t("wdStationImgAlt")} className="h-36 w-full object-cover" /><div className="p-4">
         <div className="flex items-center gap-3">
-          <img src={ktLogoImg} alt="Logo token KT — koin emas bertuliskan KT" className="h-12 w-12 shrink-0 rounded-xl object-cover ring-2 ring-amber-400/50" />
+          <img src={ktLogoImg} alt={t("ktLogoAltShort")} className="h-12 w-12 shrink-0 rounded-xl object-cover ring-2 ring-amber-400/50" />
           <div>
-            <h2 className="font-display text-base leading-tight">Tarik KT jadi USDT</h2>
-            <p className="text-xs text-[var(--dim)]">Token resmi misi: Kredit Tambang Antariksa (KT)</p>
+            <h2 className="font-display text-base leading-tight">{t("wdTitle")}</h2>
+            <p className="text-xs text-[var(--dim)]">{t("wdTokenNote")}</p>
           </div>
         </div>
-        <ol className="mt-2 list-decimal space-y-1 pl-5 text-sm leading-relaxed"><li>Rasio tetap <strong>1.000 KT = 1 USDT</strong>, jumlah WD dalam kelipatan 0,1 USDT (100 KT).</li><li><strong>Minimum WD dua tingkat:</strong> WD pertamamu <strong>{fmt(p.wdMinUsdt)} USDT ({fmt(p.wdMinKt)} KT)</strong>{p.wdPaidCount > 0 ? (<> — kamu sudah {p.wdPaidCount}× WD terbayar, jadi minimum WD sekarang <strong>5 USDT (5.000 KT)</strong> dan tetap di sana.</>) : (<> — setelah WD pertamamu dibayar, minimum WD berikutnya jadi <strong>5 USDT (5.000 KT)</strong> dan tetap di sana.</>)} Minimum dihitung server dari riwayat WD-mu, tidak bisa diturunkan dari browser.</li><li><strong>Maksimum 5 USDT (5.000 KT) per WD</strong> — WD ulang selalu tepat 5.000 KT. <strong>Tidak ada batas waktu antar-WD:</strong> seberapa cepat kamu bisa WD tergantung seberapa cepat kamu mengumpulkan KT.</li><li>Isi alamat dompet USDT (TON) dan jumlah USDT. KT langsung dikunci.</li><li>Permintaan masuk ke Pusat Kendali — pemilik mengirim USDT <strong>secara manual</strong> ke dompetmu.</li><li>Status jadi Dibayar setelah pemilik mengirim &amp; mencatat referensi transaksi. Ditolak = KT kembali utuh.</li></ol>
-        <div className="mt-4"><div className="flex justify-between text-xs font-bold"><span>Progres menuju WD ({fmt(p.wdMinUsdt)} USDT)</span><span className="text-[var(--dim)]">{fmt(Math.min(p.ktBalance, p.wdMinKt))} / {fmt(p.wdMinKt)} KT</span></div><div className="mt-1 h-3 overflow-hidden rounded-full bg-[var(--surface2)]"><div className="h-full rounded-full bg-cyan-400 transition-all" style={{ width: `${Math.min(100, (p.ktBalance / p.wdMinKt) * 100)}%` }} /></div></div>
+        <ol className="mt-2 list-decimal space-y-1 pl-5 text-sm leading-relaxed"><li>{trich("wdRule1")}</li><li>{trich("wdRule2a", { min: fmt(p.wdMinUsdt), minkt: fmt(p.wdMinKt) })}{p.wdPaidCount > 0 ? trich("wdRule2b", { count: p.wdPaidCount }) : trich("wdRule2c")}{t("wdRule2d")}</li><li>{trich("wdRule3")}</li><li>{t("wdRule4")}</li><li>{trich("wdRule5")}</li><li>{t("wdRule6")}</li></ol>
+        <div className="mt-4"><div className="flex justify-between text-xs font-bold"><span>{t("wdProgress", { min: fmt(p.wdMinUsdt) })}</span><span className="text-[var(--dim)]">{t("wdProgressLine", { have: fmt(Math.min(p.ktBalance, p.wdMinKt)), need: fmt(p.wdMinKt) })}</span></div><div className="mt-1 h-3 overflow-hidden rounded-full bg-[var(--surface2)]"><div className="h-full rounded-full bg-cyan-400 transition-all" style={{ width: `${Math.min(100, (p.ktBalance / p.wdMinKt) * 100)}%` }} /></div></div>
         <form className="mt-4 space-y-3" onSubmit={(e) => { e.preventDefault(); request.mutate(); }}>
-          <div><label htmlFor="wallet" className="text-sm font-bold">Alamat dompet USDT (TON)</label><input id="wallet" value={wallet} onChange={(e) => setWallet(e.target.value)} placeholder="Tempel alamat dompet USDT" autoComplete="off" className="mt-1 w-full rounded-xl border border-[var(--border)] bg-[var(--bg)] px-3 py-2 font-mono text-sm" /></div>
-          <div><label htmlFor="usdt" className="text-sm font-bold">Jumlah USDT (kelipatan 0,1)</label><input id="usdt" type="number" min={p.wdMinUsdt} max={p.wdMaxUsdt} step={0.1} value={usdt} onChange={(e) => setUsdt(Math.max(0, Number(e.target.value) || 0))} className="mt-1 w-full rounded-xl border border-[var(--border)] bg-[var(--bg)] px-3 py-2" /><p className="mt-1 text-xs text-[var(--dim)]">Biaya: {fmt(ktCost)} KT · saldo kamu {fmt(p.ktBalance)} KT · minimum saat ini {fmt(p.wdMinUsdt)} USDT · maksimum {fmt(p.wdMaxUsdt)} USDT per WD</p>{belowMin && (<p className="mt-1 text-xs font-bold text-red-300">Di bawah minimum WD saat ini ({fmt(p.wdMinUsdt)} USDT / {fmt(p.wdMinKt)} KT).</p>)}{!belowMin && offStep && (<p className="mt-1 text-xs font-bold text-red-300">Jumlah harus kelipatan 0,1 USDT (100 KT).</p>)}{!belowMin && !offStep && aboveMax && (<p className="mt-1 text-xs font-bold text-red-300">Maksimum WD {fmt(p.wdMaxUsdt)} USDT ({fmt(p.wdMaxKt)} KT) per WD.</p>)}</div>
-          <button type="submit" disabled={request.isPending || wallet.trim().length < 10 || !enough || belowMin || offStep || aboveMax} className="btn-press w-full rounded-xl bg-cyan-400 px-4 py-3 font-display text-sm text-black disabled:opacity-40">{belowMin || offStep || aboveMax ? "Periksa jumlah WD dulu" : !enough ? `Saldo kurang ${fmt(ktCost - p.ktBalance)} KT lagi` : `Ajukan WD ${fmt(usdt)} USDT`}</button>
-          {wallet.trim().length > 0 && wallet.trim().length < 10 && (<p className="text-xs font-bold text-red-300">Alamat dompet terlalu pendek — periksa lagi.</p>)}
+          <div><label htmlFor="wallet" className="text-sm font-bold">{t("wdWalletLabel")}</label><input id="wallet" value={wallet} onChange={(e) => setWallet(e.target.value)} placeholder={t("wdWalletPlaceholder")} autoComplete="off" className="mt-1 w-full rounded-xl border border-[var(--border)] bg-[var(--bg)] px-3 py-2 font-mono text-sm" /></div>
+          <div><label htmlFor="usdt" className="text-sm font-bold">{t("wdUsdtLabel")}</label><input id="usdt" type="number" min={p.wdMinUsdt} max={p.wdMaxUsdt} step={0.1} value={usdt} onChange={(e) => setUsdt(Math.max(0, Number(e.target.value) || 0))} className="mt-1 w-full rounded-xl border border-[var(--border)] bg-[var(--bg)] px-3 py-2" /><p className="mt-1 text-xs text-[var(--dim)]">{t("wdCostLine", { kt: fmt(ktCost), bal: fmt(p.ktBalance), min: fmt(p.wdMinUsdt), max: fmt(p.wdMaxUsdt) })}</p>{belowMin && (<p className="mt-1 text-xs font-bold text-red-300">{t("wdBelowMin", { min: fmt(p.wdMinUsdt), minkt: fmt(p.wdMinKt) })}</p>)}{!belowMin && offStep && (<p className="mt-1 text-xs font-bold text-red-300">{t("wdOffStep")}</p>)}{!belowMin && !offStep && aboveMax && (<p className="mt-1 text-xs font-bold text-red-300">{t("wdAboveMax", { max: fmt(p.wdMaxUsdt), maxkt: fmt(p.wdMaxKt) })}</p>)}</div>
+          <button type="submit" disabled={request.isPending || wallet.trim().length < 10 || !enough || belowMin || offStep || aboveMax} className="btn-press w-full rounded-xl bg-cyan-400 px-4 py-3 font-display text-sm text-black disabled:opacity-40">{belowMin || offStep || aboveMax ? t("wdSubmitCheck") : !enough ? t("wdNeedKt", { kt: fmt(ktCost - p.ktBalance) }) : t("wdSubmitGo", { usdt: fmt(usdt) })}</button>
+          {wallet.trim().length > 0 && wallet.trim().length < 10 && (<p className="text-xs font-bold text-red-300">{t("wdWalletShort")}</p>)}
         </form>
       </div></div>
-      <div className="rounded-2xl bg-[var(--surface)] border border-[var(--border)] p-4"><h3 className="font-display text-sm">Riwayat WD Saya</h3>{data.withdrawals.length === 0 ? (<p className="mt-2 text-sm text-[var(--dim)]">Belum ada permintaan WD. Kumpulkan {fmt(p.wdMinKt)} KT untuk WD pertamamu ({fmt(p.wdMinUsdt)} USDT).</p>) : (<ul className="mt-3 space-y-3">{data.withdrawals.map((w) => (<li key={w.id} className="rounded-xl bg-[var(--surface2)] p-3"><div className="flex items-center justify-between gap-2"><p className="font-display text-sm">#{w.id} · {fmt(w.amountUsdt)} USDT</p><span className={`rounded-full border px-2 py-0.5 text-[11px] font-bold ${statusClass(w.status)}`}>{STATUS_LABEL[w.status]}</span></div><p className="mt-1 break-all font-mono text-xs text-[var(--dim)]">{w.walletAddress}</p><p className="mt-1 text-xs text-[var(--dim)]">{fmt(w.amountKt)} KT · diajukan {fmtDate(w.createdAt)}{w.processedAt ? ` · diproses ${fmtDate(w.processedAt)}` : ""}</p>{w.adminNote && <p className="mt-1 text-xs">Catatan pemilik: {w.adminNote}</p>}{w.txRef && <p className="mt-1 break-all font-mono text-xs">Ref: {w.txRef}</p>}{w.status === "pending" && (<button type="button" onClick={() => onCancel(w.id)} disabled={cancelling} aria-label={`Batalkan WD nomor ${w.id}`} className="btn-press mt-2 rounded-lg border border-red-400 px-3 py-1.5 text-sm font-bold text-red-300">Batalkan &amp; Kembalikan KT</button>)}</li>))}</ul>)}</div>
+      <div className="rounded-2xl bg-[var(--surface)] border border-[var(--border)] p-4"><h3 className="font-display text-sm">{t("wdHistory")}</h3>{data.withdrawals.length === 0 ? (<p className="mt-2 text-sm text-[var(--dim)]">{t("wdHistoryEmpty", { min: fmt(p.wdMinKt), usdt: fmt(p.wdMinUsdt) })}</p>) : (<ul className="mt-3 space-y-3">{data.withdrawals.map((w) => (<li key={w.id} className="rounded-xl bg-[var(--surface2)] p-3"><div className="flex items-center justify-between gap-2"><p className="font-display text-sm">#{w.id} · {fmt(w.amountUsdt)} USDT</p><span className={`rounded-full border px-2 py-0.5 text-[11px] font-bold ${statusClass(w.status)}`}>{statusLabel(w.status)}</span></div><p className="mt-1 break-all font-mono text-xs text-[var(--dim)]">{w.walletAddress}</p><p className="mt-1 text-xs text-[var(--dim)]">{t("wdHistoryLine", { kt: fmt(w.amountKt), created: fmtDateTime(w.createdAt), processed: w.processedAt ? t("wdProcessedAt", { date: fmtDateTime(w.processedAt) }) : "" })}</p>{w.adminNote && <p className="mt-1 text-xs">{t("wdOwnerNote", { note: w.adminNote })}</p>}{w.txRef && <p className="mt-1 break-all font-mono text-xs">{t("wdTxRefLabel", { ref: w.txRef })}</p>}{w.status === "pending" && (<button type="button" onClick={() => onCancel(w.id)} disabled={cancelling} aria-label={t("wdCancelAria", { id: w.id })} className="btn-press mt-2 rounded-lg border border-red-400 px-3 py-1.5 text-sm font-bold text-red-300">{t("wdCancelBtn")}</button>)}</li>))}</ul>)}</div>
     </section>
   );
 }
@@ -1146,28 +1131,28 @@ function GrantPremiumCard({ data, onDone }: { data: GameState; onDone: (ok: bool
   const [tier, setTier] = useState<"standard" | "pro">("pro");
   const grant = useMutation({
     mutationFn: () => api.grantPremium({ days, tier }),
-    onSuccess: (r) => onDone(r.ok, r.error, `Premium ${tier === "pro" ? "Pro (bor ganda)" : "Standard"} ${days} hari diaktifkan — berlaku sampai ${r.premiumUntil ? new Date(r.premiumUntil).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" }) : ""}.`),
+    onSuccess: (r) => onDone(r.ok, r.error, t("premiumGranted", { tier: tier === "pro" ? t("tierProParen") : "Standard", days, date: r.premiumUntil ? fmtDateLong(r.premiumUntil) : "" })),
   });
   const confirm = useMutation({
     mutationFn: (orderId: number) => api.confirmPremiumOrder({ orderId }),
-    onSuccess: (r) => onDone(r.ok, r.error, `Pesanan Stars terkonfirmasi — Premium aktif sampai ${r.premiumUntil ? new Date(r.premiumUntil).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" }) : ""}.`),
+    onSuccess: (r) => onDone(r.ok, r.error, t("premiumConfirmed", { date: r.premiumUntil ? fmtDateLong(r.premiumUntil) : "" })),
   });
   const reject = useMutation({
     mutationFn: (orderId: number) => api.rejectPremiumOrder({ orderId }),
-    onSuccess: (r) => onDone(r.ok, r.error, "Pesanan Premium ditolak — pemain bisa membuat pesanan baru."),
+    onSuccess: (r) => onDone(r.ok, r.error, t("premiumRejected")),
   });
   const p = data.player;
   const pendingOrders = data.premiumOrders.filter((o) => o.status === "pending");
   const pastOrders = data.premiumOrders.filter((o) => o.status !== "pending").slice(0, 5);
   return (
     <div className="rounded-2xl border-2 border-amber-400/50 bg-[var(--surface)] p-4">
-      <h3 className="font-display inline-flex items-center gap-2 text-sm text-amber-300"><CrownIcon size={16} /> Monetisasi — Premium via Telegram Stars</h3>
-      <p className="mt-1 text-sm text-[var(--dim)]">Premium dijual dengan <b className="text-[var(--text)]">Telegram Stars</b>: pemain membuat pesanan di Hanggar, membayar Stars ke kamu di Telegram, lalu kamu konfirmasi pesanannya di bawah ini — Premium langsung aktif. Tier <b className="text-[var(--text)]">Pro</b> membuka Bor Ganda (pengeboran 2× lebih cepat).</p>
-      <p className="mt-2 text-sm">Status pemain saat ini: {p.premium.active ? (<b className="text-amber-300">PREMIUM {p.premium.tier === "pro" ? "PRO" : "STANDARD"} aktif{p.premium.until ? ` sampai ${new Date(p.premium.until).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })}` : ""}</b>) : (<b>Pemain gratis (belum Premium)</b>)}</p>
+      <h3 className="font-display inline-flex items-center gap-2 text-sm text-amber-300"><CrownIcon size={16} /> {t("grantTitle")}</h3>
+      <p className="mt-1 text-sm text-[var(--dim)]">{trich("grantDesc")}</p>
+      <p className="mt-2 text-sm">{t("grantStatusLabel")}{p.premium.active ? (<b className="text-amber-300">{t("grantStatusActive", { tier: p.premium.tier === "pro" ? "PRO" : "STANDARD", until: p.premium.until ? t("grantStatusActiveUntil", { date: fmtDateLong(p.premium.until) }) : "" })}</b>) : (<b>{t("grantStatusFree")}</b>)}</p>
 
-      <h4 className="mt-4 text-xs font-bold uppercase tracking-[0.18em] text-[var(--dim)]">Pesanan Stars menunggu konfirmasi</h4>
+      <h4 className="mt-4 text-xs font-bold uppercase tracking-[0.18em] text-[var(--dim)]">{t("grantPendingTitle")}</h4>
       {pendingOrders.length === 0 ? (
-        <p className="mt-2 text-sm text-[var(--dim)]">Belum ada pesanan menunggu. Pesanan baru muncul di sini begitu pemain menekan paket Premium di Hanggar.</p>
+        <p className="mt-2 text-sm text-[var(--dim)]">{t("grantPendingEmpty")}</p>
       ) : (
         <ul className="mt-2 space-y-2">
           {pendingOrders.map((o) => (
@@ -1176,10 +1161,10 @@ function GrantPremiumCard({ data, onDone }: { data: GameState; onDone: (ok: bool
                 <p className="font-display text-sm">#{o.id} · Premium {o.tier === "pro" ? "Pro" : "Standard"} · {o.days} hari</p>
                 <span className="inline-flex items-center gap-1 rounded-full border border-amber-400/50 bg-amber-400/15 px-2 py-0.5 text-[11px] font-bold text-amber-200"><SparkleIcon size={11} /> {fmt(o.stars)} Stars</span>
               </div>
-              <p className="mt-1 text-xs text-[var(--dim)]">Dibuat {fmtDate(o.createdAt)} · pastikan {fmt(o.stars)} Stars dari pemain ini sudah masuk di Telegram sebelum konfirmasi.</p>
+              <p className="mt-1 text-xs text-[var(--dim)]">{t("grantOrderNote", { date: fmtDateTime(o.createdAt), stars: fmt(o.stars) })}</p>
               <div className="mt-2 flex flex-wrap gap-2">
-                <button type="button" onClick={() => confirm.mutate(o.id)} disabled={confirm.isPending} aria-label={`Konfirmasi pesanan Premium nomor ${o.id} dan aktifkan Premium`} className="btn-press rounded-xl bg-amber-400 px-4 py-2 font-bold text-black disabled:opacity-40">Stars Masuk — Aktifkan Premium</button>
-                <button type="button" onClick={() => reject.mutate(o.id)} disabled={reject.isPending} aria-label={`Tolak pesanan Premium nomor ${o.id}`} className="btn-press rounded-xl border border-red-400 px-4 py-2 font-bold text-red-300 disabled:opacity-40">Tolak Pesanan</button>
+                <button type="button" onClick={() => confirm.mutate(o.id)} disabled={confirm.isPending} aria-label={t("grantConfirmAria", { id: o.id })} className="btn-press rounded-xl bg-amber-400 px-4 py-2 font-bold text-black disabled:opacity-40">{t("grantConfirm")}</button>
+                <button type="button" onClick={() => reject.mutate(o.id)} disabled={reject.isPending} aria-label={t("grantRejectAria", { id: o.id })} className="btn-press rounded-xl border border-red-400 px-4 py-2 font-bold text-red-300 disabled:opacity-40">{t("grantReject")}</button>
               </div>
             </li>
           ))}
@@ -1187,26 +1172,26 @@ function GrantPremiumCard({ data, onDone }: { data: GameState; onDone: (ok: bool
       )}
       {pastOrders.length > 0 && (
         <ul className="mt-3 space-y-1 text-xs text-[var(--dim)]">
-          {pastOrders.map((o) => (<li key={o.id}>#{o.id} · {o.tier === "pro" ? "Pro" : "Standard"} · {fmt(o.stars)} Stars — {o.status === "confirmed" ? "terkonfirmasi" : "ditolak"}{o.processedAt ? ` · ${fmtDate(o.processedAt)}` : ""}</li>))}
+          {pastOrders.map((o) => (<li key={o.id}>#{o.id} · {o.tier === "pro" ? "Pro" : "Standard"} · {fmt(o.stars)} Stars — {o.status === "confirmed" ? t("grantPastConfirmed") : t("grantPastRejected")}{o.processedAt ? ` · ${fmtDateTime(o.processedAt)}` : ""}</li>))}
         </ul>
       )}
 
-      <h4 className="mt-4 text-xs font-bold uppercase tracking-[0.18em] text-[var(--dim)]">Aktifkan manual (pembayaran di luar alur pesanan)</h4>
+      <h4 className="mt-4 text-xs font-bold uppercase tracking-[0.18em] text-[var(--dim)]">{t("grantManualTitle")}</h4>
       <form className="mt-2 flex flex-wrap items-end gap-2" onSubmit={(e) => { e.preventDefault(); grant.mutate(); }}>
         <div>
-          <label htmlFor="grant-tier" className="text-xs font-bold">Tier</label>
+          <label htmlFor="grant-tier" className="text-xs font-bold">{t("grantTierLabel")}</label>
           <select id="grant-tier" value={tier} onChange={(e) => setTier(e.target.value as "standard" | "pro")} className="mt-1 block rounded-xl border border-[var(--border)] bg-[var(--bg)] px-3 py-2">
             <option value="standard">Standard</option>
-            <option value="pro">Pro — Bor Ganda</option>
+            <option value="pro">{t("grantProOption")}</option>
           </select>
         </div>
         <div>
-          <label htmlFor="grant-days" className="text-xs font-bold">Durasi (hari)</label>
+          <label htmlFor="grant-days" className="text-xs font-bold">{t("grantDaysLabel")}</label>
           <input id="grant-days" type="number" min={1} max={365} step={1} value={days} onChange={(e) => setDays(Math.min(365, Math.max(1, Math.floor(Number(e.target.value) || 1))))} className="mt-1 w-28 rounded-xl border border-[var(--border)] bg-[var(--bg)] px-3 py-2" />
         </div>
-        <button type="submit" disabled={grant.isPending} className="btn-press rounded-xl bg-amber-400 px-4 py-2 font-bold text-black disabled:opacity-40">{p.premium.active ? "Perpanjang Premium" : "Aktifkan Premium"}</button>
+        <button type="submit" disabled={grant.isPending} className="btn-press rounded-xl bg-amber-400 px-4 py-2 font-bold text-black disabled:opacity-40">{p.premium.active ? t("grantExtend") : t("grantActivate")}</button>
       </form>
-      <p className="mt-2 text-xs text-[var(--dim)]">Mengaktifkan saat Premium masih berjalan menambah durasinya dari tanggal berakhir saat ini; mengaktifkan Pro tidak pernah menurunkan tier yang sedang aktif.</p>
+      <p className="mt-2 text-xs text-[var(--dim)]">{t("grantNote")}</p>
     </div>
   );
 }
@@ -1216,17 +1201,17 @@ function AdminTab({ data, onDone }: { data: GameState; onDone: (ok: boolean, err
   const queue = [...data.withdrawals].sort((a, b) => order[a.status] - order[b.status] || b.id - a.id);
   const lockedKt = data.withdrawals.filter((w) => w.status === "pending" || w.status === "approved").reduce((a, w) => a + w.amountKt, 0);
   const owedUsdt = data.withdrawals.filter((w) => w.status === "approved").reduce((a, w) => a + w.amountUsdt, 0);
-  return (<section className="mt-4 space-y-4"><GrantPremiumCard data={data} onDone={onDone} /><FlaggedPlayersCard data={data} onDone={onDone} /><div className="rounded-2xl bg-[var(--surface)] border border-[var(--border)] p-4"><h2 className="font-display text-base">Pusat Kendali — Antrean WD Pemilik</h2><p className="mt-1 text-sm text-[var(--dim)]">Alur manual: periksa dompet → Setujui → kirim USDT dari dompetmu sendiri → Tandai Dibayar (isi referensi transaksi). Tolak bila alamat tidak valid; KT pemain kembali otomatis.</p><div className="mt-3 grid grid-cols-3 gap-2 text-center"><div className="rounded-xl bg-[var(--surface2)] px-2 py-3"><p className="font-display text-base">{fmt(lockedKt)} KT</p><p className="text-[11px] font-semibold text-[var(--dim)]">KT terkunci</p></div><div className="rounded-xl bg-[var(--surface2)] px-2 py-3"><p className="font-display text-base">{fmt(owedUsdt)} USDT</p><p className="text-[11px] font-semibold text-[var(--dim)]">Siap kirim</p></div><div className="rounded-xl bg-[var(--surface2)] px-2 py-3"><p className="font-display text-base">{fmt(data.adminStats?.totalWdPaidUsdt ?? data.player.totalWdPaidUsdt)} USDT</p><p className="text-[11px] font-semibold text-[var(--dim)]">Sudah dibayar</p></div></div></div>{queue.length === 0 ? (<p className="rounded-2xl bg-[var(--surface)] border border-[var(--border)] p-4 text-sm text-[var(--dim)]">Antrean kosong — belum ada penambang yang mengajukan WD.</p>) : (queue.map((w) => <AdminWdCard key={w.id} wd={w} onDone={onDone} />))}</section>);
+  return (<section className="mt-4 space-y-4"><GrantPremiumCard data={data} onDone={onDone} /><FlaggedPlayersCard data={data} onDone={onDone} /><div className="rounded-2xl bg-[var(--surface)] border border-[var(--border)] p-4"><h2 className="font-display text-base">{t("adminTitle")}</h2><p className="mt-1 text-sm text-[var(--dim)]">{t("adminFlow")}</p><div className="mt-3 grid grid-cols-3 gap-2 text-center"><div className="rounded-xl bg-[var(--surface2)] px-2 py-3"><p className="font-display text-base">{fmt(lockedKt)} KT</p><p className="text-[11px] font-semibold text-[var(--dim)]">{t("adminLocked")}</p></div><div className="rounded-xl bg-[var(--surface2)] px-2 py-3"><p className="font-display text-base">{fmt(owedUsdt)} USDT</p><p className="text-[11px] font-semibold text-[var(--dim)]">{t("adminReady")}</p></div><div className="rounded-xl bg-[var(--surface2)] px-2 py-3"><p className="font-display text-base">{fmt(data.adminStats?.totalWdPaidUsdt ?? data.player.totalWdPaidUsdt)} USDT</p><p className="text-[11px] font-semibold text-[var(--dim)]">{t("adminPaid")}</p></div></div></div>{queue.length === 0 ? (<p className="rounded-2xl bg-[var(--surface)] border border-[var(--border)] p-4 text-sm text-[var(--dim)]">{t("adminEmpty")}</p>) : (queue.map((w) => <AdminWdCard key={w.id} wd={w} onDone={onDone} />))}</section>);
 }
 
 function FlaggedPlayersCard({ data, onDone }: { data: GameState; onDone: (ok: boolean, error: string | null, good: string) => void }) {
   const flagged = data.flaggedPlayers ?? [];
-  const clear = useMutation({ mutationFn: (playerId: number) => api.clearPlayerFlag({ playerId }), onSuccess: (r, playerId) => { onDone(r.ok, r.error, `Bendera pemain #${playerId} dibersihkan — saldonya dan progresnya tetap utuh.`); } });
-  return (<div className="rounded-2xl bg-[var(--surface)] border border-[var(--border)] p-4"><h2 className="font-display text-base">Pemain Mencurigakan</h2><p className="mt-1 text-sm text-[var(--dim)]">Deteksi otomatis: bot, multi-akun, atau pola mustahil. Flag ini HANYA peringatan — pemain tetap bisa main, dan WD-nya ditandai "Perlu ditinjau" di antrean bawah. Bersihkan flag bila setelah ditinjau ternyata pemain biasa; pola bot yang berlanjut akan ter-flag lagi otomatis.</p>{flagged.length === 0 ? (<p className="mt-3 text-sm text-[var(--dim)]">Tidak ada pemain mencurigakan saat ini.</p>) : (<ul className="mt-3 space-y-3">{flagged.map((f) => (<li key={f.playerId} className="rounded-xl bg-[var(--surface2)] p-3"><div className="flex items-center justify-between gap-2"><p className="font-display text-sm">{f.username ? `@${f.username}` : "Tanpa username"} · ID {f.telegramId ?? f.playerId}</p><span className="shrink-0 rounded-full border border-amber-400/60 bg-amber-400/10 px-2 py-0.5 text-[11px] font-bold text-amber-200">Skor {f.riskScore}</span></div><p className="mt-1 text-xs text-[var(--dim)]">{f.flagReason ?? "Tanpa alasan."}</p><p className="mt-1 text-xs text-[var(--dim)]">Saldo {fmt(f.ktBalance)} KT · {f.paidWdCount}× WD terbayar{f.flaggedAt ? ` · ditandai ${fmtDate(f.flaggedAt)}` : ""}</p><button type="button" onClick={() => clear.mutate(f.playerId)} disabled={clear.isPending} aria-label={`Bersihkan bendera pemain ${f.telegramId ?? f.playerId}`} className="btn-press mt-2 rounded-lg border border-emerald-400 px-3 py-1.5 text-sm font-bold text-emerald-300">Bersihkan</button></li>))}</ul>)}</div>);
+  const clear = useMutation({ mutationFn: (playerId: number) => api.clearPlayerFlag({ playerId }), onSuccess: (r, playerId) => { onDone(r.ok, r.error, t("flaggedCleared", { id: playerId })); } });
+  return (<div className="rounded-2xl bg-[var(--surface)] border border-[var(--border)] p-4"><h2 className="font-display text-base">{t("flaggedTitle")}</h2><p className="mt-1 text-sm text-[var(--dim)]">{t("flaggedDesc")}</p>{flagged.length === 0 ? (<p className="mt-3 text-sm text-[var(--dim)]">{t("flaggedEmpty")}</p>) : (<ul className="mt-3 space-y-3">{flagged.map((f) => (<li key={f.playerId} className="rounded-xl bg-[var(--surface2)] p-3"><div className="flex items-center justify-between gap-2"><p className="font-display text-sm">{f.username ? `@${f.username}` : t("flaggedNoUser")} · ID {f.telegramId ?? f.playerId}</p><span className="shrink-0 rounded-full border border-amber-400/60 bg-amber-400/10 px-2 py-0.5 text-[11px] font-bold text-amber-200">{t("flaggedScore", { score: f.riskScore })}</span></div><p className="mt-1 text-xs text-[var(--dim)]">{f.flagReason ?? t("flaggedNoReason")}</p><p className="mt-1 text-xs text-[var(--dim)]">{t("flaggedLine", { kt: fmt(f.ktBalance), count: f.paidWdCount, at: f.flaggedAt ? t("flaggedAt", { date: fmtDateTime(f.flaggedAt) }) : "" })}</p><button type="button" onClick={() => clear.mutate(f.playerId)} disabled={clear.isPending} aria-label={t("flaggedClearAria", { id: f.telegramId ?? f.playerId })} className="btn-press mt-2 rounded-lg border border-emerald-400 px-3 py-1.5 text-sm font-bold text-emerald-300">{t("flaggedClear")}</button></li>))}</ul>)}</div>);
 }
 
 function AdminWdCard({ wd, onDone }: { wd: Wd; onDone: (ok: boolean, error: string | null, good: string) => void }) {
   const [note, setNote] = useState(""); const [txRef, setTxRef] = useState("");
-  const act = useMutation({ mutationFn: async (action: "approve" | "reject" | "pay") => await api.updateWithdrawal({ wdId: wd.id, action, adminNote: note.trim() ? note.trim() : undefined, txRef: txRef.trim() ? txRef.trim() : undefined }), onSuccess: (r, action) => { const good = action === "approve" ? `WD #${wd.id} disetujui. Kirim ${fmt(wd.amountUsdt)} USDT ke dompet pemain, lalu tandai Dibayar.` : action === "pay" ? `WD #${wd.id} ditandai Dibayar. Selesai!` : `WD #${wd.id} ditolak — KT pemain sudah dikembalikan.`; onDone(r.ok, r.error, good); } });
-  return (<div className="rounded-2xl bg-[var(--surface)] border border-[var(--border)] p-4"><div className="flex items-center justify-between gap-2"><p className="font-display text-base">#{wd.id} · {fmt(wd.amountUsdt)} USDT</p><span className={`rounded-full border px-2 py-0.5 text-[11px] font-bold ${statusClass(wd.status)}`}>{STATUS_LABEL[wd.status]}</span></div>{wd.needsReview && (<p className="mt-2 rounded-lg border border-amber-400/50 bg-amber-400/10 px-3 py-2 text-xs font-bold text-amber-200">Perlu ditinjau — pemain ini ditandai mencurigakan (lihat "Pemain Mencurigakan" di atas). Periksa dengan teliti sebelum menyetujui WD ini.</p>)}<p className="mt-1 text-sm text-[var(--dim)]">{fmt(wd.amountKt)} KT terkunci · diajukan {fmtDate(wd.createdAt)}</p><p className="mt-2 break-all rounded-lg bg-[var(--surface2)] px-3 py-2 font-mono text-xs">{wd.walletAddress}</p>{wd.adminNote && <p className="mt-2 text-sm">Catatan: {wd.adminNote}</p>}{wd.txRef && <p className="mt-1 break-all font-mono text-xs text-[var(--dim)]">Ref: {wd.txRef}</p>}{(wd.status === "pending" || wd.status === "approved") && (<div className="mt-3 space-y-2"><div><label htmlFor={`note-${wd.id}`} className="text-xs font-bold">Catatan admin (opsional)</label><input id={`note-${wd.id}`} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Mis. alamat valid, diproses malam ini" className="mt-1 w-full rounded-xl border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-sm" /></div>{wd.status === "approved" && (<div><label htmlFor={`tx-${wd.id}`} className="text-xs font-bold">Referensi transaksi USDT</label><input id={`tx-${wd.id}`} value={txRef} onChange={(e) => setTxRef(e.target.value)} placeholder="Tempel hash transaksi setelah USDT terkirim" className="mt-1 w-full rounded-xl border border-[var(--border)] bg-[var(--bg)] px-3 py-2 font-mono text-sm" /></div>)}<div className="flex flex-wrap gap-2">{wd.status === "pending" && (<button type="button" onClick={() => act.mutate("approve")} disabled={act.isPending} aria-label={`Setujui WD nomor ${wd.id}`} className="btn-press rounded-xl bg-sky-600 px-4 py-2 font-bold text-white disabled:opacity-40">Setujui</button>)}{wd.status === "approved" && (<button type="button" onClick={() => act.mutate("pay")} disabled={act.isPending} aria-label={`Tandai WD nomor ${wd.id} sudah dibayar`} className="btn-press rounded-xl bg-emerald-600 px-4 py-2 font-bold text-white disabled:opacity-40">Tandai Dibayar</button>)}<button type="button" onClick={() => act.mutate("reject")} disabled={act.isPending} aria-label={`Tolak WD nomor ${wd.id} dan kembalikan KT`} className="btn-press rounded-xl border border-red-400 px-4 py-2 font-bold text-red-300 disabled:opacity-40">Tolak &amp; Refund KT</button></div></div>)}</div>);
+  const act = useMutation({ mutationFn: async (action: "approve" | "reject" | "pay") => await api.updateWithdrawal({ wdId: wd.id, action, adminNote: note.trim() ? note.trim() : undefined, txRef: txRef.trim() ? txRef.trim() : undefined }), onSuccess: (r, action) => { const good = action === "approve" ? t("wdApproveDone", { id: wd.id, usdt: fmt(wd.amountUsdt) }) : action === "pay" ? t("wdPayDone", { id: wd.id }) : t("wdRejectDone", { id: wd.id }); onDone(r.ok, r.error, good); } });
+  return (<div className="rounded-2xl bg-[var(--surface)] border border-[var(--border)] p-4"><div className="flex items-center justify-between gap-2"><p className="font-display text-base">#{wd.id} · {fmt(wd.amountUsdt)} USDT</p><span className={`rounded-full border px-2 py-0.5 text-[11px] font-bold ${statusClass(wd.status)}`}>{statusLabel(wd.status)}</span></div>{wd.needsReview && (<p className="mt-2 rounded-lg border border-amber-400/50 bg-amber-400/10 px-3 py-2 text-xs font-bold text-amber-200">{t("wdNeedsReview")}</p>)}<p className="mt-1 text-sm text-[var(--dim)]">{t("wdLockedLine", { kt: fmt(wd.amountKt), date: fmtDateTime(wd.createdAt) })}</p><p className="mt-2 break-all rounded-lg bg-[var(--surface2)] px-3 py-2 font-mono text-xs">{wd.walletAddress}</p>{wd.adminNote && <p className="mt-2 text-sm">{t("wdAdminNote", { note: wd.adminNote })}</p>}{wd.txRef && <p className="mt-1 break-all font-mono text-xs text-[var(--dim)]">{t("wdTxRefLabel", { ref: wd.txRef })}</p>}{(wd.status === "pending" || wd.status === "approved") && (<div className="mt-3 space-y-2"><div><label htmlFor={`note-${wd.id}`} className="text-xs font-bold">{t("wdNoteLabel")}</label><input id={`note-${wd.id}`} value={note} onChange={(e) => setNote(e.target.value)} placeholder={t("wdNotePlaceholder")} className="mt-1 w-full rounded-xl border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-sm" /></div>{wd.status === "approved" && (<div><label htmlFor={`tx-${wd.id}`} className="text-xs font-bold">{t("wdTxRefLabel2")}</label><input id={`tx-${wd.id}`} value={txRef} onChange={(e) => setTxRef(e.target.value)} placeholder={t("wdTxRefPlaceholder")} className="mt-1 w-full rounded-xl border border-[var(--border)] bg-[var(--bg)] px-3 py-2 font-mono text-sm" /></div>)}<div className="flex flex-wrap gap-2">{wd.status === "pending" && (<button type="button" onClick={() => act.mutate("approve")} disabled={act.isPending} aria-label={t("wdApproveAria", { id: wd.id })} className="btn-press rounded-xl bg-sky-600 px-4 py-2 font-bold text-white disabled:opacity-40">{t("wdApprove")}</button>)}{wd.status === "approved" && (<button type="button" onClick={() => act.mutate("pay")} disabled={act.isPending} aria-label={t("wdPayAria", { id: wd.id })} className="btn-press rounded-xl bg-emerald-600 px-4 py-2 font-bold text-white disabled:opacity-40">{t("wdMarkPaid")}</button>)}<button type="button" onClick={() => act.mutate("reject")} disabled={act.isPending} aria-label={t("wdRejectAria", { id: wd.id })} className="btn-press rounded-xl border border-red-400 px-4 py-2 font-bold text-red-300 disabled:opacity-40">{t("wdRejectRefund")}</button></div></div>)}</div>);
 }

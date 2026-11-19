@@ -18,6 +18,9 @@ interface TelegramWebApp {
       id?: number;
       username?: string;
       first_name?: string;
+      /** Telegram UI language, e.g. "id" / "en" / "ru" — used only
+       *  to pick the game's initial language (i18n.ts). */
+      language_code?: string;
     };
   };
   ready: () => void;

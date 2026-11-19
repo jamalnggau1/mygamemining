@@ -329,6 +329,16 @@ import * as schema from "../../deploy/neon/schema.pg.js";
 import { getDb, type Db } from "./store.js";
 import { resolveSession, type Session } from "./telegram.js";
 import {
+  ANOMALIES_EN,
+  ASTEROID_CLASSES_EN,
+  ASTEROID_NICKNAMES_EN,
+  fmtDateLang,
+  fmtNum,
+  normalizeLang,
+  serverStrings,
+  type Lang,
+} from "./i18n.js";
+import {
   clearPlayerFlag,
   evaluateAntiCheat,
   listFlaggedPlayers,
@@ -391,8 +401,8 @@ export const WD_MAX_KT = 5000;
 // Premium Pass plans — priced in Telegram Stars (paid to the owner in
 // Telegram; the owner confirms the order in the Kendali tab).
 const PREMIUM_PLANS = {
-  standard: { days: 7, stars: 150, tier: "standard" as const, label: "Standard · 7 hari" },
-  pro: { days: 30, stars: 500, tier: "pro" as const, label: "Pro · 30 hari" },
+  standard: { days: 7, stars: 150, tier: "standard" as const, label: "Standard · 7 hari", labelEn: "Standard · 7 days" },
+  pro: { days: 30, stars: 500, tier: "pro" as const, label: "Pro · 30 hari", labelEn: "Pro · 30 days" },
 } as const;
 type PremiumPlanId = keyof typeof PREMIUM_PLANS;
 type PremiumTier = "standard" | "pro";
@@ -404,6 +414,8 @@ const DUAL_DRILL_FACTOR = 0.5; // Pro tier: two drill arms — mining takes half
 type OreDef = {
   id: string;
   name: string;
+  /** English display name (i18n) — same ore, same price. */
+  nameEn: string;
   price: number; // base KT per unit
   color: string;
   icon: string; // client-side SVG icon id (matches the ore id)
@@ -413,25 +425,25 @@ type OreDef = {
 };
 
 export const ORES: OreDef[] = [
-  { id: "regolith", name: "Regolith Asteroid", price: 0.025, color: "#9a9186", icon: "regolith", hardness: 1, weights: [34, 20, 12, 8, 5] },
-  { id: "kondrit", name: "Kondrit Karbon", price: 0.05, color: "#4b4f5e", icon: "kondrit", hardness: 1, weights: [26, 34, 18, 10, 6] },
-  { id: "besinikel", name: "Besi-Nikel", price: 0.125, color: "#c97a3a", icon: "besinikel", hardness: 2, weights: [14, 16, 28, 15, 9] },
-  { id: "kobalt", name: "Kobalt Antariksa", price: 0.25, color: "#5b8cff", icon: "kobalt", hardness: 2, weights: [8, 8, 17, 17, 11] },
-  { id: "platinum", name: "Platinum", price: 1.125, color: "#e6ebf2", icon: "platinum", hardness: 3, weights: [4, 3, 8, 18, 15] },
-  { id: "iridium", name: "Iridium", price: 3.6, color: "#f2b705", icon: "iridium", hardness: 3, weights: [2, 1, 4, 12, 18] },
-  { id: "helium3", name: "Kristal Helium-3", price: 9, color: "#6ee7ff", icon: "helium3", hardness: 4, weights: [0, 0, 1, 3, 9] },
+  { id: "regolith", name: "Regolith Asteroid", nameEn: "Asteroid Regolith", price: 0.025, color: "#9a9186", icon: "regolith", hardness: 1, weights: [34, 20, 12, 8, 5] },
+  { id: "kondrit", name: "Kondrit Karbon", nameEn: "Carbonaceous Chondrite", price: 0.05, color: "#4b4f5e", icon: "kondrit", hardness: 1, weights: [26, 34, 18, 10, 6] },
+  { id: "besinikel", name: "Besi-Nikel", nameEn: "Iron-Nickel", price: 0.125, color: "#c97a3a", icon: "besinikel", hardness: 2, weights: [14, 16, 28, 15, 9] },
+  { id: "kobalt", name: "Kobalt Antariksa", nameEn: "Space Cobalt", price: 0.25, color: "#5b8cff", icon: "kobalt", hardness: 2, weights: [8, 8, 17, 17, 11] },
+  { id: "platinum", name: "Platinum", nameEn: "Platinum", price: 1.125, color: "#e6ebf2", icon: "platinum", hardness: 3, weights: [4, 3, 8, 18, 15] },
+  { id: "iridium", name: "Iridium", nameEn: "Iridium", price: 3.6, color: "#f2b705", icon: "iridium", hardness: 3, weights: [2, 1, 4, 12, 18] },
+  { id: "helium3", name: "Kristal Helium-3", nameEn: "Helium-3 Crystal", price: 9, color: "#6ee7ff", icon: "helium3", hardness: 4, weights: [0, 0, 1, 3, 9] },
   // Batu mulia khas tiap peta — dua permata unggulan per map, hanya
   // muncul di map-nya (weight di zone lain 0).
-  { id: "opal", name: "Opal Pelangi", price: 0.975, color: "#f9a8d4", icon: "opal", hardness: 2, weights: [7, 0, 0, 0, 0] },
-  { id: "topaz", name: "Topaz Emas", price: 1.275, color: "#fbbf24", icon: "topaz", hardness: 2, weights: [5, 0, 0, 0, 0] },
-  { id: "turkuois", name: "Turkuois Orbit", price: 1.95, color: "#2dd4bf", icon: "turkuois", hardness: 2, weights: [0, 6, 0, 0, 0] },
-  { id: "ametis", name: "Ametis Sabuk", price: 2.625, color: "#a78bfa", icon: "ametis", hardness: 3, weights: [0, 4, 0, 0, 0] },
-  { id: "zamrud", name: "Zamrud Bulan", price: 4.8, color: "#34d399", icon: "zamrud", hardness: 3, weights: [0, 0, 5, 0, 0] },
-  { id: "rubi", name: "Rubi Mare", price: 6.3, color: "#f87171", icon: "rubi", hardness: 3, weights: [0, 0, 3, 0, 0] },
-  { id: "safir", name: "Safir Bintang", price: 10.5, color: "#60a5fa", icon: "safir", hardness: 4, weights: [0, 0, 0, 5, 0] },
-  { id: "berlian", name: "Berlian Psyche", price: 14.25, color: "#f8fafc", icon: "berlian", hardness: 4, weights: [0, 0, 0, 3, 0] },
-  { id: "opales", name: "Opal Es Hitam", price: 22.5, color: "#c084fc", icon: "opales", hardness: 4, weights: [0, 0, 0, 0, 4] },
-  { id: "voidium", name: "Kristal Voidium", price: 36, color: "#818cf8", icon: "voidium", hardness: 4, weights: [0, 0, 0, 0, 2] },
+  { id: "opal", name: "Opal Pelangi", nameEn: "Rainbow Opal", price: 0.975, color: "#f9a8d4", icon: "opal", hardness: 2, weights: [7, 0, 0, 0, 0] },
+  { id: "topaz", name: "Topaz Emas", nameEn: "Golden Topaz", price: 1.275, color: "#fbbf24", icon: "topaz", hardness: 2, weights: [5, 0, 0, 0, 0] },
+  { id: "turkuois", name: "Turkuois Orbit", nameEn: "Orbital Turquoise", price: 1.95, color: "#2dd4bf", icon: "turkuois", hardness: 2, weights: [0, 6, 0, 0, 0] },
+  { id: "ametis", name: "Ametis Sabuk", nameEn: "Belt Amethyst", price: 2.625, color: "#a78bfa", icon: "ametis", hardness: 3, weights: [0, 4, 0, 0, 0] },
+  { id: "zamrud", name: "Zamrud Bulan", nameEn: "Moon Emerald", price: 4.8, color: "#34d399", icon: "zamrud", hardness: 3, weights: [0, 0, 5, 0, 0] },
+  { id: "rubi", name: "Rubi Mare", nameEn: "Mare Ruby", price: 6.3, color: "#f87171", icon: "rubi", hardness: 3, weights: [0, 0, 3, 0, 0] },
+  { id: "safir", name: "Safir Bintang", nameEn: "Star Sapphire", price: 10.5, color: "#60a5fa", icon: "safir", hardness: 4, weights: [0, 0, 0, 5, 0] },
+  { id: "berlian", name: "Berlian Psyche", nameEn: "Psyche Diamond", price: 14.25, color: "#f8fafc", icon: "berlian", hardness: 4, weights: [0, 0, 0, 3, 0] },
+  { id: "opales", name: "Opal Es Hitam", nameEn: "Black Ice Opal", price: 22.5, color: "#c084fc", icon: "opales", hardness: 4, weights: [0, 0, 0, 0, 4] },
+  { id: "voidium", name: "Kristal Voidium", nameEn: "Voidium Crystal", price: 36, color: "#818cf8", icon: "voidium", hardness: 4, weights: [0, 0, 0, 0, 2] },
 ];
 const RARE_IDS = new Set([
   "platinum", "iridium", "helium3",
@@ -440,11 +452,16 @@ const RARE_IDS = new Set([
 
 type MapDef = {
   name: string;
+  /** English display strings (i18n) — same map, same rules. */
+  nameEn: string;
   tagline: string;
+  taglineEn: string;
   desc: string;
+  descEn: string;
   minLayer: number; // sector needed to unlock this map
   image: string; // client asset key
   distanceLabel: string; // how far this map is from Earth — farther = slower ops
+  distanceLabelEn: string;
   // Challenge profile — map 1 is the gentle starter, map 5 the endgame.
   jamChance: number; // 0..1 — drill jams mid-job: vein lost, energy lost
   damageChance: number; // 0..1 — hull hit while mining: repair fee in KT
@@ -457,11 +474,15 @@ type MapDef = {
 export const MAPS: MapDef[] = [
   {
     name: "Orbit Rendah — Pos Tambang LEO",
+    nameEn: "Low Orbit — LEO Mining Post",
     tagline: "Peta pemula · aman & ramah",
+    taglineEn: "Starter map · safe & friendly",
     desc: "Asteroid kecil dekat Bumi, jauh dari bahaya. Regolith dan kondrit karbon mendominasi, dengan kilau Opal Pelangi dan Topaz Emas di sela batuan. Tempat belajar terbaik untuk penambang baru.",
+    descEn: "Small asteroids near Earth, far from danger. Regolith and carbonaceous chondrite dominate, with flashes of Rainbow Opal and Golden Topaz between the rocks. The best place for new miners to learn.",
     minLayer: 1,
     image: "hero",
     distanceLabel: "±0,01 SA dari Bumi — halaman belakang stasiun",
+    distanceLabelEn: "±0.01 AU from Earth — the station's backyard",
     jamChance: 0,
     damageChance: 0,
     damageFeeKt: 0,
@@ -471,11 +492,15 @@ export const MAPS: MapDef[] = [
   },
   {
     name: "Sabuk Asteroid Utama",
+    nameEn: "Main Asteroid Belt",
     tagline: "Peta menengah · serpihan beterbangan",
+    taglineEn: "Mid map · flying debris",
     desc: "Di antara Mars dan Jupiter, jutaan serpihan batu beterbangan. Kondrit melimpah, besi-nikel mulai muncul dari inti asteroid purba — dan Turkuois Orbit serta Ametis Sabuk bersembunyi di kawah-kawah tua. Serpihan kadang menyumbat mata bor.",
+    descEn: "Between Mars and Jupiter, millions of rock fragments fly around. Chondrite is abundant, iron-nickel starts showing up from the cores of ancient asteroids — and Orbital Turquoise and Belt Amethyst hide in old craters. Debris sometimes clogs the drill bit.",
     minLayer: 3,
     image: "asteroid",
     distanceLabel: "±2,8 SA dari Bumi — di antara Mars dan Jupiter",
+    distanceLabelEn: "±2.8 AU from Earth — between Mars and Jupiter",
     jamChance: 0.06,
     damageChance: 0,
     damageFeeKt: 0,
@@ -485,11 +510,15 @@ export const MAPS: MapDef[] = [
   },
   {
     name: "Permukaan Bulan — Mare Tenang",
+    nameEn: "Moon Surface — Mare Tranquillitatis",
     tagline: "Peta lanjutan · radiasi & debu tajam",
+    taglineEn: "Advanced map · radiation & sharp dust",
     desc: "Regolith bulan yang keras dan berdebu tajam. Besi-nikel dan kobalt jadi buruan utama, Zamrud Bulan berkilau hijau dari singkapan batuan, dan Rubi Mare yang langka menunggu penambang tekun. Radiasi permukaan menguras daya setiap operasi, dan debu bulan sesekali membuat bor macet.",
+    descEn: "Hard lunar regolith and sharp dust. Iron-nickel and cobalt are the main prize, Moon Emerald glints green from rock outcrops, and the rare Mare Ruby waits for patient miners. Surface radiation drains energy on every operation, and moon dust occasionally jams the drill.",
     minLayer: 6,
     image: "moon",
     distanceLabel: "384 ribu km dari Bumi — tetangga terdekat, batuan kerasnya yang bikin lama",
+    distanceLabelEn: "384 thousand km from Earth — the closest neighbour, its hard rock is what slows you down",
     jamChance: 0.08,
     damageChance: 0.05,
     damageFeeKt: 60,
@@ -499,11 +528,15 @@ export const MAPS: MapDef[] = [
   },
   {
     name: "Asteroid Logam 16 Psyche",
+    nameEn: "Metal Asteroid 16 Psyche",
     tagline: "Peta sulit · inti logam raksasa",
+    taglineEn: "Hard map · giant metal core",
     desc: "Asteroid raksasa yang hampir seluruhnya logam padat. Platinum dan iridium jauh lebih sering terlihat, Safir Bintang dan Berlian Psyche tertanam di inti besinya. Batuan sekeras ini membuat bor sering macet, dan serpihan logam tajam bisa merobek lambung kapal — siapkan KT untuk biaya perbaikan.",
+    descEn: "A giant asteroid made almost entirely of solid metal. Platinum and iridium show up far more often, Star Sapphire and Psyche Diamond are embedded in its iron core. Rock this hard jams drills often, and sharp metal shards can tear the hull — keep KT ready for repair fees.",
     minLayer: 10,
     image: "psyche",
     distanceLabel: "±3,3 SA dari Bumi — jauh di sabuk utama luar",
+    distanceLabelEn: "±3.3 AU from Earth — deep in the outer main belt",
     jamChance: 0.12,
     damageChance: 0.1,
     damageFeeKt: 150,
@@ -513,11 +546,15 @@ export const MAPS: MapDef[] = [
   },
   {
     name: "Sabuk Kuiper — Inti Es Antariksa",
+    nameEn: "Kuiper Belt — Deep-Space Ice Core",
     tagline: "Peta tersulit · ujung tata surya",
+    taglineEn: "Hardest map · edge of the solar system",
     desc: "Ujung tata surya: gelap, membeku, dan bermandikan radiasi kosmik. Iridium dan kristal Helium-3 menunggu di sini, bersama Opal Es Hitam dan Kristal Voidium — permata termahal yang dikenal stasiun. Bor membeku dan macet, lambung kapal rapuh diterpa puing es, dan setiap operasi menguras daya jauh lebih besar. Hanya penambang paling sabar yang pulang kaya dari sini.",
+    descEn: "The edge of the solar system: dark, freezing, and bathed in cosmic radiation. Iridium and Helium-3 crystals wait here, along with Black Ice Opal and Voidium Crystal — the most expensive gems the station knows. Drills freeze and jam, the hull grows brittle under ice debris, and every operation drains far more energy. Only the most patient miners come home rich from here.",
     minLayer: 15,
     image: "kuiper",
     distanceLabel: "±40 SA dari Bumi — ujung tata surya, sinyal saja butuh berjam-jam",
+    distanceLabelEn: "±40 AU from Earth — the edge of the solar system, even a signal takes hours",
     jamChance: 0.16,
     damageChance: 0.14,
     damageFeeKt: 300,
@@ -549,19 +586,22 @@ const ANOMALIES: { text: string; factor: number }[] = [
 type UpgradeDef = {
   id: string;
   name: string;
+  /** English display strings (i18n) — same upgrade, same cost. */
+  nameEn: string;
   desc: string;
+  descEn: string;
   baseCost: number;
   growth: number;
   maxLevel: number;
 };
 
 export const UPGRADES: UpgradeDef[] = [
-  { id: "beliung", name: "Lengan Bor Laser", desc: "Pengeboran setiap urat mineral 6% lebih cepat per level — mata bor laser memotong batuan lebih efisien.", baseCost: 150, growth: 1.6, maxLevel: 10 },
-  { id: "tangki", name: "Tangki O₂ & Baterai Surya", desc: "KAPASITAS daya: +6 daya maksimum per level (30 → 90). Tangki O₂ yang lebih besar memperpanjang napas misi di permukaan, dan baterai surya menyimpan cadangan daya lebih banyak — jadi kamu bisa menjalankan lebih banyak scan & bor dalam satu sesi, dan daya yang terisi saat kamu tidak bermain tidak terbuang karena tangki cepat penuh. Upgrade ini TIDAK mempercepat isi ulang; kecepatan isi ulang diatur Reaktor Fusi Mini.", baseCost: 120, growth: 1.6, maxLevel: 10 },
-  { id: "bor", name: "Reaktor Fusi Mini", desc: "KECEPATAN isi ulang daya: waktu isi ulang berkurang 10% per level — dari 4 menit per daya di level 0 menjadi sekitar 1 menit 24 detik per daya di level 10. Inilah upgrade yang membuat daya kapal pulih lebih cepat; tanpa upgrade ini isi ulang sengaja dibuat lambat.", baseCost: 200, growth: 1.7, maxLevel: 10 },
-  { id: "ransel", name: "Drone Kargo Otomatis", desc: "+7% peluang hasil ganda saat mengambil hasil tambang (drone mengangkut 2× lipat) per level.", baseCost: 180, growth: 1.6, maxLevel: 10 },
-  { id: "negosiator", name: "Negosiator Stasiun Orbital", desc: "+5% harga jual semua mineral di Stasiun Orbital per level.", baseCost: 250, growth: 1.65, maxLevel: 10 },
-  { id: "pemindai", name: "Spektrometer Inti", desc: "Scan asteroid 7% lebih cepat per level, dan +25% peluang urat Iridium & Kristal Helium-3 muncul di asteroid berikutnya.", baseCost: 400, growth: 1.75, maxLevel: 8 },
+  { id: "beliung", name: "Lengan Bor Laser", nameEn: "Laser Drill Arm", desc: "Pengeboran setiap urat mineral 6% lebih cepat per level — mata bor laser memotong batuan lebih efisien.", descEn: "Drilling each mineral vein is 6% faster per level — the laser bit cuts through rock more efficiently.", baseCost: 150, growth: 1.6, maxLevel: 10 },
+  { id: "tangki", name: "Tangki O₂ & Baterai Surya", nameEn: "O₂ Tank & Solar Battery", desc: "KAPASITAS daya: +6 daya maksimum per level (30 → 90). Tangki O₂ yang lebih besar memperpanjang napas misi di permukaan, dan baterai surya menyimpan cadangan daya lebih banyak — jadi kamu bisa menjalankan lebih banyak scan & bor dalam satu sesi, dan daya yang terisi saat kamu tidak bermain tidak terbuang karena tangki cepat penuh. Upgrade ini TIDAK mempercepat isi ulang; kecepatan isi ulang diatur Reaktor Fusi Mini.", descEn: "Energy CAPACITY: +6 max energy per level (30 → 90). A bigger O₂ tank stretches your mission breath on the surface, and the solar battery banks more reserve energy — so you can run more scans & drills in one session, and energy gained while you're away isn't wasted by a tank that fills up too fast. This upgrade does NOT speed up recharge; recharge speed is set by the Mini Fusion Reactor.", baseCost: 120, growth: 1.6, maxLevel: 10 },
+  { id: "bor", name: "Reaktor Fusi Mini", nameEn: "Mini Fusion Reactor", desc: "KECEPATAN isi ulang daya: waktu isi ulang berkurang 10% per level — dari 4 menit per daya di level 0 menjadi sekitar 1 menit 24 detik per daya di level 10. Inilah upgrade yang membuat daya kapal pulih lebih cepat; tanpa upgrade ini isi ulang sengaja dibuat lambat.", descEn: "Energy recharge SPEED: recharge time drops 10% per level — from 4 minutes per energy at level 0 to about 1 minute 24 seconds per energy at level 10. This is the upgrade that makes ship energy recover faster; without it, recharge is deliberately slow.", baseCost: 200, growth: 1.7, maxLevel: 10 },
+  { id: "ransel", name: "Drone Kargo Otomatis", nameEn: "Automated Cargo Drone", desc: "+7% peluang hasil ganda saat mengambil hasil tambang (drone mengangkut 2× lipat) per level.", descEn: "+7% chance of a double haul when collecting mining results (the drone carries 2× as much) per level.", baseCost: 180, growth: 1.6, maxLevel: 10 },
+  { id: "negosiator", name: "Negosiator Stasiun Orbital", nameEn: "Orbital Station Negotiator", desc: "+5% harga jual semua mineral di Stasiun Orbital per level.", descEn: "+5% sell price for all minerals at the Orbital Station per level.", baseCost: 250, growth: 1.65, maxLevel: 10 },
+  { id: "pemindai", name: "Spektrometer Inti", nameEn: "Core Spectrometer", desc: "Scan asteroid 7% lebih cepat per level, dan +25% peluang urat Iridium & Kristal Helium-3 muncul di asteroid berikutnya.", descEn: "Asteroid scans 7% faster per level, and +25% chance that Iridium & Helium-3 crystal veins appear on the next asteroid.", baseCost: 400, growth: 1.75, maxLevel: 8 },
 ];
 
 function oreById(id: string): OreDef | undefined {
@@ -789,11 +829,72 @@ export function completionBonusKt(layer: number): number {
 export function roundKt(n: number): number {
   return Math.round(n * 1000) / 1000;
 }
-/** Three-decimal Indonesian formatting for KT amounts inside
- *  server-written activity messages (raw `${n}` would print a dot,
- *  e.g. "1.2 KT"). */
-export function fmtKt(n: number): string {
-  return n.toLocaleString("id-ID", { maximumFractionDigits: 3 });
+/** Locale-aware KT formatting for server-written activity messages
+ *  (raw `${n}` would print a dot, e.g. "1.2 KT"). Indonesian prints
+ *  "5.000" / "0,025", English prints "5,000" / "0.025". Default "id"
+ *  keeps every existing test and log message byte-identical. */
+export function fmtKt(n: number, lang: Lang = "id"): string {
+  return fmtNum(n, lang);
+}
+
+/** Localized display helpers — pick the English field when the
+ *  player's session language is "en", else the Indonesian original. */
+export function oreName(ore: OreDef, lang: Lang): string {
+  return lang === "en" ? ore.nameEn : ore.name;
+}
+/** Localized ore name by id (null when the ore id is unknown). */
+export function oreNameById(id: string, lang: Lang): string | null {
+  const ore = oreById(id);
+  return ore ? oreName(ore, lang) : null;
+}
+export function mapName(map: MapDef, lang: Lang): string {
+  return lang === "en" ? map.nameEn : map.name;
+}
+export function mapTagline(map: MapDef, lang: Lang): string {
+  return lang === "en" ? map.taglineEn : map.tagline;
+}
+export function mapDesc(map: MapDef, lang: Lang): string {
+  return lang === "en" ? map.descEn : map.desc;
+}
+export function mapDistanceLabel(map: MapDef, lang: Lang): string {
+  return lang === "en" ? map.distanceLabelEn : map.distanceLabel;
+}
+export function upgradeName(def: UpgradeDef, lang: Lang): string {
+  return lang === "en" ? def.nameEn : def.name;
+}
+export function upgradeDesc(def: UpgradeDef, lang: Lang): string {
+  return lang === "en" ? def.descEn : def.desc;
+}
+export function premiumPlanLabel(plan: { label: string; labelEn: string }, lang: Lang): string {
+  return lang === "en" ? plan.labelEn : plan.label;
+}
+/** Expedition names are stored as "Asteroid CODE — Nickname" (see
+ *  generateExpedition). Translate the nickname part by index; the
+ *  code and the word "Asteroid" stay the same in both languages. */
+export function localizeExpeditionName(name: string, lang: Lang): string {
+  if (lang !== "en") return name;
+  const parts = name.split(" — ");
+  const nick = parts[parts.length - 1] ?? "";
+  const idx = ASTEROID_NICKNAMES.indexOf(nick);
+  if (idx === -1) return name;
+  parts[parts.length - 1] = ASTEROID_NICKNAMES_EN[idx] ?? nick;
+  return parts.join(" — ");
+}
+/** Asteroid class strings ("Tipe C — Karbonan") are stored in the
+ *  expedition; translate by (zone, index) lookup. */
+export function localizeKlass(klass: string, zone: number, lang: Lang): string {
+  if (lang !== "en") return klass;
+  const classes = ASTEROID_CLASSES[zone] ?? [];
+  const idx = classes.indexOf(klass);
+  if (idx === -1) return klass;
+  return ASTEROID_CLASSES_EN[zone]?.[idx] ?? klass;
+}
+/** Anomaly text is stored in the expedition; translate by exact match. */
+export function localizeAnomaly(text: string | null, lang: Lang): string | null {
+  if (text == null || lang !== "en") return text;
+  const idx = ANOMALIES.findIndex((a) => a.text === text);
+  if (idx === -1) return text;
+  return ANOMALIES_EN[idx] ?? text;
 }
 /** Energy to fly to a map: the base hop plus 2 per map step of distance. */
 function travelCostFor(zoneIdx: number, premium: boolean): number {
@@ -1395,6 +1496,8 @@ export const gameActions = {
     }),
     async handler(_args, session) {
       const db = getDb();
+      // i18n: request language — user-facing strings only.
+      const lang = session.lang;
       const p = await loadPlayer(db, session);
       const levels = await loadLevels(db, p.id);
       const premium = isPremium(p);
@@ -1482,8 +1585,8 @@ export const gameActions = {
           regenSeconds: regenSeconds(levels, premium),
           layer: p.layer,
           depthMeters: p.layer * 12500,
-          zoneName: zone.name,
-          zoneDesc: zone.desc,
+          zoneName: mapName(zone, lang),
+          zoneDesc: mapDesc(zone, lang),
           currentZone: p.currentZone,
           premium: {
             active: premium,
@@ -1492,7 +1595,7 @@ export const gameActions = {
             until: p.premiumUntil ? p.premiumUntil.toISOString() : null,
             plans: (Object.keys(PREMIUM_PLANS) as PremiumPlanId[]).map((id) => ({
               id,
-              label: PREMIUM_PLANS[id].label,
+              label: premiumPlanLabel(PREMIUM_PLANS[id], lang),
               days: PREMIUM_PLANS[id].days,
               stars: PREMIUM_PLANS[id].stars,
               tier: PREMIUM_PLANS[id].tier,
@@ -1526,15 +1629,15 @@ export const gameActions = {
         },
         maps: MAPS.map((m, i) => ({
           index: i,
-          name: m.name,
-          tagline: m.tagline,
-          desc: m.desc,
+          name: mapName(m, lang),
+          tagline: mapTagline(m, lang),
+          desc: mapDesc(m, lang),
           minLayer: m.minLayer,
           image: m.image,
           unlocked: p.layer >= m.minLayer,
           isCurrent: p.currentZone === i,
           travelCost: travelCostFor(i, premium),
-          distanceLabel: m.distanceLabel,
+          distanceLabel: mapDistanceLabel(m, lang),
           scanSeconds: scanDurationForZone(i, levels, premium),
           jamChancePct: Math.round(m.jamChance * 100),
           damageChancePct: Math.round(m.damageChance * 100),
@@ -1543,20 +1646,20 @@ export const gameActions = {
           timeFactor: m.timeFactor,
           gems: ORES.filter((o) => (o.weights[i] ?? 0) > 0).map((o) => ({
             id: o.id,
-            name: o.name,
+            name: oreName(o, lang),
             price: roundKt(o.price * mult),
             color: o.color,
             icon: o.icon,
           })),
         })),
         expedition: {
-          name: exp.name,
-          klass: exp.klass,
+          name: localizeExpeditionName(exp.name, lang),
+          klass: localizeKlass(exp.klass, zoneIdx, lang),
           diameterKm: exp.diameterKm,
           zoneIndex: zoneIdx,
-          zoneName: zone.name,
+          zoneName: mapName(zone, lang),
           scanned: exp.scanned,
-          anomalyText: exp.scanned ? exp.anomalyText : null,
+          anomalyText: exp.scanned ? localizeAnomaly(exp.anomalyText, lang) : null,
           veinCount: exp.veins.length,
           minedCount: exp.veins.filter((v) => v.mined).length,
           allMined: exp.veins.length > 0 && exp.veins.every((v) => v.mined),
@@ -1570,7 +1673,7 @@ export const gameActions = {
                 return {
                   index: i,
                   oreId: v.oreId,
-                  name: ore?.name ?? v.oreId,
+                  name: ore ? oreName(ore, lang) : v.oreId,
                   color: ore?.color ?? "#999",
                   icon: ore?.icon ?? v.oreId,
                   qty: v.qty,
@@ -1587,7 +1690,7 @@ export const gameActions = {
           ? {
               kind: job.kind,
               veinIndex: job.veinIndex,
-              oreName: job.oreId ? (oreById(job.oreId)?.name ?? null) : null,
+              oreName: job.oreId ? oreNameById(job.oreId, lang) : null,
               startedAt: new Date(job.startedAt).toISOString(),
               endsAt: new Date(job.endsAt).toISOString(),
               durationSec: job.durationSec,
@@ -1599,7 +1702,7 @@ export const gameActions = {
           : null,
         ores: ORES.map((o) => ({
           id: o.id,
-          name: o.name,
+          name: oreName(o, lang),
           basePrice: o.price,
           sellPrice: roundKt(o.price * mult),
           color: o.color,
@@ -1610,8 +1713,8 @@ export const gameActions = {
           const level = levels[u.id] ?? 0;
           return {
             id: u.id,
-            name: u.name,
-            desc: u.desc,
+            name: upgradeName(u, lang),
+            desc: upgradeDesc(u, lang),
             level,
             maxLevel: u.maxLevel,
             nextCost: level >= u.maxLevel ? null : upgradeCost(u, level),
@@ -1652,21 +1755,24 @@ export const gameActions = {
     }),
     async handler(_args, session) {
       const db = getDb();
+      // i18n: request language — user-facing strings only.
+      const lang = session.lang;
+      const S = serverStrings(lang);
       const p = await loadPlayer(db, session);
       const levels = await loadLevels(db, p.id);
       const fail = (error: string) => ({ ok: false, error, durationSec: 0, energy: p.energy });
       const exp = parseExpedition(p.expedition);
-      if (!exp) return fail("Data asteroid tidak valid, coba muat ulang.");
+      if (!exp) return fail(S.errInvalidAsteroid);
       if (parseJob(p.job)) {
         // Anti-cheat (aturan d): operasi kedua saat timer operasi
         // pertama masih berjalan — sudah ditolak, polanya dicatat.
-        await recordTamperAttempt(db, p, "memulai scan saat operasi masih berjalan");
-        return fail("Ada operasi yang sedang berjalan. Selesaikan atau batalkan dulu.");
+        await recordTamperAttempt(db, p, S.tamperScan, lang);
+        return fail(S.errJobRunning);
       }
-      if (exp.scanned) return fail("Asteroid ini sudah dipindai — komposisi uratnya sudah terbuka.");
+      if (exp.scanned) return fail(S.errAlreadyScanned);
       const cost = scanEnergyCost(exp);
       if (p.energy < cost)
-        return fail(`Daya tidak cukup — scan butuh ${cost} daya, kamu punya ${p.energy}. Tunggu daya pulih (isi ulang memang lambat), naikkan Reaktor Fusi Mini agar isi ulang lebih cepat, atau Tangki O₂ & Baterai Surya agar kapasitas daya lebih besar.`);
+        return fail(S.errEnergyScan(cost, p.energy));
       const durationSec = scanDurationSec(exp, levels, isPremium(p));
       const now = Date.now();
       const job: Job = {
@@ -1697,24 +1803,27 @@ export const gameActions = {
     }),
     async handler(args, session) {
       const db = getDb();
+      // i18n: request language — user-facing strings only.
+      const lang = session.lang;
+      const S = serverStrings(lang);
       const p = await loadPlayer(db, session);
       const levels = await loadLevels(db, p.id);
       const fail = (error: string) => ({ ok: false, error, durationSec: 0, energy: p.energy, oreName: null as string | null });
       const exp = parseExpedition(p.expedition);
-      if (!exp) return fail("Data asteroid tidak valid, coba muat ulang.");
+      if (!exp) return fail(S.errInvalidAsteroid);
       if (parseJob(p.job)) {
         // Anti-cheat (aturan d): operasi kedua saat timer operasi
         // pertama masih berjalan — sudah ditolak, polanya dicatat.
-        await recordTamperAttempt(db, p, "memulai pengeboran saat operasi masih berjalan");
-        return fail("Ada operasi yang sedang berjalan. Selesaikan atau batalkan dulu.");
+        await recordTamperAttempt(db, p, S.tamperMine, lang);
+        return fail(S.errJobRunning);
       }
-      if (!exp.scanned) return fail("Pindai asteroid ini dulu — tanpa scan, urat mineralnya tidak terlihat.");
+      if (!exp.scanned) return fail(S.errScanFirst);
       const vein = exp.veins[args.veinIndex];
-      if (!vein) return fail("Urat mineral itu tidak ada di asteroid ini.");
-      if (vein.mined) return fail("Urat ini sudah habis ditambang.");
+      if (!vein) return fail(S.errVeinNotFound);
+      if (vein.mined) return fail(S.errVeinMined);
       const cost = mineEnergyCost(vein, exp);
       if (p.energy < cost)
-        return fail(`Daya tidak cukup — pengeboran urat ini butuh ${cost} daya, kamu punya ${p.energy}. Tunggu daya pulih (isi ulang memang lambat), naikkan Reaktor Fusi Mini agar isi ulang lebih cepat, atau Tangki O₂ & Baterai Surya agar kapasitas daya lebih besar.`);
+        return fail(S.errEnergyMine(cost, p.energy));
       const durationSec = mineDurationSec(vein, exp, levels, isPremium(p), hasDualDrill(p));
       const now = Date.now();
       // Map challenge rolls happen now, server-side, and stay hidden
@@ -1735,7 +1844,7 @@ export const gameActions = {
         .update(schema.player)
         .set({ ...spend, job: JSON.stringify(job) })
         .where(eq(schema.player.id, p.id));
-      return { ok: true, error: null, durationSec, energy: spend.energy, oreName: oreById(vein.oreId)?.name ?? null };
+      return { ok: true, error: null, durationSec, energy: spend.energy, oreName: oreNameById(vein.oreId, lang) };
     },
   }),
 
@@ -1756,6 +1865,9 @@ export const gameActions = {
     }),
     async handler(_args, session) {
       const db = getDb();
+      // i18n: request language — user-facing strings only.
+      const lang = session.lang;
+      const S = serverStrings(lang);
       const p = await loadPlayer(db, session);
       const levels = await loadLevels(db, p.id);
       const fail = (error: string) => ({
@@ -1763,15 +1875,15 @@ export const gameActions = {
         jammed: false, hullHit: false, repairFeeKt: 0,
       });
       const exp = parseExpedition(p.expedition);
-      if (!exp) return fail("Data asteroid tidak valid, coba muat ulang.");
+      if (!exp) return fail(S.errInvalidAsteroid);
       const job = parseJob(p.job);
       if (!job) return fail("Tidak ada operasi yang bisa diambil hasilnya.");
       const remaining = Math.ceil((job.endsAt - Date.now()) / 1000);
       if (remaining > 0) {
         // Anti-cheat (aturan d): ambil hasil sebelum timer operasi
         // selesai — sudah ditolak, polanya dicatat.
-        await recordTamperAttempt(db, p, "ambil hasil sebelum operasi selesai");
-        return fail(`Operasi belum selesai — masih ${remaining} detik lagi. Bor dan spektrometer bekerja dengan waktu nyata.`);
+        await recordTamperAttempt(db, p, S.tamperCollect, lang);
+        return fail(S.errJobNotReady(remaining));
       }
       // Anti-cheat (aturan b): selisih waktu collect vs job.endsAt
       // server-side — bot mengambil hasil dengan timing metronom,
@@ -1784,8 +1896,8 @@ export const gameActions = {
           .update(schema.player)
           .set({ expedition: JSON.stringify(exp), job: null, totalScans: p.totalScans + 1 })
           .where(eq(schema.player.id, p.id));
-        await logActivity(db, p.id, "scan", `Scan ${exp.name} selesai — ${exp.veins.length} urat mineral terdeteksi.`, null);
-        await recordCollectLatency(db, p, collectDelayMs);
+        await logActivity(db, p.id, "scan", S.logScan(localizeExpeditionName(exp.name, lang), exp.veins.length), null);
+        await recordCollectLatency(db, p, collectDelayMs, lang);
         return { ok: true, error: null, kind: "scan" as const, oreId: null, oreName: null, qty: 0, isRare: false, allMined: false, jammed: false, hullHit: false, repairFeeKt: 0 };
       }
 
@@ -1793,7 +1905,7 @@ export const gameActions = {
       const vein = job.veinIndex != null ? exp.veins[job.veinIndex] : undefined;
       if (!vein || vein.mined || vein.oreId !== job.oreId) {
         await db.update(schema.player).set({ job: null }).where(eq(schema.player.id, p.id));
-        return fail("Urat target operasi ini sudah tidak tersedia — operasi dibatalkan.");
+        return fail(S.errVeinGone);
       }
       const ore = oreById(vein.oreId);
       const map = mapByIndex(expeditionZone(exp, p.currentZone));
@@ -1807,11 +1919,11 @@ export const gameActions = {
           .update(schema.player)
           .set({ expedition: JSON.stringify(exp), job: null, totalDigs: p.totalDigs + 1 })
           .where(eq(schema.player.id, p.id));
-        await logActivity(db, p.id, "jam", `Bor macet saat mengebor urat ${ore?.name ?? vein.oreId} di ${exp.name} — urat hilang, mata bor harus diganti.`, null);
-        await recordCollectLatency(db, p, collectDelayMs);
+        await logActivity(db, p.id, "jam", S.logJam(ore ? oreName(ore, lang) : vein.oreId, localizeExpeditionName(exp.name, lang)), null);
+        await recordCollectLatency(db, p, collectDelayMs, lang);
         return {
           ok: true, error: null, kind: "mine" as const,
-          oreId: vein.oreId, oreName: ore?.name ?? null, qty: 0,
+          oreId: vein.oreId, oreName: ore ? oreName(ore, lang) : null, qty: 0,
           isRare: false, allMined: allMinedJam,
           jammed: true, hullHit: false, repairFeeKt: 0,
         };
@@ -1834,7 +1946,7 @@ export const gameActions = {
           set: { qty: sql`${schema.inventory.qty} + ${qty}` },
         });
       if (ore && RARE_IDS.has(ore.id)) {
-        await logActivity(db, p.id, "rare_find", `Menambang ${ore.name} ×${qty} dari ${exp.name}!`, null);
+        await logActivity(db, p.id, "rare_find", S.logRare(oreName(ore, lang), qty, localizeExpeditionName(exp.name, lang)), null);
       }
       // Tantangan peta: lambung kapal terkena serpihan — hasil tambang
       // tetap didapat, tapi biaya perbaikan dipotong dari saldo KT.
@@ -1847,15 +1959,15 @@ export const gameActions = {
             .set({ ktBalance: roundKt(p.ktBalance - repairFeeKt) })
             .where(eq(schema.player.id, p.id));
         }
-        await logActivity(db, p.id, "hull_damage", `Lambung kapal terkena serpihan di ${map.name} — biaya perbaikan ${fmtKt(repairFeeKt)} KT.`, -repairFeeKt);
+        await logActivity(db, p.id, "hull_damage", S.logHull(mapName(map, lang), repairFeeKt), -repairFeeKt);
       }
-      await recordCollectLatency(db, p, collectDelayMs);
+      await recordCollectLatency(db, p, collectDelayMs, lang);
       return {
         ok: true,
         error: null,
         kind: "mine" as const,
         oreId: vein.oreId,
-        oreName: ore?.name ?? null,
+        oreName: ore ? oreName(ore, lang) : null,
         qty,
         isRare: ore ? RARE_IDS.has(ore.id) : false,
         allMined,
@@ -1873,8 +1985,11 @@ export const gameActions = {
     response: resultShape,
     async handler(_args, session) {
       const db = getDb();
+      // i18n: request language — user-facing strings only.
+      const lang = session.lang;
+      const S = serverStrings(lang);
       const p = await loadPlayer(db, session);
-      if (!parseJob(p.job)) return { ok: false, error: "Tidak ada operasi yang sedang berjalan." };
+      if (!parseJob(p.job)) return { ok: false, error: S.errNoJobRunning };
       await db.update(schema.player).set({ job: null }).where(eq(schema.player.id, p.id));
       return { ok: true, error: null };
     },
@@ -1891,14 +2006,17 @@ export const gameActions = {
     }),
     async handler(_args, session) {
       const db = getDb();
+      // i18n: request language — user-facing strings only.
+      const lang = session.lang;
+      const S = serverStrings(lang);
       const p = await loadPlayer(db, session);
       const levels = await loadLevels(db, p.id);
       const fail = (error: string) => ({ ok: false, error, layer: p.layer, bonusKt: 0, ktBalance: p.ktBalance });
       const exp = parseExpedition(p.expedition);
-      if (!exp) return fail("Data asteroid tidak valid, coba muat ulang.");
-      if (parseJob(p.job)) return fail("Selesaikan operasi yang sedang berjalan dulu.");
+      if (!exp) return fail(S.errInvalidAsteroid);
+      if (parseJob(p.job)) return fail(S.errCompleteJobRunning);
       if (!exp.scanned || !exp.veins.every((v) => v.mined))
-        return fail("Tambang semua urat mineral di asteroid ini dulu sebelum warp ke asteroid berikutnya.");
+        return fail(S.errCompleteNotAllMined);
       const bonus = completionBonusKt(p.layer);
       const newExp = generateExpedition(p.currentZone, levels);
       const newBalance = roundKt(p.ktBalance + bonus);
@@ -1916,7 +2034,7 @@ export const gameActions = {
         db,
         p.id,
         "expedition_bonus",
-        `Ekspedisi ${exp.name} tuntas. Bonus ${fmtKt(bonus)} KT, warp ke Sektor ${p.layer + 1}: ${newExp.name}.`,
+        S.logExpedition(localizeExpeditionName(exp.name, lang), bonus, p.layer + 1, localizeExpeditionName(newExp.name, lang)),
         bonus,
       );
       return { ok: true, error: null, layer: p.layer + 1, bonusKt: bonus, ktBalance: newBalance };
@@ -1930,20 +2048,23 @@ export const gameActions = {
     response: resultShape.extend({ asteroidName: z.string().nullable() }),
     async handler(_args, session) {
       const db = getDb();
+      // i18n: request language — user-facing strings only.
+      const lang = session.lang;
+      const S = serverStrings(lang);
       const p = await loadPlayer(db, session);
       const levels = await loadLevels(db, p.id);
       const fail = (error: string) => ({ ok: false, error, asteroidName: null as string | null });
-      if (parseJob(p.job)) return fail("Batalkan operasi yang sedang berjalan dulu sebelum pindah asteroid.");
+      if (parseJob(p.job)) return fail(S.errAbandonJobRunning);
       if (p.energy < ABANDON_ENERGY_COST)
-        return fail(`Bahan bakar tidak cukup — pindah asteroid butuh ${ABANDON_ENERGY_COST} daya, kamu punya ${p.energy}.`);
+        return fail(S.errAbandonEnergy(ABANDON_ENERGY_COST, p.energy));
       const newExp = generateExpedition(p.currentZone, levels);
       const spend = energyAfterSpend(p, levels, ABANDON_ENERGY_COST);
       await db
         .update(schema.player)
         .set({ ...spend, expedition: JSON.stringify(newExp) })
         .where(eq(schema.player.id, p.id));
-      await logActivity(db, p.id, "travel", `Meninggalkan asteroid lama, warp ke ${newExp.name}.`, null);
-      return { ok: true, error: null, asteroidName: newExp.name };
+      await logActivity(db, p.id, "travel", S.logAbandon(localizeExpeditionName(newExp.name, lang)), null);
+      return { ok: true, error: null, asteroidName: localizeExpeditionName(newExp.name, lang) };
     },
   }),
 
@@ -1957,28 +2078,31 @@ export const gameActions = {
     }),
     async handler(args, session) {
       const db = getDb();
+      // i18n: request language — user-facing strings only.
+      const lang = session.lang;
+      const S = serverStrings(lang);
       const p = await loadPlayer(db, session);
       const levels = await loadLevels(db, p.id);
       const fail = (error: string) => ({ ok: false, error, mapName: null as string | null, asteroidName: null as string | null });
-      if (args.zoneIndex >= MAPS.length) return fail("Peta itu tidak ada di bagan navigasi stasiun.");
+      if (args.zoneIndex >= MAPS.length) return fail(S.errMapNotFound);
       const target = mapByIndex(args.zoneIndex);
       if (p.layer < target.minLayer)
-        return fail(`Peta ini terkunci — butuh Sektor ${target.minLayer}, kamu baru Sektor ${p.layer}. Selesaikan ekspedisi untuk naik sektor.`);
+        return fail(S.errMapLocked(target.minLayer, p.layer));
       if (args.zoneIndex === p.currentZone)
-        return fail("Kamu sudah menambang di peta ini.");
-      if (parseJob(p.job)) return fail("Batalkan operasi yang sedang berjalan dulu sebelum pindah peta.");
+        return fail(S.errAlreadyOnMap);
+      if (parseJob(p.job)) return fail(S.errTravelJobRunning);
       const premium = isPremium(p);
       const cost = travelCostFor(args.zoneIndex, premium);
       if (p.energy < cost)
-        return fail(`Bahan bakar tidak cukup — perjalanan antar-peta butuh ${cost} daya, kamu punya ${p.energy}.`);
+        return fail(S.errTravelEnergy(cost, p.energy));
       const newExp = generateExpedition(args.zoneIndex, levels);
       const spend = cost > 0 ? energyAfterSpend(p, levels, cost) : { energy: p.energy, energyUpdatedAt: p.energyUpdatedAt };
       await db
         .update(schema.player)
         .set({ ...spend, currentZone: args.zoneIndex, expedition: JSON.stringify(newExp) })
         .where(eq(schema.player.id, p.id));
-      await logActivity(db, p.id, "travel", `Perjalanan antar-peta ke ${target.name}. Asteroid baru: ${newExp.name}.`, null);
-      return { ok: true, error: null, mapName: target.name, asteroidName: newExp.name };
+      await logActivity(db, p.id, "travel", S.logTravel(mapName(target, lang), localizeExpeditionName(newExp.name, lang)), null);
+      return { ok: true, error: null, mapName: mapName(target, lang), asteroidName: localizeExpeditionName(newExp.name, lang) };
     },
   }),
 
@@ -1992,6 +2116,9 @@ export const gameActions = {
     }),
     async handler(args, session) {
       const db = getDb();
+      // i18n: request language — user-facing strings only.
+      const lang = session.lang;
+      const S = serverStrings(lang);
       // Creates the player row (and applies regen) if this is the
       // first ever action.
       const p = await loadPlayer(db, session);
@@ -2008,14 +2135,14 @@ export const gameActions = {
         )
         .limit(1);
       if (pending[0])
-        return fail("Masih ada pesanan Premium yang menunggu konfirmasi pemilik. Selesaikan pembayaran Stars untuk pesanan itu dulu, atau tunggu pemilik memprosesnya.");
+        return fail(S.errPremiumOrderPending);
       const inserted = await db
         .insert(schema.premiumOrders)
         .values({ playerId: p.id, plan: args.plan, stars: plan.stars, days: plan.days, tier: plan.tier, status: "pending" })
         .returning({ id: schema.premiumOrders.id });
       const row = inserted[0];
-      if (!row) return fail("Gagal membuat pesanan Premium, coba lagi.");
-      await logActivity(db, p.id, "premium_order", `Pesanan Premium ${plan.label} dibuat (${plan.stars} Telegram Stars) — menunggu pembayaran & konfirmasi pemilik.`, null);
+      if (!row) return fail(S.errPremiumOrderCreateFail);
+      await logActivity(db, p.id, "premium_order", S.logPremiumOrder(premiumPlanLabel(plan, lang), plan.stars), null);
       return { ok: true, error: null, orderId: row.id, stars: plan.stars };
     },
   }),
@@ -2027,21 +2154,24 @@ export const gameActions = {
     response: resultShape.extend({
       premiumUntil: z.string().nullable(),
     }),
-    async handler(args, _session) {
+    async handler(args, session) {
       const db = getDb();
+      // i18n: request language — user-facing strings only.
+      const lang = session.lang;
+      const S = serverStrings(lang);
       const rows = await db
         .select()
         .from(schema.premiumOrders)
         .where(eq(schema.premiumOrders.id, args.orderId))
         .limit(1);
       const order = rows[0];
-      if (!order) return { ok: false, error: "Pesanan Premium tidak ditemukan.", premiumUntil: null };
+      if (!order) return { ok: false, error: S.errPremiumOrderNotFound, premiumUntil: null };
       if (order.status !== "pending")
-        return { ok: false, error: "Pesanan ini sudah diproses.", premiumUntil: null };
+        return { ok: false, error: S.errOrderAlreadyProcessed, premiumUntil: null };
       // Premium diaktifkan untuk PEMILIK pesanan, bukan untuk admin
       // yang mengonfirmasi.
       const target = await loadPlayerRowOrNull(db, order.playerId);
-      if (!target) return { ok: false, error: "Pemain pemilik pesanan tidak ditemukan.", premiumUntil: null };
+      if (!target) return { ok: false, error: S.errOrderOwnerNotFound, premiumUntil: null };
       const base = target.premiumUntil && target.premiumUntil.getTime() > Date.now() ? target.premiumUntil.getTime() : Date.now();
       const until = new Date(base + order.days * 24 * 60 * 60 * 1000);
       // Tier: a Pro order always sets Pro; a Standard order never
@@ -2055,7 +2185,7 @@ export const gameActions = {
         .update(schema.player)
         .set({ premiumUntil: until, premiumTier: tier })
         .where(eq(schema.player.id, target.id));
-      await logActivity(db, order.playerId, "premium_confirm", `Pembayaran ${order.stars} Telegram Stars terkonfirmasi — Premium ${tier === "pro" ? "Pro (bor ganda)" : "Standard"} ${order.days} hari aktif sampai ${until.toLocaleDateString("id-ID")}.`, null);
+      await logActivity(db, order.playerId, "premium_confirm", S.logPremiumConfirm(order.stars, tier === "pro" ? (lang === "en" ? "Pro (dual drill)" : "Pro (bor ganda)") : "Standard", order.days, fmtDateLang(until, lang)), null);
       return { ok: true, error: null, premiumUntil: until.toISOString() };
     },
   }),
@@ -2065,21 +2195,24 @@ export const gameActions = {
       "Owner action: rejects a pending Telegram Stars premium order (e.g. the Stars payment never arrived). The pass is not activated; the player can create a new order afterwards.",
     request: z.object({ orderId: z.number().int().positive() }),
     response: resultShape,
-    async handler(args, _session) {
+    async handler(args, session) {
       const db = getDb();
+      // i18n: request language — user-facing strings only.
+      const lang = session.lang;
+      const S = serverStrings(lang);
       const rows = await db
         .select()
         .from(schema.premiumOrders)
         .where(eq(schema.premiumOrders.id, args.orderId))
         .limit(1);
       const order = rows[0];
-      if (!order) return { ok: false, error: "Pesanan Premium tidak ditemukan." };
-      if (order.status !== "pending") return { ok: false, error: "Pesanan ini sudah diproses." };
+      if (!order) return { ok: false, error: S.errPremiumOrderNotFound };
+      if (order.status !== "pending") return { ok: false, error: S.errOrderAlreadyProcessed };
       await db
         .update(schema.premiumOrders)
         .set({ status: "rejected", processedAt: new Date() })
         .where(eq(schema.premiumOrders.id, order.id));
-      await logActivity(db, order.playerId, "premium_reject", `Pesanan Premium #${order.id} (${order.stars} Stars) ditolak pemilik — pembayaran tidak terkonfirmasi.`, null);
+      await logActivity(db, order.playerId, "premium_reject", S.logPremiumReject(order.id, order.stars), null);
       return { ok: true, error: null };
     },
   }),
@@ -2100,10 +2233,13 @@ export const gameActions = {
     }),
     async handler(args, session) {
       const db = getDb();
+      // i18n: request language — user-facing strings only.
+      const lang = session.lang;
+      const S = serverStrings(lang);
       let target: PlayerRow;
       if (args.playerId) {
         const found = await loadPlayerRowOrNull(db, args.playerId);
-        if (!found) return { ok: false, error: "Pemain tidak ditemukan.", premiumUntil: null };
+        if (!found) return { ok: false, error: S.errPlayerNotFound, premiumUntil: null };
         target = found;
       } else {
         target = await loadPlayer(db, session);
@@ -2115,7 +2251,7 @@ export const gameActions = {
         .update(schema.player)
         .set({ premiumUntil: until, premiumTier: tier })
         .where(eq(schema.player.id, target.id));
-      await logActivity(db, target.id, "premium_grant", `Pemilik mengaktifkan Premium ${tier === "pro" ? "Pro (bor ganda)" : "Standard"} ${args.days} hari (pembayaran di luar game) — aktif sampai ${until.toLocaleDateString("id-ID")}.`, null);
+      await logActivity(db, target.id, "premium_grant", S.logPremiumGrant(tier === "pro" ? (lang === "en" ? "Pro (dual drill)" : "Pro (bor ganda)") : "Standard", args.days, fmtDateLang(until, lang)), null);
       return { ok: true, error: null, premiumUntil: until.toISOString() };
     },
   }),
@@ -2130,11 +2266,14 @@ export const gameActions = {
     }),
     async handler(_args, session) {
       const db = getDb();
+      // i18n: request language — user-facing strings only.
+      const lang = session.lang;
+      const S = serverStrings(lang);
       const p = await loadPlayer(db, session);
       if (!(await canClaimDailyBonus(db, p.id))) {
         return {
           ok: false,
-          error: "Bonus harian sudah diklaim hari ini. Kembali lagi besok!",
+          error: S.errDailyBonusClaimed,
           bonusKt: 0,
           ktBalance: p.ktBalance,
         };
@@ -2147,7 +2286,7 @@ export const gameActions = {
           totalKtEarned: roundKt(p.totalKtEarned + DAILY_BONUS_KT),
         })
         .where(eq(schema.player.id, p.id));
-      await logActivity(db, p.id, "daily_bonus", `Bonus harian ${fmtKt(DAILY_BONUS_KT)} KT diklaim.`, DAILY_BONUS_KT);
+      await logActivity(db, p.id, "daily_bonus", S.logDailyBonus(DAILY_BONUS_KT), DAILY_BONUS_KT);
       return {
         ok: true,
         error: null,
@@ -2170,6 +2309,9 @@ export const gameActions = {
     }),
     async handler(_args, session) {
       const db = getDb();
+      // i18n: request language — user-facing strings only.
+      const lang = session.lang;
+      const S = serverStrings(lang);
       const p = await loadPlayer(db, session);
       const stats = await getAdStats(db, p.id);
       const fail = (error: string) => ({
@@ -2182,9 +2324,9 @@ export const gameActions = {
         cooldownRemainingSec: stats.cooldownRemainingSec,
       });
       if (stats.remainingToday <= 0)
-        return fail(`Batas iklan hari ini sudah tercapai (${AD_DAILY_CAP}× sehari). Hadiah iklan direset besok — kembali lagi ya!`);
+        return fail(S.errAdCapReached(AD_DAILY_CAP));
       if (stats.cooldownRemainingSec > 0)
-        return fail(`Sabar — iklan berikutnya bisa ditonton dalam ${stats.cooldownRemainingSec} detik lagi (jeda ${AD_COOLDOWN_SECONDS} detik antar-iklan).`);
+        return fail(S.errAdCooldown(stats.cooldownRemainingSec, AD_COOLDOWN_SECONDS));
       const newBalance = roundKt(p.ktBalance + AD_REWARD_KT);
       await db
         .update(schema.player)
@@ -2193,7 +2335,7 @@ export const gameActions = {
           totalKtEarned: roundKt(p.totalKtEarned + AD_REWARD_KT),
         })
         .where(eq(schema.player.id, p.id));
-      await logActivity(db, p.id, "ad_reward", `Menonton iklan sponsor — hadiah ${fmtKt(AD_REWARD_KT)} KT masuk ke saldo.`, AD_REWARD_KT);
+      await logActivity(db, p.id, "ad_reward", S.logAd(AD_REWARD_KT), AD_REWARD_KT);
       return {
         ok: true,
         error: null,
@@ -2219,11 +2361,14 @@ export const gameActions = {
     }),
     async handler(args, session) {
       const db = getDb();
+      // i18n: request language — user-facing strings only.
+      const lang = session.lang;
+      const S = serverStrings(lang);
       const p = await loadPlayer(db, session);
       const levels = await loadLevels(db, p.id);
       const ore = oreById(args.oreId);
       const fail = (error: string) => ({ ok: false, error, ktGained: 0, ktBalance: p.ktBalance });
-      if (!ore) return fail("Jenis mineral tidak dikenal.");
+      if (!ore) return fail(S.errOreUnknown);
       const inv = await db
         .select()
         .from(schema.inventory)
@@ -2235,7 +2380,7 @@ export const gameActions = {
         )
         .limit(1);
       const held = inv[0]?.qty ?? 0;
-      if (held < args.qty) return fail(`Bijih tidak cukup — kamu hanya punya ${held} ${ore.name}.`);
+      if (held < args.qty) return fail(S.errNotEnoughOre(held, oreName(ore, lang)));
       // Harga per unit bisa pecahan (Regolith 0,025 KT) — total penjualan
       // dibulatkan ke 3 desimal, BUKAN harga satuan (Math.round di
       // satuan akan membuat Regolith bernilai 0 KT).
@@ -2257,7 +2402,7 @@ export const gameActions = {
           totalKtEarned: roundKt(p.totalKtEarned + gained),
         })
         .where(eq(schema.player.id, p.id));
-      await logActivity(db, p.id, "sell", `Menjual ${args.qty} ${ore.name} seharga ${fmtKt(gained)} KT.`, gained);
+      await logActivity(db, p.id, "sell", S.logSell(args.qty, oreName(ore, lang), gained), gained);
       return { ok: true, error: null, ktGained: gained, ktBalance: newBalance };
     },
   }),
@@ -2272,6 +2417,9 @@ export const gameActions = {
     }),
     async handler(_args, session) {
       const db = getDb();
+      // i18n: request language — user-facing strings only.
+      const lang = session.lang;
+      const S = serverStrings(lang);
       const p = await loadPlayer(db, session);
       const levels = await loadLevels(db, p.id);
       const invRows = await db
@@ -2291,7 +2439,7 @@ export const gameActions = {
       }
       gained = roundKt(gained);
       if (count === 0) {
-        return { ok: false, error: "Kargo kosong — belum ada mineral untuk dijual.", ktGained: 0, ktBalance: p.ktBalance };
+        return { ok: false, error: S.errCargoEmpty, ktGained: 0, ktBalance: p.ktBalance };
       }
       for (const row of invRows) {
         if (row.qty > 0) {
@@ -2314,7 +2462,7 @@ export const gameActions = {
           totalKtEarned: roundKt(p.totalKtEarned + gained),
         })
         .where(eq(schema.player.id, p.id));
-      await logActivity(db, p.id, "sell", `Menjual semua mineral (${count} unit) seharga ${fmtKt(gained)} KT.`, gained);
+      await logActivity(db, p.id, "sell", S.logSellAll(count, gained), gained);
       return { ok: true, error: null, ktGained: gained, ktBalance: newBalance };
     },
   }),
@@ -2330,16 +2478,19 @@ export const gameActions = {
     }),
     async handler(args, session) {
       const db = getDb();
+      // i18n: request language — user-facing strings only.
+      const lang = session.lang;
+      const S = serverStrings(lang);
       const p = await loadPlayer(db, session);
       const levels = await loadLevels(db, p.id);
       const def = upgradeById(args.upgradeId);
       const fail = (error: string) => ({ ok: false, error, newLevel: null as number | null, costPaid: 0, ktBalance: p.ktBalance });
-      if (!def) return fail("Upgrade tidak dikenal.");
+      if (!def) return fail(S.errUpgradeUnknown);
       const level = levels[def.id] ?? 0;
-      if (level >= def.maxLevel) return fail(`${def.name} sudah level maksimum.`);
+      if (level >= def.maxLevel) return fail(S.errUpgradeMax(upgradeName(def, lang)));
       const cost = upgradeCost(def, level);
       if (p.ktBalance < cost)
-        return fail(`KT tidak cukup — butuh ${cost} KT, saldo kamu ${fmtKt(p.ktBalance)} KT.`);
+        return fail(S.errKtNotEnough(cost, p.ktBalance));
       const existing = await db
         .select()
         .from(schema.upgrades)
@@ -2370,7 +2521,7 @@ export const gameActions = {
         .update(schema.player)
         .set({ ktBalance: newBalance })
         .where(eq(schema.player.id, p.id));
-      await logActivity(db, p.id, "upgrade", `${def.name} naik ke level ${level + 1}.`, -cost);
+      await logActivity(db, p.id, "upgrade", S.logUpgrade(upgradeName(def, lang), level + 1), -cost);
       return {
         ok: true,
         error: null,
@@ -2394,29 +2545,32 @@ export const gameActions = {
     }),
     async handler(args, session) {
       const db = getDb();
+      // i18n: request language — user-facing strings only.
+      const lang = session.lang;
+      const S = serverStrings(lang);
       const p = await loadPlayer(db, session);
       const amountKt = args.amountKt;
       const amountUsdt = amountKt / KT_PER_USDT;
       const fail = (error: string) => ({ ok: false, error, wdId: null as number | null, ktBalance: p.ktBalance });
       if (amountKt % WD_STEP_KT !== 0)
-        return fail(`Jumlah WD harus kelipatan ${WD_STEP_KT} KT (${(WD_STEP_KT / KT_PER_USDT).toLocaleString("id-ID")} USDT) — ${amountKt} KT tidak valid.`);
+        return fail(S.errWdStep(WD_STEP_KT, fmtNum(WD_STEP_KT / KT_PER_USDT, lang), amountKt));
       const paidCount = await countPaidWithdrawals(db, p.id);
       const minKt = wdMinKtForPaidCount(paidCount);
       if (amountKt < minKt)
         return fail(
           paidCount === 0
-            ? `Minimum WD pertama adalah ${minKt.toLocaleString("id-ID")} KT (${minKt / KT_PER_USDT} USDT) — kamu mengajukan ${amountKt.toLocaleString("id-ID")} KT. Kumpulkan ${(minKt - amountKt).toLocaleString("id-ID")} KT lagi.`
-            : `Minimum WD setelah WD pertama adalah 5.000 KT (5 USDT) — kamu sudah ${paidCount}× WD terbayar, jadi minimum WD tetap 5.000 KT — kamu mengajukan ${amountKt.toLocaleString("id-ID")} KT.`,
+            ? S.errWdMinFirst(minKt, minKt / KT_PER_USDT, amountKt, minKt - amountKt)
+            : S.errWdMinRepeat(paidCount, amountKt),
         );
       // Per-WD maximum: 5.000 KT (5 USDT) per WD — tanpa ini
       // pemain tinggal menabung lalu WD sekaligus besar.
       if (amountKt > WD_MAX_KT)
         return fail(
-          `Maksimum WD adalah ${WD_MAX_KT.toLocaleString("id-ID")} KT (5 USDT) per WD — kamu mengajukan ${amountKt.toLocaleString("id-ID")} KT. Ajukan ${WD_MAX_KT.toLocaleString("id-ID")} KT saja.`,
+          S.errWdMax(WD_MAX_KT, amountKt),
         );
       if (p.ktBalance < amountKt)
         return fail(
-          `Saldo KT tidak cukup — WD ${amountUsdt} USDT butuh ${amountKt} KT, saldo kamu ${fmtKt(p.ktBalance)} KT.`,
+          S.errWdBalance(amountUsdt, amountKt, p.ktBalance),
         );
       const inserted = await db
         .insert(schema.wdRequests)
@@ -2429,7 +2583,7 @@ export const gameActions = {
         })
         .returning({ id: schema.wdRequests.id });
       const row = inserted[0];
-      if (!row) return fail("Gagal membuat permintaan WD, coba lagi.");
+      if (!row) return fail(S.errWdCreateFail);
       const newBalance = roundKt(p.ktBalance - amountKt);
       await db
         .update(schema.player)
@@ -2439,7 +2593,7 @@ export const gameActions = {
         db,
         p.id,
         "wd_request",
-        `Permintaan WD ${amountUsdt} USDT (${amountKt} KT) dibuat — menunggu diproses pemilik.`,
+        S.logWdRequest(amountUsdt, amountKt),
         -amountKt,
       );
       return { ok: true, error: null, wdId: row.id, ktBalance: newBalance };
@@ -2453,6 +2607,9 @@ export const gameActions = {
     response: resultShape.extend({ ktBalance: z.number() }),
     async handler(args, session) {
       const db = getDb();
+      // i18n: request language — user-facing strings only.
+      const lang = session.lang;
+      const S = serverStrings(lang);
       const p = await loadPlayer(db, session);
       // Hanya WD milik sendiri yang bisa dibatalkan — id WD orang
       // lain tidak akan ketemu di sini.
@@ -2467,9 +2624,9 @@ export const gameActions = {
         )
         .limit(1);
       const wd = rows[0];
-      if (!wd) return { ok: false, error: "Permintaan WD tidak ditemukan.", ktBalance: p.ktBalance };
+      if (!wd) return { ok: false, error: S.errWdNotFound, ktBalance: p.ktBalance };
       if (wd.status !== "pending")
-        return { ok: false, error: "Hanya WD berstatus Menunggu yang bisa dibatalkan.", ktBalance: p.ktBalance };
+        return { ok: false, error: S.errWdCancelNotPending, ktBalance: p.ktBalance };
       await db
         .update(schema.wdRequests)
         .set({ status: "cancelled", processedAt: new Date() })
@@ -2478,7 +2635,7 @@ export const gameActions = {
         .update(schema.player)
         .set({ ktBalance: roundKt(p.ktBalance + wd.amountKt) })
         .where(eq(schema.player.id, p.id));
-      await logActivity(db, p.id, "wd_cancel", `WD #${wd.id} dibatalkan pemain — ${wd.amountKt} KT dikembalikan.`, wd.amountKt);
+      await logActivity(db, p.id, "wd_cancel", S.logWdCancel(wd.id, wd.amountKt), wd.amountKt);
       return { ok: true, error: null, ktBalance: roundKt(p.ktBalance + wd.amountKt) };
     },
   }),
@@ -2497,33 +2654,36 @@ export const gameActions = {
         .enum(["pending", "approved", "paid", "rejected", "cancelled"])
         .nullable(),
     }),
-    async handler(args, _session) {
+    async handler(args, session) {
       const db = getDb();
+      // i18n: request language — user-facing strings only.
+      const lang = session.lang;
+      const S = serverStrings(lang);
       const rows = await db
         .select()
         .from(schema.wdRequests)
         .where(eq(schema.wdRequests.id, args.wdId))
         .limit(1);
       const wd = rows[0];
-      if (!wd) return { ok: false, error: "Permintaan WD tidak ditemukan.", status: null };
+      if (!wd) return { ok: false, error: S.errWdNotFound, status: null };
       // Saldo yang berubah adalah saldo PEMILIK WD, bukan saldo admin.
       const target = await loadPlayerRowOrNull(db, wd.playerId);
-      if (!target) return { ok: false, error: "Pemain pemilik WD tidak ditemukan.", status: wd.status };
+      if (!target) return { ok: false, error: S.errWdOwnerNotFound, status: wd.status };
 
       if (args.action === "approve") {
         if (wd.status !== "pending")
-          return { ok: false, error: "Hanya WD Menunggu yang bisa disetujui.", status: wd.status };
+          return { ok: false, error: S.errWdApproveNotPending, status: wd.status };
         await db
           .update(schema.wdRequests)
           .set({ status: "approved", adminNote: args.adminNote ?? wd.adminNote })
           .where(eq(schema.wdRequests.id, wd.id));
-        await logActivity(db, wd.playerId, "wd_approve", `WD #${wd.id} (${wd.amountUsdt} USDT) disetujui — siap kirim USDT manual.`, null);
+        await logActivity(db, wd.playerId, "wd_approve", S.logWdApprove(wd.id, wd.amountUsdt), null);
         return { ok: true, error: null, status: "approved" as const };
       }
 
       if (args.action === "pay") {
         if (wd.status !== "approved")
-          return { ok: false, error: "WD harus Disetujui dulu sebelum ditandai Dibayar.", status: wd.status };
+          return { ok: false, error: S.errWdPayNotApproved, status: wd.status };
         await db
           .update(schema.wdRequests)
           .set({
@@ -2537,13 +2697,13 @@ export const gameActions = {
           .update(schema.player)
           .set({ totalWdPaidUsdt: target.totalWdPaidUsdt + wd.amountUsdt })
           .where(eq(schema.player.id, target.id));
-        await logActivity(db, wd.playerId, "wd_paid", `WD #${wd.id} selesai — ${wd.amountUsdt} USDT telah dikirim manual ke dompet pemain.`, null);
+        await logActivity(db, wd.playerId, "wd_paid", S.logWdPaid(wd.id, wd.amountUsdt), null);
         return { ok: true, error: null, status: "paid" as const };
       }
 
       // reject
       if (wd.status !== "pending" && wd.status !== "approved")
-        return { ok: false, error: "WD ini sudah selesai diproses.", status: wd.status };
+        return { ok: false, error: S.errWdAlreadyDone, status: wd.status };
       await db
         .update(schema.wdRequests)
         .set({
@@ -2556,7 +2716,7 @@ export const gameActions = {
         .update(schema.player)
         .set({ ktBalance: roundKt(target.ktBalance + wd.amountKt) })
         .where(eq(schema.player.id, target.id));
-      await logActivity(db, wd.playerId, "wd_reject", `WD #${wd.id} ditolak — ${wd.amountKt} KT dikembalikan ke saldo pemain.`, wd.amountKt);
+      await logActivity(db, wd.playerId, "wd_reject", S.logWdReject(wd.id, wd.amountKt), wd.amountKt);
       return { ok: true, error: null, status: "rejected" as const };
     },
   }),
@@ -2566,11 +2726,14 @@ export const gameActions = {
       "Admin action for the owner: clears one player's anti-cheat flag after manual review (risk score back to 0, reason and counters reset). The player keeps their balance and progress — clearing a flag is never a punishment, and a genuinely suspicious player will simply be flagged again by the detection rules if the pattern continues.",
     request: z.object({ playerId: z.number().int().positive() }),
     response: resultShape,
-    async handler(args, _session) {
+    async handler(args, session) {
       const db = getDb();
+      // i18n: request language — user-facing strings only.
+      const lang = session.lang;
+      const S = serverStrings(lang);
       const target = await loadPlayerRowOrNull(db, args.playerId);
-      if (!target) return { ok: false, error: "Pemain tidak ditemukan." };
-      await clearPlayerFlag(db, args.playerId);
+      if (!target) return { ok: false, error: S.errPlayerNotFound };
+      await clearPlayerFlag(db, args.playerId, lang);
       return { ok: true, error: null };
     },
   }),
@@ -2592,6 +2755,10 @@ export async function dispatchGameAction(
   input: unknown,
   initData?: string | null,
   ip?: string | null,
+  // Optional client language ("id" | "en", default "id") — used ONLY
+  // for user-facing strings; never for logic. Threaded through
+  // resolveSession into session.lang.
+  lang?: unknown,
 ): Promise<unknown> {
   const entry = (
     gameActions as Record<
@@ -2603,11 +2770,11 @@ export async function dispatchGameAction(
     >
   )[action];
   if (!entry) {
-    throw new Error(`Aksi tidak dikenal: ${action}`);
+    throw new Error(serverStrings(normalizeLang(lang)).errUnknownAction(action));
   }
   // Sesi diputuskan dulu dari initData — initData palsu/kedaluwarsa
   // ditolak sebelum handler apa pun berjalan.
-  const resolved = resolveSession(initData ?? null);
+  const resolved = resolveSession(initData ?? null, lang);
   // NB: `=== false`, bukan `!resolved.ok` — lihat catatan yang sama
   // di api/_lib/telegram.ts (Vercel typecheck tanpa strictNullChecks).
   if (resolved.ok === false) {
@@ -2629,7 +2796,7 @@ export async function dispatchGameAction(
     "clearPlayerFlag",
   ]);
   if (ADMIN_ACTIONS.has(action) && !resolved.session.isAdmin) {
-    return { ok: false, error: "Aksi ini hanya bisa dilakukan pemilik." };
+    return { ok: false, error: serverStrings(resolved.session.lang).errAdminOnly };
   }
   const args = entry.request.parse(input ?? {});
   return entry.handler(args as never, resolved.session);

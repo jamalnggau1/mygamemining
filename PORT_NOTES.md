@@ -1428,3 +1428,95 @@ Telegram frame-ancestors rule is untouched.
 60/60 pass vs local Postgres. NOT verified live (no blockId yet —
 live verification needs the owner to activate ads first, then one
 real ad watch end-to-end). NOT pushed to GitHub.
+
+## i18n — Indonesian + English (2026-11-19, implemented, NOT yet deployed)
+
+Players can switch the whole game between Indonesian (id) and
+English (en). No gameplay, economy, rule, price, timing, WD,
+Premium, anti-cheat, session, USDT, or AdsGram change — only
+user-facing strings move between languages.
+
+### Languages
+
+- `id` (Indonesian, default) and `en` (English). Game name stays
+  ASTRA MINING. KT/USDT wording of the economy itself is unchanged
+  (1.000 KT = 1 USDT / 1,000 KT = 1 USDT, same ratio, locale number
+  format differs: `0,625 KT` in id, `0.625 KT` in en).
+
+### Detection order (client)
+
+Saved choice in `localStorage` (`astra-mining-lang`) first, else
+Telegram WebApp `initDataUnsafe.user.language_code` (`id` → id,
+anything else supported → that language), else browser
+`navigator.language` (`id` → id), else `en`. Every change is
+persisted to localStorage and sent to the server on every
+`/api/game` request, so server-written messages match the
+client language.
+
+### Picker location
+
+Header, next to the "Sesi: …" session line — an `ID | EN` toggle
+(`LanguagePicker` in `client/src/i18n.ts`), visible without
+opening any settings. Switching re-renders the whole game
+immediately (the `LanguageProvider` in `main.tsx`).
+
+### What is translated
+
+- Client (`client/src/i18n.ts`, 365 keys each in id/en):
+  tabs, headers, hero, balance card, session line, mining tab
+  (asteroid card, vein rows, scan/drill buttons, job panel),
+  the 17-item rules list, Log Misi / Log Ekonomi, market,
+  Hanggar upgrades, Premium card + plans, map cards + challenges,
+  WD tab + WD rules, admin/Kendali (GrantPremiumCard,
+  FlaggedPlayersCard, AdminWdCard), ad button + ad messages,
+  loading/error screens. `t(key, vars)` interpolates `{vars}`;
+  `trich(key, vars)` also renders `**bold**` / `*italic*`.
+  `App.tsx` holds NO hardcoded Indonesian/English UI string
+  anymore — every string lives in the dictionaries (the only
+  exceptions are a developer code comment and a React `key`).
+- Server (`api/_lib/i18n.ts`): every user-facing string the
+  server writes — all `logActivity` messages, all action result
+  messages, all error strings (WD/premium/scan/drill/sell/
+  upgrade/ad/daily-bonus, Telegram errors, route errors).
+  `api/game.ts` parses optional `lang: "id" | "en"` from the
+  request body (default `"id"` when absent/invalid) and threads
+  it through `dispatchGameAction` → `resolveSession` →
+  every action handler (`session.lang`). Ore/map/upgrade names
+  and descriptions gained `nameEn`/`descEn`/`taglineEn`/
+  `distanceLabelEn` fields; numbers, logic, and DB writes are
+  untouched. Known limitation: admin-initiated log entries
+  (premium confirm/reject/grant, WD approve/pay/reject) are
+  written in the ADMIN's current language, since the owner's
+  language preference is not stored per player.
+  One string stays Indonesian-only by necessity: the
+  unparseable-JSON 400 in `api/game.ts` — no language can be
+  read from a broken body.
+
+### How to add a third language
+
+1. Add one dictionary to `DICTS` in `client/src/i18n.ts`
+   (same keys as id/en) and its code to `LANGS` — the picker
+   renders from `LANGS`, so the toggle gains the new entry
+   automatically.
+2. Add the matching dictionary in `api/_lib/i18n.ts`
+   (`ServerStrings` + the `normalizeLang` list).
+3. Nothing else changes: the client sends the new code as
+   `lang`, the server validates it the same way.
+
+### Verified locally (2026-11-19)
+
+`bun run typecheck` 0 errors (strict AND Vercel-style
+`--strictNullChecks false`), `bun run build:client` OK
+(`main-CZVDAVVY.js`). Full suite 69/69 pass vs local
+Postgres (60 existing + 9 new i18n tests), 3 consecutive
+runs. New tests in `/tmp/smoke-test/i18n.test.ts` (backup at
+`~/workspace/smoke-test/`): same action returns Indonesian
+with `lang="id"`/default and English with `lang="en"` for a
+game action result (getGameState map/ore names), an activity
+log message (daily bonus), and two error messages (locked
+map, daily bonus already claimed); invalid `lang` falls back
+to Indonesian; client dictionaries are symmetric (365 keys
+each) with matching `{var}` placeholders (one documented
+exception: `veinQty` — English pluralises "unit{s}", Indonesian
+has no plural suffix). NOT verified live.
+NOT pushed to GitHub.
