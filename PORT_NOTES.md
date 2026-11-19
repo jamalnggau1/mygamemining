@@ -61,8 +61,9 @@ machine. The live Muse-hosted game was not touched.
 - `deploy/neon/init.sql` / `schema.pg.ts`: unchanged except comments.
 
 **Unchanged game rules** (owner-settled, verified in the smoke test):
-KT economy (1,000 KT = 1 GRAM, sell prices at the rebalance #5
-level — Regolith 0,1 KT, fractional balances),
+KT economy (1,000 KT = 1 GRAM, sell prices at the rebalance #6
+level — Regolith 0,05 KT, fractional balances to 2 decimals,
+expedition bonus 0,5 + 0,1×sector CAPPED at 35 KT),
 two-tier WD minimum (first WD 500 KT = 0,5 GRAM; repeat WDs
 minimum 5.000 KT = 5 GRAM FLAT — the escalating ladder was
 ABOLISHED 2026-11-19, see rebalance #4 below; 500 KT steps,
@@ -71,7 +72,7 @@ contract, reject/cancel refunds in full), Premium in Telegram Stars
 only (Standard 150/7d, Pro 500/30d, Pro = dual drill), power (1/4
 min regen, Tangki = capacity only, Reaktor = −10%/level), scan 2.5
 min base with map factors ×1/×1.3/×1.6/×2.0/×2.5, 5 maps with their
-gems and challenges, ads 10/day +1,5 KT with 60s cooldown,
+gems and challenges, ads 10/day +0,75 KT with 60s cooldown,
 server-side validation of everything.
 
 ## Per-player sessions — Telegram initData (2026-11-18, implemented, NOT yet deployed)
@@ -627,3 +628,118 @@ NOT pushed to GitHub.
    migrasi: `init.sql` terbaru sudah berisi semuanya.
 2. Redeploy on Vercel. Until then the live deployment still runs
    integer-KT balances and the old income rates.
+3. **Rebalance #6 (2026-11-19, code ready in this dir, NOT yet
+   deployed): no migration needed** — the balance column is
+   already DOUBLE PRECISION from migration-0003; the ÷20 income
+   cut and the bonus cap are code constants. Push + redeploy only.
+
+## Economy rebalance #6 — ALL KT income ÷20 total + CAPPED expedition bonus (2026-11-19, implemented, NOT yet deployed)
+
+Owner decision (2026-11-19 09:10 WITA, his words: "Potong
+penghasilan lagi (÷20)"): the first WD at 5 days broke the
+original >10-day agreement, and a weekly WD is bankruptcy in his
+words. He chose: halve income AGAIN (÷20 total) AND cap the
+expedition bonus. Keep it simple — no cooldown, no per-WD max,
+no other new mechanic.
+
+New prices (KT per unit, halved from #5): Regolith 0,1 → **0,05**,
+Kondrit 0,2 → **0,1**, Besi-Nikel 0,5 → **0,25**, Kobalt 1 →
+**0,5**, Platinum 4,5 → **2,25**, Iridium 14,4 → **7,2**,
+Helium-3 36 → **18**; map gems halved too (Opal 3,9 → 1,95,
+Topaz 5,1 → 2,55, Turkuois 7,8 → 3,9, Ametis 10,5 → 5,25,
+Zamrud 19,2 → 9,6, Rubi 25,2 → 12,6, Safir 42 → 21, Berlian
+57 → 28,5, Opal Es Hitam 90 → 45, Voidium 144 → **72**).
+Expedition bonus 1 + 0,2×sektor → **0,5 + 0,1×sektor, CAPPED at
+MAX_COMPLETION_BONUS_KT = 35 KT** (binds at sector 345).
+Daily bonus 2,5 → **1,25** KT, ads reward 1,5 → **0,75** KT
+(cap 10/day + 60s cooldown unchanged). WD rule from #4 STAYS
+(first WD 500 KT = 0,5 GRAM, repeat WDs minimum 5.000 KT =
+5 GRAM flat, amounts in 500 KT multiples, ratio 1.000 KT =
+1 GRAM). Upgrade costs UNCHANGED (23.430 KT for all level 5).
+Prices now need 2 decimals: `roundKt` rounds every credit/debit
+to 2 decimals, the client formatter (`fmt` in App.tsx) and the
+server formatter (`fmtKt`) show max 2 decimals. No DB migration
+needed (balance already DOUBLE PRECISION).
+
+### The cap value — chosen from the simulation, not guessed
+
+The target was an ACTIVE player's repeat-WD interval at ~14 days,
+stable from days 46–60 through days 166–180. An active player
+runs ~9 Map 1 expeditions/day (180 energy ÷ ~20 energy/exp) and
+earns ~33 KT/day of ore + 5 KT/day of faucet, so the bonus must
+supply ~319 KT/day: 319 ÷ 9 ≈ 35 KT per expedition. The sim
+confirms it: with the cap at 35 the active interval is 14,06
+days (46–60) and 13,96–14,06 days (166–180) — a 0,7% difference.
+The cap binds at sector 345, which an active player reaches
+around day 38; a casual player reaches it around day 150.
+
+### Recalculation (same Monte Carlo + day-by-day model as #4/#5, real constants, 2 runs agreeing within a few percent)
+
+KT per 30-energy tank, ore only (no upgrades, completion bonus
+excluded): Map 1 ~5,6, Map 2 ~6,6, Map 3 ~11,7, Map 4 ~25,1,
+Map 5 ~39,8. Hull fees per tank (unchanged costs): Map 1–2 0,
+Map 3 ~9,4, Map 4 ~43, Map 5 ~98,7 — Map 5 is still NET-NEGATIVE
+on ore minus fees alone (−59 KT/tank); only the sector bonus
+makes the far maps pay, and Map 1 still pays the most bonus per
+energy, so a KT-maximising player still farms Map 1.
+
+| Profile | Days to FIRST WD (500 KT) | Days between REPEAT WDs (5.000 KT), days 46–60 | Days between REPEAT WDs, days 166–180 | GRAM in month 1 | GRAM / 30 days, days 46–60 | GRAM / 30 days, days 166–180 | Days to afford all lvl-5 upgrades (23.430 KT) |
+|---|---|---|---|---|---|---|---|
+| (a) Max-effort, no upgrades | 4 | ~7,0 | ~7,0 | ~15,3 | ~21,4 | ~21,4 | ~42 |
+| (b) Active, no upgrades | 7 | ~14,1 | ~14,0 | ~4,9 | ~10,7 | ~10,7 | ~83 |
+| (c) Casual, no upgrades | 26 | ~133 | ~55 | ~0,6 | ~1,1 | ~2,7 | >180 (never in horizon) |
+| (d) Mid-upgrade (all lvl 5) | 2 | ~3,8 | ~3,8 | ~32,5 | ~39,4 | ~39,3 | 24 (payback period — starts fully upgraded) |
+
+Read it plainly: 100 active players ≈ **1.070 GRAM/month at
+BOTH horizons** (was ~2.800 at #5 days 46–60 and climbing to
+~8.800 by days 166–180). The payout rate now has a ceiling.
+The faucet floor (1,25 + 7,5 = 8,75 KT/day) needs ~57 days for
+a first WD and ~571 days for a repeat WD on its own.
+
+### Honest notes — what the cap does and does NOT fix
+
+1. **The ACTIVE first WD is day ~7, NOT above 10 days.** The
+   owner chose ÷20 + cap to reach a >10-day first WD, and the
+   honest result is that it does NOT get there. The cap cannot
+   fix the first WD: it only binds from sector 345 (~day 38 for
+   an active player), while the first WD happens around day 7
+   when the bonus is still small (0,5 + 0,1×~60 ≈ 6,5 KT/exp).
+   Reaching >10 days would need a lower bonus SLOPE (0,1 per
+   sector) or lower base income — a further cut, not a cap.
+   This is pinned in the tests (`economy.test.ts`, "HONEST
+   NOTE") instead of hidden.
+2. **Casual pace is not fully stable across horizons** (133 →
+   55 days) because the cap binds late for a casual player
+   (~day 150). It only ever IMPROVES to ~55 days and then stops
+   — the cap still bounds it, just later.
+3. **A fully-upgraded player still pays ~39 GRAM/month**
+   (repeat WD every ~3,8 days). The cap limits the bonus PER
+   EXPEDITION, not the number of expeditions: a mid-upgrade
+   player runs ~30 expeditions/day. The brake on that profile
+   is the upgrade cost itself — an active player needs ~83 days
+   of earnings to afford all level-5 upgrades, so the ~39
+   GRAM/month pace is only reachable after ~3 months of play.
+4. **The bonus is still 55–89% of earnings** — the cap does
+   not make ore the main income again, it only stops the bonus
+   from growing. Map 1 remains the best KT/energy map.
+
+### Verified locally (2026-11-19)
+
+`bun run typecheck` 0 errors (strict AND Vercel-style
+`--strictNullChecks false`), `bun run build:client` OK. Full
+suite **46/46 pass, 3 consecutive runs** vs local Postgres
+(`/tmp/smoke-test/`: `economy.test.ts` 21/21 — new fractional
+prices (Regolith 0,05 KT), 20× 0,05 KT credits = exactly 1 KT
+(no float dust — the assertion is tolerance-based, because
+0,55 × 100 is 55.00000000000001 in IEEE doubles, so a strict
+`Number.isInteger(x * 100)` check is wrong for 2-decimal
+values), mixed-ore sellAll = 0,6 KT, daily bonus 1,25 KT,
+expedition bonus 0,6 KT at sector 1, bonus cap binds at sector
+345 (35 KT at sector 345, 346, 500 and 10.000), WD rules
+unchanged, windowed simulation assertions (interval + GRAM/30d
+at days 46–60 AND 166–180, stability within 1 day for
+max-effort/active/mid-upgrade), the pinned HONEST NOTE test
+(active first WD ≤10 days); `game.test.ts` 9/9 (daily bonus
+1,25 KT, ads 0,75 KT, expedition bonus 0,6 KT),
+`telegram.test.ts` 9/9, `anticheat.test.ts` 7/7 regressions).
+NOT verified live. NOT pushed to GitHub.

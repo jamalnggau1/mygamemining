@@ -25,7 +25,7 @@ type Wd = GameState["withdrawals"][number];
 // "0.30000000000000004 KT" — client-side products like qty × price
 // can also produce float dust, and the server rounds every credit
 // to 1 decimal, so 1 decimal is the display precision everywhere).
-const fmt = (n: number) => n.toLocaleString("id-ID", { maximumFractionDigits: 1 });
+const fmt = (n: number) => n.toLocaleString("id-ID", { maximumFractionDigits: 2 });
 const STATUS_LABEL: Record<Wd["status"], string> = {
   pending: "Menunggu",
   approved: "Disetujui — kirim GRAM",

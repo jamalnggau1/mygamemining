@@ -230,12 +230,39 @@
 //   The faucet floor (2,5 + 15 = 17,5 KT/day) needs ~29 days for
 //   a first WD and ~286 days for a repeat WD on its own.
 //
+// Economy rebalance #6 (2026-11-19, owner chose: "Potong
+//   penghasilan lagi (÷20)" + cap the bonus — first WD at 5 days
+//   broke the original >10-day agreement, and a weekly WD is
+//   bankruptcy in the owner's words): ALL KT income halved AGAIN
+//   from #5 (÷20 total vs the original economy), AND the
+//   expedition completion bonus is CAPPED at
+//   MAX_COMPLETION_BONUS_KT (35 KT — chosen from the simulation so
+//   an ACTIVE player's repeat-WD interval holds at ~14 days,
+//   stable from days 46–60 through days 166–180; see
+//   PORT_NOTES.md). Ore prices: Regolith 0,1 → 0,05, Kondrit 0,2 →
+//   0,1, Besi-Nikel 0,5 → 0,25, Kobalt 1 → 0,5, Platinum 4,5 →
+//   2,25, Iridium 14,4 → 7,2, Helium-3 36 → 18 KT; map gems halved
+//   too (Opal 3,9 → 1,95 … Voidium 144 → 72 KT). Expedition bonus
+//   1 + 0,2×sektor → 0,5 + 0,1×sektor, CAPPED at 35 KT (binds at
+//   sector 345). Daily bonus 2,5 → 1,25 KT, ads reward 1,5 → 0,75
+//   KT (cap 10/day + 60s cooldown unchanged). WD rule from #4
+//   STAYS (first WD 500 KT, repeat WDs 5.000 KT flat). Upgrade
+//   costs UNCHANGED. Prices now need 2 decimals: roundKt and the
+//   client formatter round/show 2 decimals; no DB migration
+//   (balance is already DOUBLE PRECISION). Simulation (same Monte
+//   Carlo + day-by-day model, real constants — verified numbers in
+//   PORT_NOTES.md): first WD day ~7 (active) — HONEST NOTE: still
+//   ≤10 days, because the cap only binds from sector 345 (day
+//   ~38) and the early bonus is small; the ÷20 cut alone cannot
+//   reach >10 days for the first WD. Repeat WDs hold at ~14 days
+//   for the active profile at BOTH horizons (days 46–60 and
+//   166–180) — that stability is what the cap buys.
+//
 // Sponsored ads (owner monetization slot):
-//   A "Tonton Iklan" button pays AD_REWARD_KT (1,5 KT) per view — the
+//   A "Tonton Iklan" button pays AD_REWARD_KT (0,75 KT) per view — the
 //   slot where the owner plugs in a real ad provider later. The
 //   reward is capped server-side: at most AD_DAILY_CAP (10) views per
-//   calendar day (= 15 KT/day max, deliberately below one Map 1 tank
-//   so ads supplement mining instead of replacing it) and a
+//   calendar day (= 7,5 KT/day max) and a
 //   AD_COOLDOWN_SECONDS (60s) gap between views, both recomputed in
 //   watchAd from the ad_reward rows in the activity log. No new table
 //   or migration: the activity log IS the claim history, and ad_reward
@@ -259,8 +286,8 @@ import {
 // ---------------------------------------------------------------------------
 
 export const KT_PER_GRAM = 1000;
-export const DAILY_BONUS_KT = 2.5;
-export const AD_REWARD_KT = 1.5;
+export const DAILY_BONUS_KT = 1.25;
+export const AD_REWARD_KT = 0.75;
 export const AD_DAILY_CAP = 10;
 const AD_COOLDOWN_SECONDS = 60;
 export const BASE_MAX_ENERGY = 30;
@@ -312,25 +339,25 @@ type OreDef = {
 };
 
 export const ORES: OreDef[] = [
-  { id: "regolith", name: "Regolith Asteroid", price: 0.1, color: "#9a9186", icon: "regolith", hardness: 1, weights: [34, 20, 12, 8, 5] },
-  { id: "kondrit", name: "Kondrit Karbon", price: 0.2, color: "#4b4f5e", icon: "kondrit", hardness: 1, weights: [26, 34, 18, 10, 6] },
-  { id: "besinikel", name: "Besi-Nikel", price: 0.5, color: "#c97a3a", icon: "besinikel", hardness: 2, weights: [14, 16, 28, 15, 9] },
-  { id: "kobalt", name: "Kobalt Antariksa", price: 1, color: "#5b8cff", icon: "kobalt", hardness: 2, weights: [8, 8, 17, 17, 11] },
-  { id: "platinum", name: "Platinum", price: 4.5, color: "#e6ebf2", icon: "platinum", hardness: 3, weights: [4, 3, 8, 18, 15] },
-  { id: "iridium", name: "Iridium", price: 14.4, color: "#f2b705", icon: "iridium", hardness: 3, weights: [2, 1, 4, 12, 18] },
-  { id: "helium3", name: "Kristal Helium-3", price: 36, color: "#6ee7ff", icon: "helium3", hardness: 4, weights: [0, 0, 1, 3, 9] },
+  { id: "regolith", name: "Regolith Asteroid", price: 0.05, color: "#9a9186", icon: "regolith", hardness: 1, weights: [34, 20, 12, 8, 5] },
+  { id: "kondrit", name: "Kondrit Karbon", price: 0.1, color: "#4b4f5e", icon: "kondrit", hardness: 1, weights: [26, 34, 18, 10, 6] },
+  { id: "besinikel", name: "Besi-Nikel", price: 0.25, color: "#c97a3a", icon: "besinikel", hardness: 2, weights: [14, 16, 28, 15, 9] },
+  { id: "kobalt", name: "Kobalt Antariksa", price: 0.5, color: "#5b8cff", icon: "kobalt", hardness: 2, weights: [8, 8, 17, 17, 11] },
+  { id: "platinum", name: "Platinum", price: 2.25, color: "#e6ebf2", icon: "platinum", hardness: 3, weights: [4, 3, 8, 18, 15] },
+  { id: "iridium", name: "Iridium", price: 7.2, color: "#f2b705", icon: "iridium", hardness: 3, weights: [2, 1, 4, 12, 18] },
+  { id: "helium3", name: "Kristal Helium-3", price: 18, color: "#6ee7ff", icon: "helium3", hardness: 4, weights: [0, 0, 1, 3, 9] },
   // Batu mulia khas tiap peta — dua permata unggulan per map, hanya
   // muncul di map-nya (weight di zone lain 0).
-  { id: "opal", name: "Opal Pelangi", price: 3.9, color: "#f9a8d4", icon: "opal", hardness: 2, weights: [7, 0, 0, 0, 0] },
-  { id: "topaz", name: "Topaz Emas", price: 5.1, color: "#fbbf24", icon: "topaz", hardness: 2, weights: [5, 0, 0, 0, 0] },
-  { id: "turkuois", name: "Turkuois Orbit", price: 7.8, color: "#2dd4bf", icon: "turkuois", hardness: 2, weights: [0, 6, 0, 0, 0] },
-  { id: "ametis", name: "Ametis Sabuk", price: 10.5, color: "#a78bfa", icon: "ametis", hardness: 3, weights: [0, 4, 0, 0, 0] },
-  { id: "zamrud", name: "Zamrud Bulan", price: 19.2, color: "#34d399", icon: "zamrud", hardness: 3, weights: [0, 0, 5, 0, 0] },
-  { id: "rubi", name: "Rubi Mare", price: 25.2, color: "#f87171", icon: "rubi", hardness: 3, weights: [0, 0, 3, 0, 0] },
-  { id: "safir", name: "Safir Bintang", price: 42, color: "#60a5fa", icon: "safir", hardness: 4, weights: [0, 0, 0, 5, 0] },
-  { id: "berlian", name: "Berlian Psyche", price: 57, color: "#f8fafc", icon: "berlian", hardness: 4, weights: [0, 0, 0, 3, 0] },
-  { id: "opales", name: "Opal Es Hitam", price: 90, color: "#c084fc", icon: "opales", hardness: 4, weights: [0, 0, 0, 0, 4] },
-  { id: "voidium", name: "Kristal Voidium", price: 144, color: "#818cf8", icon: "voidium", hardness: 4, weights: [0, 0, 0, 0, 2] },
+  { id: "opal", name: "Opal Pelangi", price: 1.95, color: "#f9a8d4", icon: "opal", hardness: 2, weights: [7, 0, 0, 0, 0] },
+  { id: "topaz", name: "Topaz Emas", price: 2.55, color: "#fbbf24", icon: "topaz", hardness: 2, weights: [5, 0, 0, 0, 0] },
+  { id: "turkuois", name: "Turkuois Orbit", price: 3.9, color: "#2dd4bf", icon: "turkuois", hardness: 2, weights: [0, 6, 0, 0, 0] },
+  { id: "ametis", name: "Ametis Sabuk", price: 5.25, color: "#a78bfa", icon: "ametis", hardness: 3, weights: [0, 4, 0, 0, 0] },
+  { id: "zamrud", name: "Zamrud Bulan", price: 9.6, color: "#34d399", icon: "zamrud", hardness: 3, weights: [0, 0, 5, 0, 0] },
+  { id: "rubi", name: "Rubi Mare", price: 12.6, color: "#f87171", icon: "rubi", hardness: 3, weights: [0, 0, 3, 0, 0] },
+  { id: "safir", name: "Safir Bintang", price: 21, color: "#60a5fa", icon: "safir", hardness: 4, weights: [0, 0, 0, 5, 0] },
+  { id: "berlian", name: "Berlian Psyche", price: 28.5, color: "#f8fafc", icon: "berlian", hardness: 4, weights: [0, 0, 0, 3, 0] },
+  { id: "opales", name: "Opal Es Hitam", price: 45, color: "#c084fc", icon: "opales", hardness: 4, weights: [0, 0, 0, 0, 4] },
+  { id: "voidium", name: "Kristal Voidium", price: 72, color: "#818cf8", icon: "voidium", hardness: 4, weights: [0, 0, 0, 0, 2] },
 ];
 const RARE_IDS = new Set([
   "platinum", "iridium", "helium3",
@@ -640,26 +667,38 @@ export function mineEnergyCost(vein: Vein, exp: Expedition): number {
   const ore = oreById(vein.oreId);
   return 4 + (ore?.hardness ?? 1) + mapByIndex(expeditionZone(exp, 0)).radiation;
 }
+// Expedition completion bonus (anti-bangkrut, rebalance #6): the
+// bonus grows with sector, but it is CAPPED — without the cap it
+// grew without limit (1 + 0,2×sektor in #5) and became 86–93% of
+// earnings, so the WD pace kept accelerating the longer someone
+// played. The cap value was chosen from the simulation (see
+// PORT_NOTES.md, rebalance #6): it is the value that holds an
+// ACTIVE player's repeat-WD interval at ~14 days, stable from days
+// 46–60 through days 166–180. The bonus binds at sector 345
+// (0,5 + 0,1×345 = 35).
+export const MAX_COMPLETION_BONUS_KT = 35;
 export function completionBonusKt(layer: number): number {
-  return roundKt(1 + layer * 0.2);
+  return roundKt(Math.min(0.5 + layer * 0.1, MAX_COMPLETION_BONUS_KT));
 }
 
-/** KT is fractional since rebalance #5 (Regolith 0,1 KT). Every KT
- *  credit AND debit is rounded to 1 decimal at the point it touches
- *  the balance, so the stored balance is always a clean 1-decimal
- *  double and binary float dust (0.30000000000000004) can never
- *  accumulate. The DB column is DOUBLE PRECISION (see schema.pg.ts
- *  + migration-0003): Drizzle maps it to a JS number, unlike
- *  NUMERIC which comes back as a string and would break every
- *  `p.ktBalance + x` (string concat) and every `z.number()` check. */
+/** KT is fractional since rebalance #5 (Regolith 0,1 KT), and
+ *  2-decimal since rebalance #6 (Regolith 0,05 KT). Every KT
+ *  credit AND debit is rounded to 2 decimals at the point it
+ *  touches the balance, so the stored balance is always a clean
+ *  2-decimal double and binary float dust (0.30000000000000004)
+ *  can never accumulate. The DB column is DOUBLE PRECISION (see
+ *  schema.pg.ts + migration-0003): Drizzle maps it to a JS number,
+ *  unlike NUMERIC which comes back as a string and would break
+ *  every `p.ktBalance + x` (string concat) and every `z.number()`
+ *  check. */
 export function roundKt(n: number): number {
-  return Math.round(n * 10) / 10;
+  return Math.round(n * 100) / 100;
 }
-/** One-decimal Indonesian formatting for KT amounts inside
+/** Two-decimal Indonesian formatting for KT amounts inside
  *  server-written activity messages (raw `${n}` would print a dot,
  *  e.g. "1.2 KT"). */
 export function fmtKt(n: number): string {
-  return n.toLocaleString("id-ID", { maximumFractionDigits: 1 });
+  return n.toLocaleString("id-ID", { maximumFractionDigits: 2 });
 }
 /** Energy to fly to a map: the base hop plus 2 per map step of distance. */
 function travelCostFor(zoneIdx: number, premium: boolean): number {
@@ -1980,7 +2019,7 @@ export const gameActions = {
 
   claimDailyBonus: defineGameAction({
     description:
-      "Claims the once-per-calendar-day login bonus of 2,5 KT.",
+      "Claims the once-per-calendar-day login bonus of 1,25 KT.",
     request: z.object({}),
     response: resultShape.extend({
       bonusKt: z.number(),
@@ -2017,7 +2056,7 @@ export const gameActions = {
 
   watchAd: defineGameAction({
     description:
-      "Claims the sponsored-ad reward: credits 1,5 KT for one ad view. Fully server-validated (anti-cheat): the daily cap of 10 views per calendar day and the 60-second cooldown between views are recomputed here from the ad_reward activity history in the database — a tampered client cannot exceed the cap, skip the cooldown, or change the reward amount. This is the placeholder slot where the owner will plug in a real ad provider later; the reward logic stays identical.",
+      "Claims the sponsored-ad reward: credits 0,75 KT for one ad view. Fully server-validated (anti-cheat): the daily cap of 10 views per calendar day and the 60-second cooldown between views are recomputed here from the ad_reward activity history in the database — a tampered client cannot exceed the cap, skip the cooldown, or change the reward amount. This is the placeholder slot where the owner will plug in a real ad provider later; the reward logic stays identical.",
     request: z.object({}),
     response: resultShape.extend({
       rewardKt: z.number(),
@@ -2094,7 +2133,7 @@ export const gameActions = {
         .limit(1);
       const held = inv[0]?.qty ?? 0;
       if (held < args.qty) return fail(`Bijih tidak cukup — kamu hanya punya ${held} ${ore.name}.`);
-      // Harga per unit bisa pecahan (Regolith 0,1 KT) — total penjualan
+      // Harga per unit bisa pecahan (Regolith 0,05 KT) — total penjualan
       // dibulatkan ke 1 desimal, BUKAN harga satuan (Math.round di
       // satuan akan membuat Regolith bernilai 0 KT).
       const gained = roundKt(ore.price * sellMultiplier(levels, isPremium(p)) * args.qty);
