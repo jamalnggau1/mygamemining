@@ -5,6 +5,16 @@
 //     (mode: "date", so handlers keep working with Date objects).
 //   - wd amount columns stay floating point (DOUBLE PRECISION) because
 //     WD amounts move in 0,5 GRAM steps.
+//   - KT balance columns are DOUBLE PRECISION too (rebalance #5,
+//     2026-11-19): KT is fractional now (Regolith 0,1 KT), so
+//     kt_balance, total_kt_earned and activity.amount_kt hold
+//     1-decimal values. DOUBLE PRECISION — not NUMERIC — because
+//     Drizzle maps it to a JS number in both drivers (Neon HTTPS
+//     and node-postgres); NUMERIC comes back as a string and would
+//     break every `p.ktBalance + x` (string concat) and every
+//     `z.number()` check. Float dust is prevented in code instead:
+//     every credit/debit is rounded to 1 decimal at the point it
+//     touches the balance (roundKt in api/_lib/game.ts).
 //   - AUTOINCREMENT ids become BIGSERIAL identities.
 // The DDL twin of this file is deploy/neon/init.sql — keep them in
 // sync. The game handlers in api/_lib/game.ts are written against
@@ -53,7 +63,7 @@ export const player = pgTable("player", {
   // tervalidasi (hanya untuk dikenali admin di daftar pemain
   // mencurigakan — identitas tetap telegram_id, bukan username).
   username: text("username"),
-  ktBalance: integer("kt_balance").notNull().default(0),
+  ktBalance: doublePrecision("kt_balance").notNull().default(0),
   energy: integer("energy").notNull().default(20),
   energyUpdatedAt: timestamp("energy_updated_at", {
     withTimezone: true,
@@ -74,7 +84,7 @@ export const player = pgTable("player", {
   totalScans: integer("total_scans").notNull().default(0),
   asteroidsDone: integer("asteroids_done").notNull().default(0),
   totalDigs: integer("total_digs").notNull().default(0),
-  totalKtEarned: integer("total_kt_earned").notNull().default(0),
+  totalKtEarned: doublePrecision("total_kt_earned").notNull().default(0),
   totalWdPaidGram: doublePrecision("total_wd_paid_gram").notNull().default(0),
   // -- Anti-cheat otomatis (deteksi bot, 2026-11-19) -----------------
   // Skor risiko: 0 = bersih. Setiap aturan deteksi yang menyala
@@ -189,7 +199,7 @@ export const activity = pgTable(
       .references(() => player.id),
     kind: text("kind").notNull(),
     message: text("message").notNull(),
-    amountKt: integer("amount_kt"),
+    amountKt: doublePrecision("amount_kt"),
     createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
       .notNull()
       .defaultNow(),

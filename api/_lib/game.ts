@@ -62,19 +62,22 @@
 //   Premium halves regen time on top of that (fastest possible:
 //   ~42s per energy, still ~1 hour for a full maxed tank). KT sinks
 //   (upgrade costs with steeper growth, hull repair fees) drain KT
-//   back out of circulation, and the free
-//   daily faucet was cut 150 → 50 → 25 KT so passive income alone
-//   needs 20 days to reach even the first 500 KT withdrawal.
+//   back out of circulation, and the free daily faucet was cut
+//   150 → 50 → 25 → 2,5 KT (rebalance #5, 2026-11-19: ALL income
+//   ÷10). NOTE (rebalance #5): the faucet floor is now bonus 2,5 +
+//   iklan maks 15 = 17,5 KT/hari — it needs ~29 days to reach the
+//   FIRST WD (500 KT) on its own and ~286 days for a REPEAT WD
+//   (5.000 KT), so the faucet can no longer shortcut any WD.
 //
 // Economy (fixed by the owner):
 //   Coin A = Kredit Tambang Antariksa (KT), earned by selling space-mined minerals.
-//   1000 KT = 1 GRAM. The minimum withdrawal ESCALATES with every WD the
-//   owner has actually PAID: the first paid WD only needs 500 KT
-//   (0,5 GRAM) so new players reach their first payout quickly, then the
-//   minimum climbs 1.000 → 2.000 → 3.000 → 5.000 → 10.000 KT. Amounts
-//   move in 500 KT (0,5 GRAM) steps. The minimum is computed HERE from
-//   the paid-WD history in the database — the client can display it but
-//   can never lower it.
+//   1000 KT = 1 GRAM. The WD minimum has TWO TIERS, no ladder: the
+//   FIRST WD needs only 500 KT (0,5 GRAM); every WD after that needs
+//   at least 5.000 KT (5 GRAM), FLAT — it never climbs again. Amounts
+//   move in 500 KT (0,5 GRAM) steps, so a repeat WD can be 5.000,
+//   5.500, 10.000 KT, ... — 5.000 KT is the MINIMUM, not the exact
+//   amount. The minimum is computed HERE from the paid-WD history in
+//   the database — the client can display it but can never lower it.
 //   Withdrawals are paid MANUALLY by the owner — a request deducts and
 //   locks the KT, lands in the admin queue, and is marked paid only
 //   after the owner sends the GRAM outside the game. Rejection or
@@ -84,7 +87,7 @@
 //   EVERY number that matters is computed in this file from the Neon database:
 //   balances, energy, job start/end timestamps and durations, challenge
 //   rolls (decided when a job starts, hidden until collect), sell
-//   prices, upgrade costs, the escalating WD minimum and the locked KT
+//   prices, upgrade costs, the two-tier WD minimum and the locked KT
 //   amount. Actions accept only intents and small validated inputs
 //   (a vein index, an ore id + quantity, a wallet string, a KT amount
 //   that is re-checked against the server-computed minimum and the
@@ -133,11 +136,105 @@
 //   ×2.0 / ×2.5 for scan and drilling alike, and flying to a farther
 //   map costs more energy (4 + 2 per map step).
 //
+// Economy rebalance #3 (2026-11-19, owner: first WD must take 10+
+//   days; "boleh mahal asal langka" — cheap commons, expensive rares).
+//   SUPERSEDED by rebalance #4 below (2026-11-19): the WD ladder
+//   (75.000 → 1.500.000 KT) is ABOLISHED — first WD 500 KT, repeat
+//   WDs 5.000 KT flat. The #3 PRICE cuts below STAY; only the ladder
+//   numbers in this comment are history now.
+//   Only the small-tier sell prices were cut, so the rarity curve is
+//   much steeper: Regolith 2 → 1, Kondrit 6 → 2, Besi-Nikel 14 → 5,
+//   Kobalt 30 → 10, Platinum 66 → 45 KT; Iridium 144, Helium-3 360 and
+//   all map gems (Opal 39 … Voidium 1.440) stay exactly as-is.
+//   And the WD ladder was raised to old x150: first WD 75.000 KT.
+//   Monte Carlo (real loot generator, 40k expeditions/map) with the new
+//   prices — expected KT per full 30-energy tank: Map 1 ~142, Map 2
+//   ~160, Map 3 ~245, Map 4 ~481, Map 5 ~716. Day-by-day progression
+//   sim (sector +1 per completed expedition, best unlocked map, all
+//   tanks + bonus + all ads): first WD takes ~14 days for a realistic
+//   max-effort player (8 tanks/day), ~10 days at the theoretical
+//   12-tank/day ceiling, ~21 days active (6 tanks), ~82 days casual
+//   (1,5 tanks), and ~4 days mid-upgraded (Negosiator/Ransel/Bor/
+//   Pemindai/Tangki/Beliung 5) — upgrades are the way out, as intended.
+//   Ads (+15 KT, max 10/day) and daily bonus (25 KT) unchanged: their
+//   175 KT/day floor alone needs 429 days to reach 75.000 KT.
+//
+// Economy rebalance #4 (2026-11-19, owner: takut bangkrut — WD tiap
+//   beberapa hari terlalu cepat; tangga DIHAPUS):
+//   WD minimum sekarang DUA TINGKAT, tanpa tangga: WD pertama 500 KT
+//   (0,5 GRAM), WD kedua dan seterusnya minimum 5.000 KT (5 GRAM),
+//   FLAT. Harga jual TIDAK berubah dari rebalance #3 (Regolith 1 …
+//   Helium-3 360 KT, batu map tidak berubah). Recalculation (Monte
+//   Carlo, generator loot asli, 20k ekspedisi/map + simulasi
+//   hari-demi-hari dengan progresi sektor, 2 run — angka dibulatkan):
+//   WD pertama 500 KT dicapai hari ke-1 (max-effort, aktif,
+//   mid-upgrade) dan hari ke-2–3 (kasual). Jeda antar WD ulang
+//   5.000 KT: ~0,4 hari (max-effort), ~0,9 hari (aktif), ~4 hari
+//   (kasual), ~0,1 hari (mid-upgrade). GRAM yang harus dibayar
+//   pemilik per pemain: bulan pertama ~330 / ~147 / ~29 / ~1.175
+//   GRAM, dan di kondisi mapan (hari 46–60) ~524 / ~200 / ~40 /
+//   ~1.790 GRAM per 30 hari. Penyebab utamanya BUKAN threshold WD —
+//   bonus penyelesaian ekspedisi (10 + 2×sektor KT) tumbuh TANPA
+//   BATAS mengikuti sektor dan menyumbang 24–38% penghasilan pemain
+//   aktif — threshold ulang saja tidak membatasi total payout,
+//   yang membatasi adalah penghasilan (daya + bonus sektor) pemain.
+//   Opsi rem yang TIDAK diterapkan: cooldown WD 7 hari (maks 1 WD
+//   per 7 hari per pemain) — dengan asumsi tiap WD tepat 5.000 KT,
+//   payout mentok di ~21 GRAM/bulan untuk semua profil; TAPI tanpa
+//   batas MAKSIMUM per WD, pemain tinggal menabung seminggu lalu WD
+//   sekaligus, jadi total GRAM tidak berubah (hanya jumlah WD turun
+//   ke ~4/bulan). Cooldown baru benar-benar membatasi payout bila
+//   dipasangkan dengan batas maksimum per WD. Lihat PORT_NOTES.md
+//   untuk tabel lengkapnya; pemilik yang memutuskan.
+//
+// Economy rebalance #5 (2026-11-19, owner: "tinggal kurangi saja
+//   pendapatan KT mereka, beres" — just cut KT income, keep it
+//   simple; NO cooldown, NO per-WD max, NO bonus cap):
+//   ALL KT income ÷10, nothing else changes. Ore prices: Regolith
+//   1 → 0,1, Kondrit 2 → 0,2, Besi-Nikel 5 → 0,5, Kobalt 10 → 1,
+//   Platinum 45 → 4,5, Iridium 144 → 14,4, Helium-3 360 → 36 KT;
+//   map gems ÷10 too (Opal 39 → 3,9 … Voidium 1.440 → 144 KT).
+//   Expedition bonus 10 + 2×sektor → 1 + 0,2×sektor KT, daily bonus
+//   25 → 2,5 KT, ads reward 15 → 1,5 KT (cap 10/day + 60s cooldown
+//   unchanged). WD rule from #4 STAYS: first WD 500 KT, repeat WDs
+//   5.000 KT flat, amounts in 500 KT multiples, ratio 1.000 KT =
+//   1 GRAM. Upgrade costs UNCHANGED (they are sinks, not income) —
+//   at the new rates every upgrade takes ~10× longer to afford,
+//   which itself brakes the upgraded-player payout problem.
+//   Balances are fractional now (0,1 KT steps): player.kt_balance,
+//   player.total_kt_earned and activity.amount_kt are DOUBLE
+//   PRECISION (migration-0003), and every credit/debit is rounded
+//   to 1 decimal at the point it touches the balance (roundKt) so
+//   float dust can never accumulate. WD amounts stay integers.
+//   Simulation (same Monte Carlo + day-by-day model as #4, real
+//   constants, 2 runs agreeing within a few percent — numbers below
+//   are the verified results, see PORT_NOTES.md for the full table):
+//   first WD day 2 (max-effort), day 5 (active), day 16 (casual),
+//   day 1 (mid-upgrade); repeat WDs every ~2 days (max-effort),
+//   ~7 days (active), ~32 days (casual), ~1 day (mid-upgrade);
+//   GRAM per 30 days at days 46–60: ~108 / ~28 / ~2,3 / ~262 —
+//   i.e. 100 active players ≈ 2.800 GRAM/month (was ~20.000).
+//   An ACTIVE player needs ~50 days of earnings to afford all
+//   level-5 upgrades (23.430 KT); max-effort ~25 days, casual
+//   >180 days. HONEST CAVEAT: the cut is NOT a clean ÷10 on payout
+//   (it is ~5× for max-effort, ~7× active, ~17× casual at days
+//   46–60), because the completion bonus (1 + 0,2×sektor) still
+//   grows WITHOUT LIMIT with sector and is now 86–93% of earnings
+//   — and a rational player farms cheap Map 1 for it (most bonus
+//   per energy). There is no true steady state: at days 166–180
+//   the same profiles pay ~349 / ~88 / ~6 / ~935 GRAM per 30 days
+//   and keep climbing. Maps 4–5 are net-NEGATIVE on ore minus hull
+//   fees alone (Map 5: 80 KT ore vs ~100 KT fees per tank) — only
+//   the sector bonus makes them pay, and Map 1 pays more bonus per
+//   energy, so a KT-maximising player never mines the far maps.
+//   The faucet floor (2,5 + 15 = 17,5 KT/day) needs ~29 days for
+//   a first WD and ~286 days for a repeat WD on its own.
+//
 // Sponsored ads (owner monetization slot):
-//   A "Tonton Iklan" button pays AD_REWARD_KT (15 KT) per view — the
+//   A "Tonton Iklan" button pays AD_REWARD_KT (1,5 KT) per view — the
 //   slot where the owner plugs in a real ad provider later. The
 //   reward is capped server-side: at most AD_DAILY_CAP (10) views per
-//   calendar day (= 150 KT/day max, deliberately below one Map 1 tank
+//   calendar day (= 15 KT/day max, deliberately below one Map 1 tank
 //   so ads supplement mining instead of replacing it) and a
 //   AD_COOLDOWN_SECONDS (60s) gap between views, both recomputed in
 //   watchAd from the ad_reward rows in the activity log. No new table
@@ -161,28 +258,33 @@ import {
 // Game design constants
 // ---------------------------------------------------------------------------
 
-const KT_PER_GRAM = 1000;
-const DAILY_BONUS_KT = 25;
-const AD_REWARD_KT = 15;
-const AD_DAILY_CAP = 10;
+export const KT_PER_GRAM = 1000;
+export const DAILY_BONUS_KT = 2.5;
+export const AD_REWARD_KT = 1.5;
+export const AD_DAILY_CAP = 10;
 const AD_COOLDOWN_SECONDS = 60;
-const BASE_MAX_ENERGY = 30;
-const BASE_REGEN_SECONDS = 240; // 1 energy per 4 minutes — deliberately slow (see economy note above)
+export const BASE_MAX_ENERGY = 30;
+export const BASE_REGEN_SECONDS = 240; // 1 energy per 4 minutes — deliberately slow (see economy note above)
 const REGEN_MIN_SECONDS = 60; // hard floor for the Reaktor upgrade curve (pre-Premium)
 const SCAN_ENERGY_COST = 5;
 const ABANDON_ENERGY_COST = 2;
 const BASE_SCAN_SECONDS = 150; // base scan is deliberately slow (2,5 menit) — the Spektrometer upgrade is what speeds it up
 const TRAVEL_ENERGY_COST = 4; // base hop to the nearest map; +2 per extra map step (distance)
 
-// Escalating WD minimum (anti-leak + anti-cheat): indexed by how many
-// WDs the owner has already PAID this player. First WD is cheap
-// (500 KT = 0,5 GRAM) so newcomers get a taste; every paid WD raises
-// the floor for the next one. WD amounts move in 500 KT steps.
+// WD minimum (anti-bangkrut): DUA TINGKAT, tanpa tangga.
+//   - WD pertama: 500 KT (0,5 GRAM).
+//   - WD kedua dan seterusnya: 5.000 KT (5 GRAM) — FLAT, tidak naik lagi.
+// Jumlah WD tetap kelipatan 500 KT (0,5 GRAM), jadi WD ulang bisa
+// 5.000, 5.500, 10.000 KT, dst. — 5.000 KT adalah MINIMUM, bukan
+// jumlah pasti. Sumber kebenaran: riwayat WD terbayar (paidCount==0
+// → 500 KT, paidCount>=1 → 5.000 KT). Zod floor tetap WD_STEP_KT
+// (500): granularitas, bukan minimum — minimum ditegakkan di handler
+// requestWithdrawal dengan pesan detail yang menyebut minimumnya.
 const WD_STEP_KT = 500;
-const WD_MIN_TIERS_KT = [500, 1000, 2000, 3000, 5000, 10000];
-function wdMinKtForPaidCount(paidCount: number): number {
-  const idx = Math.min(Math.max(paidCount, 0), WD_MIN_TIERS_KT.length - 1);
-  return WD_MIN_TIERS_KT[idx] ?? 10000;
+export const WD_FIRST_MIN_KT = 500;
+export const WD_REPEAT_MIN_KT = 5000;
+export function wdMinKtForPaidCount(paidCount: number): number {
+  return paidCount >= 1 ? WD_REPEAT_MIN_KT : WD_FIRST_MIN_KT;
 }
 
 // Premium Pass plans — priced in Telegram Stars (paid to the owner in
@@ -209,26 +311,26 @@ type OreDef = {
   weights: number[];
 };
 
-const ORES: OreDef[] = [
-  { id: "regolith", name: "Regolith Asteroid", price: 2, color: "#9a9186", icon: "regolith", hardness: 1, weights: [34, 20, 12, 8, 5] },
-  { id: "kondrit", name: "Kondrit Karbon", price: 6, color: "#4b4f5e", icon: "kondrit", hardness: 1, weights: [26, 34, 18, 10, 6] },
-  { id: "besinikel", name: "Besi-Nikel", price: 14, color: "#c97a3a", icon: "besinikel", hardness: 2, weights: [14, 16, 28, 15, 9] },
-  { id: "kobalt", name: "Kobalt Antariksa", price: 30, color: "#5b8cff", icon: "kobalt", hardness: 2, weights: [8, 8, 17, 17, 11] },
-  { id: "platinum", name: "Platinum", price: 66, color: "#e6ebf2", icon: "platinum", hardness: 3, weights: [4, 3, 8, 18, 15] },
-  { id: "iridium", name: "Iridium", price: 144, color: "#f2b705", icon: "iridium", hardness: 3, weights: [2, 1, 4, 12, 18] },
-  { id: "helium3", name: "Kristal Helium-3", price: 360, color: "#6ee7ff", icon: "helium3", hardness: 4, weights: [0, 0, 1, 3, 9] },
+export const ORES: OreDef[] = [
+  { id: "regolith", name: "Regolith Asteroid", price: 0.1, color: "#9a9186", icon: "regolith", hardness: 1, weights: [34, 20, 12, 8, 5] },
+  { id: "kondrit", name: "Kondrit Karbon", price: 0.2, color: "#4b4f5e", icon: "kondrit", hardness: 1, weights: [26, 34, 18, 10, 6] },
+  { id: "besinikel", name: "Besi-Nikel", price: 0.5, color: "#c97a3a", icon: "besinikel", hardness: 2, weights: [14, 16, 28, 15, 9] },
+  { id: "kobalt", name: "Kobalt Antariksa", price: 1, color: "#5b8cff", icon: "kobalt", hardness: 2, weights: [8, 8, 17, 17, 11] },
+  { id: "platinum", name: "Platinum", price: 4.5, color: "#e6ebf2", icon: "platinum", hardness: 3, weights: [4, 3, 8, 18, 15] },
+  { id: "iridium", name: "Iridium", price: 14.4, color: "#f2b705", icon: "iridium", hardness: 3, weights: [2, 1, 4, 12, 18] },
+  { id: "helium3", name: "Kristal Helium-3", price: 36, color: "#6ee7ff", icon: "helium3", hardness: 4, weights: [0, 0, 1, 3, 9] },
   // Batu mulia khas tiap peta — dua permata unggulan per map, hanya
   // muncul di map-nya (weight di zone lain 0).
-  { id: "opal", name: "Opal Pelangi", price: 39, color: "#f9a8d4", icon: "opal", hardness: 2, weights: [7, 0, 0, 0, 0] },
-  { id: "topaz", name: "Topaz Emas", price: 51, color: "#fbbf24", icon: "topaz", hardness: 2, weights: [5, 0, 0, 0, 0] },
-  { id: "turkuois", name: "Turkuois Orbit", price: 78, color: "#2dd4bf", icon: "turkuois", hardness: 2, weights: [0, 6, 0, 0, 0] },
-  { id: "ametis", name: "Ametis Sabuk", price: 105, color: "#a78bfa", icon: "ametis", hardness: 3, weights: [0, 4, 0, 0, 0] },
-  { id: "zamrud", name: "Zamrud Bulan", price: 192, color: "#34d399", icon: "zamrud", hardness: 3, weights: [0, 0, 5, 0, 0] },
-  { id: "rubi", name: "Rubi Mare", price: 252, color: "#f87171", icon: "rubi", hardness: 3, weights: [0, 0, 3, 0, 0] },
-  { id: "safir", name: "Safir Bintang", price: 420, color: "#60a5fa", icon: "safir", hardness: 4, weights: [0, 0, 0, 5, 0] },
-  { id: "berlian", name: "Berlian Psyche", price: 570, color: "#f8fafc", icon: "berlian", hardness: 4, weights: [0, 0, 0, 3, 0] },
-  { id: "opales", name: "Opal Es Hitam", price: 900, color: "#c084fc", icon: "opales", hardness: 4, weights: [0, 0, 0, 0, 4] },
-  { id: "voidium", name: "Kristal Voidium", price: 1440, color: "#818cf8", icon: "voidium", hardness: 4, weights: [0, 0, 0, 0, 2] },
+  { id: "opal", name: "Opal Pelangi", price: 3.9, color: "#f9a8d4", icon: "opal", hardness: 2, weights: [7, 0, 0, 0, 0] },
+  { id: "topaz", name: "Topaz Emas", price: 5.1, color: "#fbbf24", icon: "topaz", hardness: 2, weights: [5, 0, 0, 0, 0] },
+  { id: "turkuois", name: "Turkuois Orbit", price: 7.8, color: "#2dd4bf", icon: "turkuois", hardness: 2, weights: [0, 6, 0, 0, 0] },
+  { id: "ametis", name: "Ametis Sabuk", price: 10.5, color: "#a78bfa", icon: "ametis", hardness: 3, weights: [0, 4, 0, 0, 0] },
+  { id: "zamrud", name: "Zamrud Bulan", price: 19.2, color: "#34d399", icon: "zamrud", hardness: 3, weights: [0, 0, 5, 0, 0] },
+  { id: "rubi", name: "Rubi Mare", price: 25.2, color: "#f87171", icon: "rubi", hardness: 3, weights: [0, 0, 3, 0, 0] },
+  { id: "safir", name: "Safir Bintang", price: 42, color: "#60a5fa", icon: "safir", hardness: 4, weights: [0, 0, 0, 5, 0] },
+  { id: "berlian", name: "Berlian Psyche", price: 57, color: "#f8fafc", icon: "berlian", hardness: 4, weights: [0, 0, 0, 3, 0] },
+  { id: "opales", name: "Opal Es Hitam", price: 90, color: "#c084fc", icon: "opales", hardness: 4, weights: [0, 0, 0, 0, 4] },
+  { id: "voidium", name: "Kristal Voidium", price: 144, color: "#818cf8", icon: "voidium", hardness: 4, weights: [0, 0, 0, 0, 2] },
 ];
 const RARE_IDS = new Set([
   "platinum", "iridium", "helium3",
@@ -251,7 +353,7 @@ type MapDef = {
   veinCount: [number, number]; // min/max veins per asteroid
 };
 
-const MAPS: MapDef[] = [
+export const MAPS: MapDef[] = [
   {
     name: "Orbit Rendah — Pos Tambang LEO",
     tagline: "Peta pemula · aman & ramah",
@@ -352,7 +454,7 @@ type UpgradeDef = {
   maxLevel: number;
 };
 
-const UPGRADES: UpgradeDef[] = [
+export const UPGRADES: UpgradeDef[] = [
   { id: "beliung", name: "Lengan Bor Laser", desc: "Pengeboran setiap urat mineral 6% lebih cepat per level — mata bor laser memotong batuan lebih efisien.", baseCost: 150, growth: 1.6, maxLevel: 10 },
   { id: "tangki", name: "Tangki O₂ & Baterai Surya", desc: "KAPASITAS daya: +6 daya maksimum per level (30 → 90). Tangki O₂ yang lebih besar memperpanjang napas misi di permukaan, dan baterai surya menyimpan cadangan daya lebih banyak — jadi kamu bisa menjalankan lebih banyak scan & bor dalam satu sesi, dan daya yang terisi saat kamu tidak bermain tidak terbuang karena tangki cepat penuh. Upgrade ini TIDAK mempercepat isi ulang; kecepatan isi ulang diatur Reaktor Fusi Mini.", baseCost: 120, growth: 1.6, maxLevel: 10 },
   { id: "bor", name: "Reaktor Fusi Mini", desc: "KECEPATAN isi ulang daya: waktu isi ulang berkurang 10% per level — dari 4 menit per daya di level 0 menjadi sekitar 1 menit 24 detik per daya di level 10. Inilah upgrade yang membuat daya kapal pulih lebih cepat; tanpa upgrade ini isi ulang sengaja dibuat lambat.", baseCost: 200, growth: 1.7, maxLevel: 10 },
@@ -367,7 +469,7 @@ function oreById(id: string): OreDef | undefined {
 function upgradeById(id: string): UpgradeDef | undefined {
   return UPGRADES.find((u) => u.id === id);
 }
-function upgradeCost(def: UpgradeDef, level: number): number {
+export function upgradeCost(def: UpgradeDef, level: number): number {
   return Math.round((def.baseCost * Math.pow(def.growth, level)) / 5) * 5;
 }
 function mapByIndex(idx: number): MapDef {
@@ -422,7 +524,7 @@ type Job = {
   hullHit?: boolean;
 };
 
-function generateExpedition(zoneIdx: number, levels: Record<string, number>): Expedition {
+export function generateExpedition(zoneIdx: number, levels: Record<string, number>): Expedition {
   const map = mapByIndex(zoneIdx);
   const pemindai = levels["pemindai"] ?? 0;
   const weights = ORES.map((o) => {
@@ -520,10 +622,10 @@ function scanDurationForZone(zoneIdx: number, levels: Record<string, number>, pr
   const base = BASE_SCAN_SECONDS * (1 - 0.07 * (levels["pemindai"] ?? 0));
   return Math.max(45, Math.round(base * map.timeFactor * (premium ? PREMIUM_TIME_FACTOR : 1)));
 }
-function scanDurationSec(exp: Expedition, levels: Record<string, number>, premium: boolean): number {
+export function scanDurationSec(exp: Expedition, levels: Record<string, number>, premium: boolean): number {
   return scanDurationForZone(expeditionZone(exp, 0), levels, premium);
 }
-function mineDurationSec(vein: Vein, exp: Expedition, levels: Record<string, number>, premium: boolean, dualDrill: boolean): number {
+export function mineDurationSec(vein: Vein, exp: Expedition, levels: Record<string, number>, premium: boolean, dualDrill: boolean): number {
   const ore = oreById(vein.oreId);
   const hardness = ore?.hardness ?? 1;
   const map = mapByIndex(expeditionZone(exp, 0));
@@ -531,15 +633,33 @@ function mineDurationSec(vein: Vein, exp: Expedition, levels: Record<string, num
   const sped = base * exp.timeFactor * map.timeFactor * (1 - 0.06 * (levels["beliung"] ?? 0)) * (premium ? PREMIUM_TIME_FACTOR : 1) * (dualDrill ? DUAL_DRILL_FACTOR : 1);
   return Math.max(25, Math.round(sped));
 }
-function scanEnergyCost(exp: Expedition): number {
+export function scanEnergyCost(exp: Expedition): number {
   return SCAN_ENERGY_COST + mapByIndex(expeditionZone(exp, 0)).radiation;
 }
-function mineEnergyCost(vein: Vein, exp: Expedition): number {
+export function mineEnergyCost(vein: Vein, exp: Expedition): number {
   const ore = oreById(vein.oreId);
   return 4 + (ore?.hardness ?? 1) + mapByIndex(expeditionZone(exp, 0)).radiation;
 }
-function completionBonusKt(layer: number): number {
-  return 10 + layer * 2;
+export function completionBonusKt(layer: number): number {
+  return roundKt(1 + layer * 0.2);
+}
+
+/** KT is fractional since rebalance #5 (Regolith 0,1 KT). Every KT
+ *  credit AND debit is rounded to 1 decimal at the point it touches
+ *  the balance, so the stored balance is always a clean 1-decimal
+ *  double and binary float dust (0.30000000000000004) can never
+ *  accumulate. The DB column is DOUBLE PRECISION (see schema.pg.ts
+ *  + migration-0003): Drizzle maps it to a JS number, unlike
+ *  NUMERIC which comes back as a string and would break every
+ *  `p.ktBalance + x` (string concat) and every `z.number()` check. */
+export function roundKt(n: number): number {
+  return Math.round(n * 10) / 10;
+}
+/** One-decimal Indonesian formatting for KT amounts inside
+ *  server-written activity messages (raw `${n}` would print a dot,
+ *  e.g. "1.2 KT"). */
+export function fmtKt(n: number): string {
+  return n.toLocaleString("id-ID", { maximumFractionDigits: 1 });
 }
 /** Energy to fly to a map: the base hop plus 2 per map step of distance. */
 function travelCostFor(zoneIdx: number, premium: boolean): number {
@@ -561,15 +681,15 @@ async function loadLevels(db: Db, playerId: number): Promise<Record<string, numb
   return levels;
 }
 
-function maxEnergy(levels: Record<string, number>): number {
+export function maxEnergy(levels: Record<string, number>): number {
   return BASE_MAX_ENERGY + 6 * (levels["tangki"] ?? 0);
 }
-function regenSeconds(levels: Record<string, number>, premium: boolean): number {
+export function regenSeconds(levels: Record<string, number>, premium: boolean): number {
   // Reaktor Fusi Mini ("bor") is the regen-speed upgrade: -10% per level.
   const base = Math.max(REGEN_MIN_SECONDS, Math.round(BASE_REGEN_SECONDS * Math.pow(0.9, levels["bor"] ?? 0)));
   return premium ? Math.max(30, Math.round(base / PREMIUM_REGEN_DIVISOR)) : base;
 }
-function sellMultiplier(levels: Record<string, number>, premium: boolean): number {
+export function sellMultiplier(levels: Record<string, number>, premium: boolean): number {
   return 1 + 0.05 * (levels["negosiator"] ?? 0) + (premium ? PREMIUM_SELL_BONUS : 0);
 }
 
@@ -785,7 +905,7 @@ function activityCategory(kind: string): "mission" | "economy" {
   return MISSION_KINDS.has(kind) ? "mission" : "economy";
 }
 
-/** How many WDs the owner has actually PAID — drives the escalating
+/** How many WDs the owner has actually PAID — drives the two-tier
  *  WD minimum. Counted from the database on every relevant call, never
  *  taken from the client. */
 async function countPaidWithdrawals(db: Db, playerId: number): Promise<number> {
@@ -939,7 +1059,7 @@ function defineGameAction<Req extends z.ZodTypeAny, Res>(def: {
 export const gameActions = {
   getGameState: defineGameAction({
     description:
-      "Returns the full game state: player balances and energy, the escalating WD minimum computed server-side from the paid-WD history (first WD 500 KT, rising per paid WD), premium pass status (tier, dual-drill flag, Telegram Stars plans) and Stars purchase orders, the five mining maps with unlock state, per-map distance, scan duration and challenge profiles, per-map gemstone loot, the asteroid currently being explored (identity, map, scan status, mineral veins), any timed scan/mining job in progress with its remaining seconds (finished jobs also reveal map challenge outcomes: drill jam / hull hit), ore inventory with live sell prices, upgrade levels and costs, recent withdrawals, the sponsored-ad reward state (reward per view, daily cap, views used today, remaining views and cooldown seconds — all computed server-side), and the activity log split into mission and economy categories.",
+      "Returns the full game state: player balances and energy, the two-tier WD minimum computed server-side from the paid-WD history (first WD 500 KT, repeat WDs 5.000 KT flat), premium pass status (tier, dual-drill flag, Telegram Stars plans) and Stars purchase orders, the five mining maps with unlock state, per-map distance, scan duration and challenge profiles, per-map gemstone loot, the asteroid currently being explored (identity, map, scan status, mineral veins), any timed scan/mining job in progress with its remaining seconds (finished jobs also reveal map challenge outcomes: drill jam / hull hit), ore inventory with live sell prices, upgrade levels and costs, recent withdrawals, the sponsored-ad reward state (reward per view, daily cap, views used today, remaining views and cooldown seconds — all computed server-side), and the activity log split into mission and economy categories.",
     request: z.object({}),
     response: z.object({
       player: z.object({
@@ -1282,7 +1402,7 @@ export const gameActions = {
           gems: ORES.filter((o) => (o.weights[i] ?? 0) > 0).map((o) => ({
             id: o.id,
             name: o.name,
-            price: Math.round(o.price * mult),
+            price: roundKt(o.price * mult),
             color: o.color,
             icon: o.icon,
           })),
@@ -1339,7 +1459,7 @@ export const gameActions = {
           id: o.id,
           name: o.name,
           basePrice: o.price,
-          sellPrice: Math.round(o.price * mult),
+          sellPrice: roundKt(o.price * mult),
           color: o.color,
           icon: o.icon,
           qty: invMap.get(o.id) ?? 0,
@@ -1582,10 +1702,10 @@ export const gameActions = {
         if (repairFeeKt > 0) {
           await db
             .update(schema.player)
-            .set({ ktBalance: p.ktBalance - repairFeeKt })
+            .set({ ktBalance: roundKt(p.ktBalance - repairFeeKt) })
             .where(eq(schema.player.id, p.id));
         }
-        await logActivity(db, p.id, "hull_damage", `Lambung kapal terkena serpihan di ${map.name} — biaya perbaikan ${repairFeeKt} KT.`, -repairFeeKt);
+        await logActivity(db, p.id, "hull_damage", `Lambung kapal terkena serpihan di ${map.name} — biaya perbaikan ${fmtKt(repairFeeKt)} KT.`, -repairFeeKt);
       }
       await recordCollectLatency(db, p, collectDelayMs);
       return {
@@ -1639,24 +1759,25 @@ export const gameActions = {
         return fail("Tambang semua urat mineral di asteroid ini dulu sebelum warp ke asteroid berikutnya.");
       const bonus = completionBonusKt(p.layer);
       const newExp = generateExpedition(p.currentZone, levels);
+      const newBalance = roundKt(p.ktBalance + bonus);
       await db
         .update(schema.player)
         .set({
           layer: p.layer + 1,
           expedition: JSON.stringify(newExp),
           asteroidsDone: p.asteroidsDone + 1,
-          ktBalance: p.ktBalance + bonus,
-          totalKtEarned: p.totalKtEarned + bonus,
+          ktBalance: newBalance,
+          totalKtEarned: roundKt(p.totalKtEarned + bonus),
         })
         .where(eq(schema.player.id, p.id));
       await logActivity(
         db,
         p.id,
         "expedition_bonus",
-        `Ekspedisi ${exp.name} tuntas. Bonus ${bonus} KT, warp ke Sektor ${p.layer + 1}: ${newExp.name}.`,
+        `Ekspedisi ${exp.name} tuntas. Bonus ${fmtKt(bonus)} KT, warp ke Sektor ${p.layer + 1}: ${newExp.name}.`,
         bonus,
       );
-      return { ok: true, error: null, layer: p.layer + 1, bonusKt: bonus, ktBalance: p.ktBalance + bonus };
+      return { ok: true, error: null, layer: p.layer + 1, bonusKt: bonus, ktBalance: newBalance };
     },
   }),
 
@@ -1859,7 +1980,7 @@ export const gameActions = {
 
   claimDailyBonus: defineGameAction({
     description:
-      "Claims the once-per-calendar-day login bonus of 25 KT.",
+      "Claims the once-per-calendar-day login bonus of 2,5 KT.",
     request: z.object({}),
     response: resultShape.extend({
       bonusKt: z.number(),
@@ -1876,26 +1997,27 @@ export const gameActions = {
           ktBalance: p.ktBalance,
         };
       }
+      const newBalance = roundKt(p.ktBalance + DAILY_BONUS_KT);
       await db
         .update(schema.player)
         .set({
-          ktBalance: p.ktBalance + DAILY_BONUS_KT,
-          totalKtEarned: p.totalKtEarned + DAILY_BONUS_KT,
+          ktBalance: newBalance,
+          totalKtEarned: roundKt(p.totalKtEarned + DAILY_BONUS_KT),
         })
         .where(eq(schema.player.id, p.id));
-      await logActivity(db, p.id, "daily_bonus", `Bonus harian ${DAILY_BONUS_KT} KT diklaim.`, DAILY_BONUS_KT);
+      await logActivity(db, p.id, "daily_bonus", `Bonus harian ${fmtKt(DAILY_BONUS_KT)} KT diklaim.`, DAILY_BONUS_KT);
       return {
         ok: true,
         error: null,
         bonusKt: DAILY_BONUS_KT,
-        ktBalance: p.ktBalance + DAILY_BONUS_KT,
+        ktBalance: newBalance,
       };
     },
   }),
 
   watchAd: defineGameAction({
     description:
-      "Claims the sponsored-ad reward: credits 15 KT for one ad view. Fully server-validated (anti-cheat): the daily cap of 10 views per calendar day and the 60-second cooldown between views are recomputed here from the ad_reward activity history in the database — a tampered client cannot exceed the cap, skip the cooldown, or change the reward amount. This is the placeholder slot where the owner will plug in a real ad provider later; the reward logic stays identical.",
+      "Claims the sponsored-ad reward: credits 1,5 KT for one ad view. Fully server-validated (anti-cheat): the daily cap of 10 views per calendar day and the 60-second cooldown between views are recomputed here from the ad_reward activity history in the database — a tampered client cannot exceed the cap, skip the cooldown, or change the reward amount. This is the placeholder slot where the owner will plug in a real ad provider later; the reward logic stays identical.",
     request: z.object({}),
     response: resultShape.extend({
       rewardKt: z.number(),
@@ -1921,19 +2043,20 @@ export const gameActions = {
         return fail(`Batas iklan hari ini sudah tercapai (${AD_DAILY_CAP}× sehari). Hadiah iklan direset besok — kembali lagi ya!`);
       if (stats.cooldownRemainingSec > 0)
         return fail(`Sabar — iklan berikutnya bisa ditonton dalam ${stats.cooldownRemainingSec} detik lagi (jeda ${AD_COOLDOWN_SECONDS} detik antar-iklan).`);
+      const newBalance = roundKt(p.ktBalance + AD_REWARD_KT);
       await db
         .update(schema.player)
         .set({
-          ktBalance: p.ktBalance + AD_REWARD_KT,
-          totalKtEarned: p.totalKtEarned + AD_REWARD_KT,
+          ktBalance: newBalance,
+          totalKtEarned: roundKt(p.totalKtEarned + AD_REWARD_KT),
         })
         .where(eq(schema.player.id, p.id));
-      await logActivity(db, p.id, "ad_reward", `Menonton iklan sponsor — hadiah ${AD_REWARD_KT} KT masuk ke saldo.`, AD_REWARD_KT);
+      await logActivity(db, p.id, "ad_reward", `Menonton iklan sponsor — hadiah ${fmtKt(AD_REWARD_KT)} KT masuk ke saldo.`, AD_REWARD_KT);
       return {
         ok: true,
         error: null,
         rewardKt: AD_REWARD_KT,
-        ktBalance: p.ktBalance + AD_REWARD_KT,
+        ktBalance: newBalance,
         watchedToday: stats.watchedToday + 1,
         remainingToday: Math.max(0, stats.remainingToday - 1),
         cooldownRemainingSec: AD_COOLDOWN_SECONDS,
@@ -1971,8 +2094,11 @@ export const gameActions = {
         .limit(1);
       const held = inv[0]?.qty ?? 0;
       if (held < args.qty) return fail(`Bijih tidak cukup — kamu hanya punya ${held} ${ore.name}.`);
-      const unit = Math.round(ore.price * sellMultiplier(levels, isPremium(p)));
-      const gained = unit * args.qty;
+      // Harga per unit bisa pecahan (Regolith 0,1 KT) — total penjualan
+      // dibulatkan ke 1 desimal, BUKAN harga satuan (Math.round di
+      // satuan akan membuat Regolith bernilai 0 KT).
+      const gained = roundKt(ore.price * sellMultiplier(levels, isPremium(p)) * args.qty);
+      const newBalance = roundKt(p.ktBalance + gained);
       await db
         .update(schema.inventory)
         .set({ qty: held - args.qty })
@@ -1985,12 +2111,12 @@ export const gameActions = {
       await db
         .update(schema.player)
         .set({
-          ktBalance: p.ktBalance + gained,
-          totalKtEarned: p.totalKtEarned + gained,
+          ktBalance: newBalance,
+          totalKtEarned: roundKt(p.totalKtEarned + gained),
         })
         .where(eq(schema.player.id, p.id));
-      await logActivity(db, p.id, "sell", `Menjual ${args.qty} ${ore.name} seharga ${gained} KT.`, gained);
-      return { ok: true, error: null, ktGained: gained, ktBalance: p.ktBalance + gained };
+      await logActivity(db, p.id, "sell", `Menjual ${args.qty} ${ore.name} seharga ${fmtKt(gained)} KT.`, gained);
+      return { ok: true, error: null, ktGained: gained, ktBalance: newBalance };
     },
   }),
 
@@ -2016,9 +2142,12 @@ export const gameActions = {
       for (const row of invRows) {
         const ore = oreById(row.oreId);
         if (!ore || row.qty <= 0) continue;
-        gained += Math.round(ore.price * mult) * row.qty;
+        // Per-baris dibulatkan ke 1 desimal (harga bisa pecahan) —
+        // total akhir dibulatkan sekali lagi di bawah.
+        gained += roundKt(ore.price * mult * row.qty);
         count += row.qty;
       }
+      gained = roundKt(gained);
       if (count === 0) {
         return { ok: false, error: "Kargo kosong — belum ada mineral untuk dijual.", ktGained: 0, ktBalance: p.ktBalance };
       }
@@ -2035,15 +2164,16 @@ export const gameActions = {
             );
         }
       }
+      const newBalance = roundKt(p.ktBalance + gained);
       await db
         .update(schema.player)
         .set({
-          ktBalance: p.ktBalance + gained,
-          totalKtEarned: p.totalKtEarned + gained,
+          ktBalance: newBalance,
+          totalKtEarned: roundKt(p.totalKtEarned + gained),
         })
         .where(eq(schema.player.id, p.id));
-      await logActivity(db, p.id, "sell", `Menjual semua mineral (${count} unit) seharga ${gained} KT.`, gained);
-      return { ok: true, error: null, ktGained: gained, ktBalance: p.ktBalance + gained };
+      await logActivity(db, p.id, "sell", `Menjual semua mineral (${count} unit) seharga ${fmtKt(gained)} KT.`, gained);
+      return { ok: true, error: null, ktGained: gained, ktBalance: newBalance };
     },
   }),
 
@@ -2067,7 +2197,7 @@ export const gameActions = {
       if (level >= def.maxLevel) return fail(`${def.name} sudah level maksimum.`);
       const cost = upgradeCost(def, level);
       if (p.ktBalance < cost)
-        return fail(`KT tidak cukup — butuh ${cost} KT, saldo kamu ${p.ktBalance} KT.`);
+        return fail(`KT tidak cukup — butuh ${cost} KT, saldo kamu ${fmtKt(p.ktBalance)} KT.`);
       const existing = await db
         .select()
         .from(schema.upgrades)
@@ -2093,9 +2223,10 @@ export const gameActions = {
           .insert(schema.upgrades)
           .values({ playerId: p.id, upgradeId: def.id, level: 1 });
       }
+      const newBalance = roundKt(p.ktBalance - cost);
       await db
         .update(schema.player)
-        .set({ ktBalance: p.ktBalance - cost })
+        .set({ ktBalance: newBalance })
         .where(eq(schema.player.id, p.id));
       await logActivity(db, p.id, "upgrade", `${def.name} naik ke level ${level + 1}.`, -cost);
       return {
@@ -2103,17 +2234,17 @@ export const gameActions = {
         error: null,
         newLevel: level + 1,
         costPaid: cost,
-        ktBalance: p.ktBalance - cost,
+        ktBalance: newBalance,
       };
     },
   }),
 
   requestWithdrawal: defineGameAction({
     description:
-      "Creates a withdrawal request: locks the KT and puts the request in the owner's manual payout queue with the player's GRAM wallet address. Anti-cheat: the amount arrives in KT and is fully re-validated server-side — it must be a multiple of 500 KT (0,5 GRAM steps), must meet the escalating minimum computed here from the player's paid-WD history (first paid WD: 500 KT, then 1.000 / 2.000 / 3.000 / 5.000 / 10.000 KT), and must fit the server-side balance. The client cannot lower the minimum or inflate the balance.",
+      "Creates a withdrawal request: locks the KT and puts the request in the owner's manual payout queue with the player's GRAM wallet address. Anti-cheat: the amount arrives in KT and is fully re-validated server-side — it must be a multiple of 500 KT (0,5 GRAM steps), must meet the two-tier minimum computed here from the player's paid-WD history (first WD: 500 KT, repeat WDs: 5.000 KT flat), and must fit the server-side balance. The client cannot lower the minimum or inflate the balance.",
     request: z.object({
       walletAddress: z.string().trim().min(10).max(120),
-      amountKt: z.number().int().min(WD_STEP_KT).max(1000000),
+      amountKt: z.number().int().min(WD_STEP_KT).max(10000000),
     }),
     response: resultShape.extend({
       wdId: z.number().nullable(),
@@ -2132,12 +2263,12 @@ export const gameActions = {
       if (amountKt < minKt)
         return fail(
           paidCount === 0
-            ? `Minimum WD pertama adalah ${minKt} KT (0,5 GRAM) — kamu mengajukan ${amountKt} KT. Kumpulkan ${minKt - amountKt} KT lagi.`
-            : `Minimum WD naik setelah WD dibayar: kamu sudah ${paidCount}× WD terbayar, jadi minimum WD berikutnya ${minKt} KT (${minKt / KT_PER_GRAM} GRAM) — kamu mengajukan ${amountKt} KT.`,
+            ? `Minimum WD pertama adalah ${minKt.toLocaleString("id-ID")} KT (${minKt / KT_PER_GRAM} GRAM) — kamu mengajukan ${amountKt.toLocaleString("id-ID")} KT. Kumpulkan ${(minKt - amountKt).toLocaleString("id-ID")} KT lagi.`
+            : `Minimum WD setelah WD pertama adalah 5.000 KT (5 GRAM) — kamu sudah ${paidCount}× WD terbayar, jadi minimum WD tetap 5.000 KT — kamu mengajukan ${amountKt.toLocaleString("id-ID")} KT.`,
         );
       if (p.ktBalance < amountKt)
         return fail(
-          `Saldo KT tidak cukup — WD ${amountGram} GRAM butuh ${amountKt} KT, saldo kamu ${p.ktBalance} KT.`,
+          `Saldo KT tidak cukup — WD ${amountGram} GRAM butuh ${amountKt} KT, saldo kamu ${fmtKt(p.ktBalance)} KT.`,
         );
       const inserted = await db
         .insert(schema.wdRequests)
@@ -2151,9 +2282,10 @@ export const gameActions = {
         .returning({ id: schema.wdRequests.id });
       const row = inserted[0];
       if (!row) return fail("Gagal membuat permintaan WD, coba lagi.");
+      const newBalance = roundKt(p.ktBalance - amountKt);
       await db
         .update(schema.player)
-        .set({ ktBalance: p.ktBalance - amountKt })
+        .set({ ktBalance: newBalance })
         .where(eq(schema.player.id, p.id));
       await logActivity(
         db,
@@ -2162,7 +2294,7 @@ export const gameActions = {
         `Permintaan WD ${amountGram} GRAM (${amountKt} KT) dibuat — menunggu diproses pemilik.`,
         -amountKt,
       );
-      return { ok: true, error: null, wdId: row.id, ktBalance: p.ktBalance - amountKt };
+      return { ok: true, error: null, wdId: row.id, ktBalance: newBalance };
     },
   }),
 
@@ -2196,10 +2328,10 @@ export const gameActions = {
         .where(eq(schema.wdRequests.id, wd.id));
       await db
         .update(schema.player)
-        .set({ ktBalance: p.ktBalance + wd.amountKt })
+        .set({ ktBalance: roundKt(p.ktBalance + wd.amountKt) })
         .where(eq(schema.player.id, p.id));
       await logActivity(db, p.id, "wd_cancel", `WD #${wd.id} dibatalkan pemain — ${wd.amountKt} KT dikembalikan.`, wd.amountKt);
-      return { ok: true, error: null, ktBalance: p.ktBalance + wd.amountKt };
+      return { ok: true, error: null, ktBalance: roundKt(p.ktBalance + wd.amountKt) };
     },
   }),
 
@@ -2274,7 +2406,7 @@ export const gameActions = {
         .where(eq(schema.wdRequests.id, wd.id));
       await db
         .update(schema.player)
-        .set({ ktBalance: target.ktBalance + wd.amountKt })
+        .set({ ktBalance: roundKt(target.ktBalance + wd.amountKt) })
         .where(eq(schema.player.id, target.id));
       await logActivity(db, wd.playerId, "wd_reject", `WD #${wd.id} ditolak — ${wd.amountKt} KT dikembalikan ke saldo pemain.`, wd.amountKt);
       return { ok: true, error: null, status: "rejected" as const };

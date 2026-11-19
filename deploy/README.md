@@ -19,6 +19,7 @@ Telegram Mini App, dengan database **Neon Postgres**. Aturan utamanya:
 | `api/_lib/telegram.ts` | Validasi Telegram WebApp `initData` server-side (HMAC-SHA256 sesuai spesifikasi Telegram, `auth_date` maks 24 jam) — identitas pemain tidak pernah dipercaya dari klien. Tanpa `initData`, request dianggap pemain web lama. |
 | `deploy/neon/migration-0001-telegram-id.sql` | Migrasi untuk database yang SUDAH berisi tabel versi single-player: menambah `player.telegram_id` + `player_id` di semua tabel per-pemain (data lama dianggap milik pemain web id=1, tidak hilang). |
 | `deploy/neon/migration-0002-anticheat.sql` | Migrasi untuk database yang SUDAH berisi tabel: menambah kolom anti-cheat di `player` (`risk_score`, `flag_reason`, `flagged_at`, `instant_collect_streak`, `tamper_count`, `tamper_since`, `last_eval_hour`, `username`) + tabel `security_flags` (jejak audit) dan `player_ip` (IP per pemain). Idempotent — aman dijalankan ulang. **Jalankan sebelum redeploy kode anti-cheat** (setelah migration-0001 bila database lama). Database kosong tidak perlu: `init.sql` sudah berisi semua ini. |
+| `deploy/neon/migration-0003-fractional-kt.sql` | Migrasi untuk database yang SUDAH berisi tabel: mengubah `player.kt_balance`, `player.total_kt_earned`, dan `activity.amount_kt` dari INTEGER ke DOUBLE PRECISION — KT kini pecahan (Regolith 0,1 KT, rebalance #5: semua penghasilan KT ÷10). Idempotent — aman dijalankan ulang (ALTER hanya berjalan bila kolomnya masih INTEGER). **Jalankan sebelum redeploy kode rebalance #5** (setelah migration-0002). Database kosong tidak perlu: `init.sql` terbaru sudah berisi tipe baru. |
 | `api/_lib/anticheat.ts` | Deteksi bot server-side (lihat bagian Anti-cheat di bawah). |
 | `client/` | Client React yang sama, dibangun mandiri dengan esbuild + Tailwind CLI (`client/build.mjs`) — tanpa SDK Muse. |
 | `deploy/neon/init.sql` | Skema Postgres lengkap (player, inventory, upgrades, wd_requests, premium_orders, activity) untuk database Neon yang masih kosong. Idempotent — aman dijalankan ulang. |
@@ -41,6 +42,12 @@ Telegram Mini App, dengan database **Neon Postgres**. Aturan utamanya:
    `risk_score`/tabel `security_flags`/`player_ip`, dan kode baru
    membutuhkannya. Urutan: 0001 dulu, baru 0002. Database kosong
    tidak perlu migrasi: `init.sql` terbaru sudah berisi semuanya.
+   **Sudah pernah deploy sebelum rebalance #5 (KT pecahan)?** Setelah
+   migration-0002, jalankan juga
+   `deploy/neon/migration-0003-fractional-kt.sql` (sekali saja, aman
+   dijalankan ulang) — database lama masih menyimpan saldo KT sebagai
+   INTEGER dan kode baru menulis saldo pecahan 0,1 KT. Urutan: 0001,
+   0002, baru 0003.
 2. **Import project ke Vercel**: New Project → pilih folder/repo ini.
    `vercel.json` sudah mengatur output ke `client/dist` dan functions
    ke `api/`, jadi tidak ada build command tambahan yang perlu diisi.

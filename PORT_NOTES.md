@@ -61,14 +61,17 @@ machine. The live Muse-hosted game was not touched.
 - `deploy/neon/init.sql` / `schema.pg.ts`: unchanged except comments.
 
 **Unchanged game rules** (owner-settled, verified in the smoke test):
-KT economy (1,000 KT = 1 GRAM, sell prices at the patched level),
-escalating WD minimum (500 → 1,000 → 2,000 → 3,000 → 5,000 →
-10,000 KT, 500 KT steps, computed from paid-WD history), manual WD
-payout (no smart contract, reject/cancel refunds in full), Premium in
-Telegram Stars only (Standard 150/7d, Pro 500/30d, Pro = dual drill),
-power (1/4 min regen, Tangki = capacity only, Reaktor = −10%/level),
-scan 2.5 min base with map factors ×1/×1.3/×1.6/×2.0/×2.5, 5 maps
-with their gems and challenges, ads 10/day +15 KT with 60s cooldown,
+KT economy (1,000 KT = 1 GRAM, sell prices at the rebalance #5
+level — Regolith 0,1 KT, fractional balances),
+two-tier WD minimum (first WD 500 KT = 0,5 GRAM; repeat WDs
+minimum 5.000 KT = 5 GRAM FLAT — the escalating ladder was
+ABOLISHED 2026-11-19, see rebalance #4 below; 500 KT steps,
+computed from paid-WD history), manual WD payout (no smart
+contract, reject/cancel refunds in full), Premium in Telegram Stars
+only (Standard 150/7d, Pro 500/30d, Pro = dual drill), power (1/4
+min regen, Tangki = capacity only, Reaktor = −10%/level), scan 2.5
+min base with map factors ×1/×1.3/×1.6/×2.0/×2.5, 5 maps with their
+gems and challenges, ads 10/day +1,5 KT with 60s cooldown,
 server-side validation of everything.
 
 ## Per-player sessions — Telegram initData (2026-11-18, implemented, NOT yet deployed)
@@ -126,10 +129,10 @@ payloads get independent players/balances/inventory, tampered/
 stale/wrong-token initData rejected, missing BOT_TOKEN fails
 closed, non-admin cannot approve WD / confirm Premium / grant
 Premium, admin approve→pay lands on the WD owner's row and the
-escalating WD minimum rises per-player, legacy no-initData path
-still works as a REGULAR (non-admin) player id=1 that can play but
-cannot run any admin action. All 13 tests pass, 3 consecutive
-runs.
+two-tier WD minimum (500 KT first, 5.000 KT flat after) applies
+per-player, legacy no-initData path still works as a REGULAR
+(non-admin) player id=1 that can play but cannot run any admin
+action. All 13 tests pass, 3 consecutive runs.
 
 ## Admin is Telegram-only (2026-11-18, tightening — NOT yet deployed)
 
@@ -197,9 +200,11 @@ ADMIN_TELEGRAM_ID in Vercel.
   veins → expedition completion (bonus 12 KT, sector 2), sell-all,
   upgrade purchase, map travel locks, WD below-minimum rejection,
   WD approve → pay, WD minimum escalating 500 → 1,000 KT after the
-  first paid WD, Premium order (500 Stars) → confirm → Pro with dual
-  drill + regen 120s, abandon asteroid, cancel job, and the
-  mission/economy activity split. The test swaps only the driver
+  first paid WD (rule as of 2026-11-18; ABOLISHED 2026-11-19, see
+  rebalance #4 — now 500 KT first, 5.000 KT flat after), Premium
+  order (500 Stars) → confirm → Pro with dual drill + regen 120s,
+  abandon asteroid, cancel job, and the mission/economy activity
+  split. The test swaps only the driver
   (node-postgres instead of Neon HTTPS) via `mock.module` on
   `api/_lib/store.ts`; the handlers, queries, and schema are the real
   code. Test file: `/tmp/smoke-test/game.test.ts` (not committed).
@@ -207,7 +212,7 @@ ADMIN_TELEGRAM_ID in Vercel.
   are rejected at the zod request layer (HTTP 400, generic message),
   because the request schema has `.min(500)` — same as the Muse
   version, where the SDK validated the same way. Amounts ≥ 500 KT
-  below the escalating minimum get the handler's detailed message.
+  below the two-tier minimum get the handler's detailed message.
 
 ## Anti-cheat — automated bot detection + admin review (2026-11-19, implemented, NOT yet deployed)
 
@@ -257,21 +262,20 @@ ADMIN_TELEGRAM_ID in Vercel.
   Premium changed.
 - Detection functions swallow their own errors so detection never
   breaks gameplay.
-- Tested locally (Postgres 16, `astra_test`): **21/21 tests pass,
-  6 consecutive runs, 0 fail** — 7 anti-cheat tests (67 expects:
-  bot pattern flagged with the right reason, 24h cooldown, human
-  play stays clean, 5× early collect → tamper flag, flagged WD
-  `needsReview` + appears in admin `flaggedPlayers`, multi-account
-  4/IP flagged vs 3/IP clean, flagged player still plays normally,
-  admin clear → drops off the list, non-admin cannot clear), plus
-  the recreated regression suites: 8 game tests + 6 Telegram
-  session tests (player creation, daily bonus, ads, full
-  scan→mine→expedition cycle, sell, upgrade, map locks, WD
-  escalating minimum 500→1,000, Premium Pro, cancel/abandon, log
-  split; independent players, forged/stale/wrong-token initData
-  rejected, non-admin blocked from admin actions, admin approve→pay
-  lands on the owner's row, legacy web player is non-admin). Test
-  files: `/tmp/smoke-test/{anticheat,game,telegram}.test.ts`
+- Tested locally (Postgres 16, `astra_test`): **37/37 tests pass,
+  0 fail** — 7 anti-cheat tests (61 expects: bot pattern flagged
+  with the right reason, 24h cooldown, human play stays clean, 5×
+  early collect → tamper flag, flagged WD `needsReview` + appears
+  in admin `flaggedPlayers`, multi-account 4/IP flagged vs 3/IP
+  clean, flagged player still plays normally, admin clear → drops
+  off the list, non-admin cannot clear), plus the recreated
+  regression suites: 9 game tests (48 expects) + 9 Telegram session
+  tests (27 expects) + 12 economy tests (66 expects — the two-tier
+  WD rule and the simulation assertions, see rebalance #4 below).
+  Each file run 3+ consecutive times; the game file ran 5× after one
+  flake was found and fixed (a fresh asteroid can have 2 distinct
+  veins because same-ore rolls merge — the test asserted ≥3). Test
+  files: `/tmp/smoke-test/{anticheat,game,telegram,economy}.test.ts`
   (not committed). `bun run typecheck` 0 errors under strict AND
   Vercel-style (`--strictNullChecks false`) settings;
   `bun run build:client` OK.
@@ -325,3 +329,301 @@ ADMIN_TELEGRAM_ID in Vercel.
    safe to re-run; run AFTER migration-0001), and redeploy. Until
    then the live deployment has no bot detection. See
    `deploy/README.md` → "Anti-cheat otomatis (deteksi bot)".
+10. **Rebalance #5 — fractional KT (2026-11-19, code ready in
+    this dir, NOT yet deployed):** push this directory, then in
+    Neon run `deploy/neon/migration-0003-fractional-kt.sql` once
+    (idempotent — safe to re-run; run AFTER migration-0002), and
+    redeploy. Until then the live deployment still pays integer
+    KT at the old rates. See `deploy/README.md` → "Langkah
+    deploy" and the rebalance #5 section below.
+
+## Economy rebalance #3 — conversion + WD ladder (2026-11-19, implemented, NOT yet deployed)
+
+**SUPERSEDED 2026-11-19 by rebalance #4 below: the WD ladder
+(75.000 → 1.500.000 KT) is ABOLISHED. The price cuts from #3 STAY
+(Regolith 1, Kondrit 2, Besi-Nikel 5, Kobalt 10, Platinum 45,
+Iridium 144, Helium-3 360 KT; map gems unchanged).** The rest of
+this section is kept as the record of what #3 was.
+
+Owner decision: first WD for an ACTIVE player WITHOUT upgrades takes
+10+ days (10 days = the lucky/max-effort case); casual players take
+much longer; players WITH upgrades reach it MUCH faster (upgrade-first
+economy). Principle: "boleh mahal asal langka" — only small-tier prices
+cut, rares stay expensive. Ratio stays 1.000 KT = 1 GRAM, WD amounts in
+500 KT (0,5 GRAM) steps. Ads (+15 KT, max 10/day) and daily bonus
+(25 KT) UNCHANGED; power costs/regen, scan/drill times, map factors,
+Premium, upgrade costs/effects all UNCHANGED. No DB migration needed —
+prices and ladder are code constants in `api/_lib/game.ts`.
+
+New base prices (KT): Regolith 2→**1**, Kondrit 6→**2**, Besi-Nikel
+14→**5**, Kobalt 30→**10**, Platinum 66→**45**, Iridium 144 (unchanged),
+Helium-3 360 (unchanged). All map gems unchanged (Opal 39 … Voidium
+1.440). New WD ladder (KT, per paid-WD count, capped at last rung):
+**75.000 → 150.000 → 300.000 → 450.000 → 750.000 → 1.500.000**
+(old: 500 → 1.000 → 2.000 → 3.000 → 5.000 → 10.000). First minimum
+75.000 KT = 75 GRAM. The zod request floor stays `.min(500)` on
+purpose: 500 is the 0,5 GRAM granularity step, NOT the effective
+minimum — the ladder is enforced in the `requestWithdrawal` handler
+with the detailed message naming the minimum (raising the zod floor
+would swallow that message into a generic HTTP 400). Zod cap raised
+`.max(1000000)` → `.max(10000000)` so the top rung (1.500.000 KT) can
+be requested. WD minimum messages now use Indonesian thousand
+separators (`75.000 KT`). Client WD tab reads `wdMinKt`/`wdMinGram`
+from the server, so it needed no change except the hardcoded ladder
+text at `client/src/App.tsx` line 819 (now 75.000 → 1.500.000 KT).
+
+Simulated days-to-first-WD (Monte Carlo from the REAL loot generator,
+`generateExpedition` + real constants, 20k expeditions/map, with
+daily bonus + ads included; KT/tank: Map 1 ~142, Map 5 ~716):
+- Max-effort, no upgrades, 12 tanks/day (360 energy, theoretical
+  ceiling): **10 days** — the lucky case.
+- Max-effort, no upgrades, 8 tanks/day (240 energy): **14–15 days**.
+- Active, no upgrades (6 tanks/day, 5 ads): **21 days**.
+- Casual, no upgrades (1.5 tanks/day, 2 ads): **~82 days**.
+- Mid-upgraded (Negosiator/Ransel/Bor/Pemindai/Tangki/Beliung level 5,
+  ~608 energy/day, 10 ads): **4 days** — upgrades cut the wait to
+  ~1/5 of the max-effort time.
+Ads + bonus alone (175 KT/day) need 429 days to reach 75.000 KT, so
+the floor cannot shortcut the first WD. The ~82-day casual figure is
+a direct consequence of the 10-day-at-max-effort requirement.
+
+Verified locally (2026-11-19): `bun run typecheck` 0 errors (strict
+AND Vercel-style `--strictNullChecks false`), `bun run build:client`
+OK, full suite 26/26 pass × 3 consecutive runs vs local Postgres
+(`/tmp/smoke-test/`: `economy.test.ts` new — prices, WD below minimum
+rejected with the correct minimum in the message, WD at exactly
+75.000 succeeds and escalates to 150.000, ladder rungs + cap at
+1.500.000, simulation assertions computed from the real constants;
+`game.test.ts`, `telegram.test.ts`, `anticheat.test.ts` updated to the
+new ladder amounts). NOT verified live.
+
+## Economy rebalance #4 — WD ladder ABOLISHED, two-tier minimum + bankruptcy recalculation (2026-11-19, implemented, NOT yet deployed)
+
+Owner decision (2026-11-19 08:30 WITA, his words: "waduh jangan
+sampai saya malah bangkrut nih"): the escalating WD ladder from
+rebalance #3 is ABOLISHED. **New rule — two tiers, flat, no
+ladder: first WD minimum 500 KT (0,5 GRAM); second WD onwards
+minimum 5.000 KT (5 GRAM) FLAT.** Amounts stay in 500 KT (0,5
+GRAM) multiples, so a repeat WD can be 5.000, 5.500, 10.000 KT,
+etc. — 5.000 KT is the MINIMUM for repeat WDs, not an exact amount.
+Ratio stays 1.000 KT = 1 GRAM. The steep price curve from
+rebalance #3 STAYS (Regolith 1, Kondrit 2, Besi-Nikel 5, Kobalt 10,
+Platinum 45, Iridium 144, Helium-3 360 KT; map gems unchanged).
+Prices, power, timings, Premium, anti-cheat, and sessions are all
+UNCHANGED. No DB migration needed — the rule is code constants
+(`WD_FIRST_MIN_KT = 500`, `WD_REPEAT_MIN_KT = 5000`,
+`wdMinKtForPaidCount` in `api/_lib/game.ts`); `paidCount` (paid-WD
+history) is the source of truth, so existing balances, inventory,
+upgrades, and WD history are untouched. The zod request floor stays
+`.min(500)` on purpose (0,5 GRAM granularity, not the effective
+minimum) and the cap stays `.max(10000000)`. Client WD tab reads
+`wdMinKt`/`wdMinGram` from the server; the hardcoded ladder copy at
+`client/src/App.tsx` line 819 now says "WD pertama 0,5 GRAM, WD
+berikutnya minimum 5 GRAM".
+
+### Recalculation — the bankruptcy math the owner asked for
+
+Monte Carlo from the REAL loot generator (`generateExpedition` +
+real constants, 20k expeditions/map) + a day-by-day simulation with
+sector/map progression, completion-bonus growth, daily bonus
+(25 KT) and ads included. Two independent runs agree within a few
+percent. KT per 30-energy tank, ore only (no upgrades, completion
+bonus excluded): Map 1 ~110, Map 2 ~131, Map 3 ~225, Map 4 ~459,
+Map 5 ~703 KT/tank. Profiles: (a) max-effort, no upgrades, 12
+tanks/day (360 energy, 10 ads); (b) active, no upgrades, 6
+tanks/day (180 energy, 5 ads); (c) casual, no upgrades, 1.5
+tanks/day (45 energy, 2 ads); (d) mid-upgrade, all upgrades level 5
+(~608 energy/day, 10 ads; costs 23.430 KT to buy all level 5).
+
+| Profile | Days to FIRST WD (500 KT) | Days between REPEAT WDs (5.000 KT) | GRAM in month 1 | GRAM / 30 days at steady state (days 46–60) |
+|---|---|---|---|---|
+| (a) Max-effort, no upgrades | 1 | ~0,4 | ~330 | ~524 |
+| (b) Active, no upgrades | 1 | ~0,9 | ~147 | ~200 |
+| (c) Casual, no upgrades | 2–3 | ~4 | ~29 | ~40 |
+| (d) Mid-upgrade (all lvl 5) | 1 | ~0,1 | ~1.175 | ~1.790 |
+
+Read it plainly: **the first WD is now day 1–3 for everyone**,
+and an active player without upgrades can WD 5 GRAM roughly every
+day — about 200 GRAM per player per month at steady state. A
+mid-upgrade player is ~1.790 GRAM/month. With 100 active players
+that is ~20.000 GRAM/month out of the owner's pocket.
+
+### Bankruptcy note — the threshold alone does NOT cap total payout
+
+The repeat-WD minimum (5.000 KT) only sets the SIZE of each WD.
+Total GRAM/month per player is bounded by EARNINGS (energy +
+loot + the completion bonus), not by the threshold: a player who
+earns 6.500 KT/day will simply WD 5.000 KT every ~0,9 days and
+still take ~200 GRAM/month. Raising the repeat minimum further
+would only make each WD bigger and rarer, not smaller in total —
+the money still leaves at the earnings rate.
+
+Two structural facts behind the numbers:
+- The expedition completion bonus (`10 + 2×sektor` KT) grows
+  WITHOUT LIMIT as the player's sector rises, and it is 24–38% of
+  an active player's earnings (casual ~9%). At sector 500 it pays
+  ~1.010 KT per expedition on top of the ore. No WD rule touches
+  this — it is the leak that keeps growing the longer someone plays.
+- The mid-upgrade profile starts fully upgraded; the 23.430 KT
+  upgrade investment is earned back in under a day at steady
+  rates, so upgrades do not slow a determined player down for long.
+
+### The 7-day WD cooldown — simulated, NOT implemented
+
+Same profiles, one WD max per 7 days per player (reported only, so
+the owner can decide):
+
+| Profile | Days between WDs | WDs / 30 days | GRAM / 30 days (WD = 5.000 KT each) |
+|---|---|---|---|
+| (a) Max-effort | 7 | 4,29 | ~21,4 |
+| (b) Active | 7 | 4,29 | ~21,4 |
+| (c) Casual | 7 | 4,29 | ~21,4 |
+| (d) Mid-upgrade | 7 | 4,29 | ~21,4 |
+
+Every profile earns 5.000 KT in under 7 days, so the cooldown
+binds everyone equally at ~21 GRAM/month. **BUT — and this is the
+catch — the cooldown caps total payout ONLY if each WD is also
+capped at 5.000 KT.** Without a per-WD maximum, a player simply
+banks a week's earnings and withdraws it all at once: with
+uncapped amounts the cooldown changes NOTHING about total GRAM
+(524 / 200 / 40 / 1.790 per 30 days, as above) — it only cuts the
+number of WDs to ~4,3/month. A cooldown that actually protects
+the owner needs a per-WD maximum alongside it (e.g. max 5.000 KT
+per WD). That combination is NOT implemented; it is the owner's
+decision.
+
+### Verified locally (2026-11-19)
+
+`bun run typecheck` 0 errors (strict AND Vercel-style
+`--strictNullChecks false`), `bun run build:client` OK, full suite
+37/37 pass vs local Postgres (`/tmp/smoke-test/`: `economy.test.ts`
+new — (a) WD below 500 rejected, (b) exactly 500 succeeds for a
+first-timer, (c) after one paid WD the minimum is 5.000 and a 2.000
+request is rejected, (d) a 5.000 repeat WD succeeds (and 5.500),
+(e) non-multiples of 500 rejected, (f) simulation assertions from
+the real constants; `game.test.ts`, `telegram.test.ts`,
+`anticheat.test.ts` regressions still pass). NOT verified live.
+NOT pushed to GitHub — awaiting the owner's decision on the
+cooldown and/or a per-WD maximum before pushing.
+
+**The #4 earnings numbers above are SUPERSEDED by rebalance #5
+below (same WD rule, income ÷10). The two-tier WD rule from #4
+(first 500 KT, repeat 5.000 KT flat) STAYS — only the earnings
+numbers changed.**
+
+## Economy rebalance #5 — ALL KT income ÷10, fractional KT (2026-11-19, implemented, NOT yet deployed)
+
+Owner decision (2026-11-19 08:51 WITA, his words: "tinggal kurangi
+saja pendapatan KT mereka beress" — just cut their KT income, keep
+it simple): **no cooldown, no per-WD maximum, no bonus cap.**
+Divide ALL KT income by 10 and nothing else. The WD rule from #4
+STAYS (first WD 500 KT = 0,5 GRAM, repeat WDs minimum 5.000 KT =
+5 GRAM flat, amounts in 500 KT multiples, ratio 1.000 KT = 1 GRAM).
+Upgrade costs UNCHANGED (they are sinks, not income). Power
+costs/regen, scan/drill times, map factors, Premium, anti-cheat,
+and sessions UNCHANGED.
+
+New prices (KT per unit): Regolith 1 → **0,1**, Kondrit 2 → **0,2**,
+Besi-Nikel 5 → **0,5**, Kobalt 10 → **1**, Platinum 45 → **4,5**,
+Iridium 144 → **14,4**, Helium-3 360 → **36**; map gems ÷10 too
+(Opal 39 → 3,9, Topaz 51 → 5,1, Turkuois 78 → 7,8, Ametis 105 →
+10,5, Zamrud 192 → 19,2, Rubi 252 → 25,2, Safir 420 → 42, Berlian
+570 → 57, Opal Es Hitam 900 → 90, Voidium 1.440 → **144**).
+Expedition bonus 10 + 2×sektor → **1 + 0,2×sektor** KT, daily
+bonus 25 → **2,5** KT, ads reward 15 → **1,5** KT (cap 10/day +
+60s cooldown unchanged). Faucet floor is now 2,5 + 15 = 17,5
+KT/day: ~29 days to a first WD and ~286 days to a repeat WD on
+faucet alone — it can no longer shortcut any WD.
+
+### Fractional balances — why DOUBLE PRECISION
+
+KT now moves in 0,1 KT steps, so `player.kt_balance`,
+`player.total_kt_earned` and `activity.amount_kt` are DOUBLE
+PRECISION (was INTEGER) in `deploy/neon/schema.pg.ts` +
+`deploy/neon/init.sql`, and `deploy/neon/migration-0003-fractional-kt.sql`
+(ALTERs, idempotent via `information_schema` checks — safe to
+re-run) migrates existing databases. DOUBLE PRECISION — not
+NUMERIC — because Drizzle maps it to a JS number in both drivers
+(Neon HTTPS and node-postgres); NUMERIC comes back as a string
+and would break every `p.ktBalance + x` (string concat) and every
+`z.number()` check. Float dust is prevented in code instead:
+every credit AND debit is rounded to 1 decimal at the point it
+touches the balance (`roundKt` in `api/_lib/game.ts`), and the
+client formatter (`fmt` in `App.tsx`) shows at most 1 decimal.
+One real bug this caught: the sell handlers used to round the
+UNIT price (`Math.round(ore.price × mult)`), which would have
+made Regolith worth 0 KT — the total sale is now rounded to 1
+decimal instead. WD request amounts stay integers (500 KT
+multiples); the zod floor stays `.min(500)`.
+
+### Recalculation (same Monte Carlo + day-by-day model as #4, real constants, 2 runs agreeing within a few percent)
+
+KT per 30-energy tank, ore only (no upgrades, completion bonus
+excluded): Map 1 ~11,1, Map 2 ~13,2, Map 3 ~23,7, Map 4 ~50,4,
+Map 5 ~80,0. Hull fees per tank (unchanged costs): Map 1–2 0,
+Map 3 ~9,6, Map 4 ~43,7, Map 5 ~99,3 — so Map 5 is NET-NEGATIVE
+on ore minus fees alone (−20 KT/tank); only the sector bonus
+makes the far maps pay. The sim now models the real game
+faithfully: fees are capped at the running balance (like
+collectJob's `min(damageFeeKt, ktBalance)` — the old sim
+subtracted full fees from a zero balance and went negative),
+and the simulated player mines the unlocked map with the best
+expected NET KT per energy instead of always the farthest map.
+
+| Profile | Days to FIRST WD (500 KT) | Days between REPEAT WDs (5.000 KT) | GRAM in month 1 | GRAM / 30 days, days 46–60 | Days to afford all lvl-5 upgrades (23.430 KT) |
+|---|---|---|---|---|---|
+| (a) Max-effort, no upgrades | 2 | ~2 | ~34 | ~108 | ~25 |
+| (b) Active, no upgrades | 5 | ~7 | ~10 | ~28 | ~50 |
+| (c) Casual, no upgrades | 16 | ~32 | ~1,2 | ~2,3 | >180 (never in horizon) |
+| (d) Mid-upgrade (all lvl 5) | 1 | ~1 | ~76 | ~262 | 14 (payback period — starts fully upgraded) |
+
+Read it plainly: 100 active players ≈ **2.800 GRAM/month** at
+days 46–60 (was ~20.000 in #4). An ACTIVE player needs ~50 days
+of earnings to afford all level-5 upgrades — upgrades now take
+~10× longer to afford, which itself brakes the upgraded-player
+payout problem.
+
+### Honest caveat — the cut is NOT a clean ÷10 on payout
+
+The ÷10 cut reduces payout ~5× (max-effort), ~7× (active),
+~17× (casual) at days 46–60 — not 10× — because the completion
+bonus (1 + 0,2×sektor) still grows WITHOUT LIMIT with sector and
+is now 86–93% of earnings (was 24–38% in #4): a rational player
+farms cheap Map 1, which gives the most bonus per energy (the
+bonus is the same on every map, but a Map 1 expedition costs
+~20 energy vs ~39 on Map 5). There is NO true steady state:
+at days 166–180 the same profiles pay ~349 / ~88 / ~6 / ~935
+GRAM per 30 days and keep climbing linearly with sector. Maps
+4–5 are now strictly worse than Map 1 for earning KT (only the
+sector bonus makes them pay at all, and Map 1 pays more bonus
+per energy) — they remain for variety and their exclusive gems,
+not for income. The owner chose this deliberately ("kurangi saja
+pendapatan, simpel") and declined the cooldown / per-WD-max /
+bonus-cap brakes, so these dynamics are the accepted trade-off
+of the simple cut.
+
+### Verified locally (2026-11-19)
+
+`bun run typecheck` 0 errors (strict AND Vercel-style
+`--strictNullChecks false`), `bun run build:client` OK.
+Migration-0003 applied to the local test DB twice (idempotent —
+`DO` both times, columns now DOUBLE PRECISION). Full suite
+**44/44 pass, 3 consecutive runs** vs local Postgres
+(`/tmp/smoke-test/`: `economy.test.ts` 19/19 — fractional sell
+prices in the response (Regolith 0,1 KT), 3 Regolith = 0,3 KT,
+10× 0,1 KT credits = exactly 1 KT (no float dust), mixed-ore
+sellAll = 1,2 KT, daily bonus 2,5 KT, expedition bonus 1,2 KT
+at sector 1, WD rules unchanged, simulation assertions from the
+real constants; `game.test.ts` 9/9, `telegram.test.ts` 9/9,
+`anticheat.test.ts` 7/7 regressions). NOT verified live.
+NOT pushed to GitHub.
+
+### Deploy steps (owner, in order)
+
+1. Push this directory to GitHub, then in Neon run
+   `deploy/neon/migration-0002-anticheat.sql` (if not done yet)
+   and then `deploy/neon/migration-0003-fractional-kt.sql` —
+   both idempotent, safe to re-run. Database kosong tidak perlu
+   migrasi: `init.sql` terbaru sudah berisi semuanya.
+2. Redeploy on Vercel. Until then the live deployment still runs
+   integer-KT balances and the old income rates.
