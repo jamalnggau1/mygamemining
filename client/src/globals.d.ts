@@ -28,4 +28,24 @@ interface Window {
   Telegram?: {
     WebApp?: TelegramWebApp;
   };
+  Adsgram?: {
+    init: (params: { blockId: string }) => AdsgramAdController;
+  };
+}
+
+// Minimal AdsGram SDK typing — only the Rewarded surface the game
+// uses (docs.adsgram.ai/publisher/reward-interstitial-integration).
+// window.Adsgram is absent if the SDK script fails to load, so every
+// access is guarded at runtime in client/src/ads.ts.
+interface AdsgramShowResult {
+  /** true only when the user watched the ad till the end (Rewarded). */
+  done: boolean;
+  description: string;
+  state: "load" | "render" | "playing" | "destroy";
+  /** true if the event was emitted due to an error. */
+  error: boolean;
+}
+
+interface AdsgramAdController {
+  show: () => Promise<AdsgramShowResult>;
 }

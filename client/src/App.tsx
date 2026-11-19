@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, getTelegramSessionInfo, type ApiResponse } from "./api";
+import { isAdsConfigured, showRewardedAd } from "./ads";
 import heroImg from "./assets/hero.webp";
 import asteroidImg from "./assets/asteroid.webp";
 import oresImg from "./assets/ores.webp";
@@ -539,6 +540,9 @@ export function App() {
   const showBanner = (kind: "good" | "bad" | "info", text: ReactNode) => { setBanner({ kind, text }); setBannerId((i) => i + 1); };
   const [burst, setBurst] = useState<Burst | null>(null);
   const [balanceGlow, setBalanceGlow] = useState(false);
+  // True while an AdsGram rewarded ad is playing — the "Tonton Iklan"
+  // button stays disabled so a second ad cannot be opened mid-play.
+  const [adPlaying, setAdPlaying] = useState(false);
   const prevBalanceRef = useRef<number | null>(null);
   const state = useQuery({ queryKey: ["game-state"], queryFn: () => api.getGameState({}), refetchInterval: 5000 });
   const refresh = () => queryClient.invalidateQueries({ queryKey: ["game-state"] });
@@ -627,6 +631,27 @@ export function App() {
   });
   const claimBonus = useMutation({ mutationFn: () => api.claimDailyBonus({}), onSuccess: (r) => { showResult(r.ok, r.error, `Bonus misi harian +${fmt(r.bonusKt)} KT masuk ke saldo!`); refresh(); } });
   const watchAd = useMutation({ mutationFn: () => api.watchAd({}), onSuccess: (r) => { showResult(r.ok, r.error, <>Iklan selesai — hadiah +{fmt(r.rewardKt)} KT masuk ke saldo! Sisa kuota iklan hari ini: {r.remainingToday}×.</>); if (r.ok) fireBurst("mine"); refresh(); } });
+  /** "Tonton Iklan": when a blockId is configured, a real AdsGram
+   *  rewarded ad must be watched to the end FIRST — KT is granted
+   *  only on success, via the unchanged server watchAd action. With
+   *  no blockId configured the button keeps its current direct-reward
+   *  behavior until the owner activates ads. */
+  const handleWatchAd = async () => {
+    if (watchAd.isPending || adPlaying) return;
+    if (isAdsConfigured()) {
+      setAdPlaying(true);
+      try {
+        const watched = await showRewardedAd();
+        if (!watched) {
+          showBanner("bad", "Iklan belum tersedia, coba lagi nanti");
+          return;
+        }
+      } finally {
+        setAdPlaying(false);
+      }
+    }
+    watchAd.mutate();
+  };
   const sellAll = useMutation({ mutationFn: () => api.sellAllOre({}), onSuccess: (r) => { showResult(r.ok, r.error, `Semua mineral terjual di Stasiun Orbital: +${fmt(r.ktGained)} KT.`); refresh(); } });
   const sellOne = useMutation({ mutationFn: (args: { oreId: string; qty: number }) => api.sellOre(args), onSuccess: (r) => { showResult(r.ok, r.error, `Terjual: +${fmt(r.ktGained)} KT.`); refresh(); } });
   const buy = useMutation({ mutationFn: (upgradeId: string) => api.buyUpgrade({ upgradeId }), onSuccess: (r) => { showResult(r.ok, r.error, `Upgrade terpasang (level ${r.newLevel ?? "?"}) seharga ${fmt(r.costPaid)} KT.`); refresh(); } });
@@ -701,16 +726,18 @@ export function App() {
           </div>
           {p.canClaimDailyBonus && (<button type="button" onClick={() => claimBonus.mutate()} disabled={claimBonus.isPending} className="btn-press mt-3 inline-flex w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-cyan-400 bg-cyan-400/10 px-4 py-2 font-bold text-cyan-200"><GiftIcon size={17} /> Klaim Bonus Misi Harian +{fmt(p.dailyBonusKt)} KT</button>)}
           <div className="mt-3">
-            <button type="button" onClick={() => watchAd.mutate()} disabled={watchAd.isPending || !p.ads.canWatch} aria-label={`Tonton iklan sponsor dan dapatkan ${fmt(p.ads.rewardKt)} KT, sisa ${p.ads.remainingToday} dari ${p.ads.dailyCap} kali hari ini`} className="btn-press inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-amber-400 to-yellow-500 px-4 py-2.5 font-display text-sm text-black shadow-lg shadow-amber-500/20 disabled:opacity-40">
+            <button type="button" onClick={handleWatchAd} disabled={watchAd.isPending || adPlaying || !p.ads.canWatch} aria-label={`Tonton iklan sponsor dan dapatkan ${fmt(p.ads.rewardKt)} KT, sisa ${p.ads.remainingToday} dari ${p.ads.dailyCap} kali hari ini`} className="btn-press inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-amber-400 to-yellow-500 px-4 py-2.5 font-display text-sm text-black shadow-lg shadow-amber-500/20 disabled:opacity-40">
               <PlayIcon size={18} />
-              {p.ads.remainingToday <= 0
-                ? "Kuota Iklan Hari Ini Habis"
-                : p.ads.cooldownRemainingSec > 0
-                  ? `Iklan Berikutnya dalam ${p.ads.cooldownRemainingSec} dtk…`
-                  : `Tonton Iklan — Dapat +${fmt(p.ads.rewardKt)} KT`}
+              {adPlaying
+                ? "Memutar Iklan…"
+                : p.ads.remainingToday <= 0
+                  ? "Kuota Iklan Hari Ini Habis"
+                  : p.ads.cooldownRemainingSec > 0
+                    ? `Iklan Berikutnya dalam ${p.ads.cooldownRemainingSec} dtk…`
+                    : `Tonton Iklan — Dapat +${fmt(p.ads.rewardKt)} KT`}
             </button>
             <p className="mt-1.5 text-center text-xs text-[var(--dim)]">
-              Slot iklan sponsor stasiun — penyedia iklan akan dipasang pemilik di tombol ini. Hadiah {fmt(p.ads.rewardKt)} KT per tontonan, maks {p.ads.dailyCap}× sehari ({p.ads.watchedToday}/{p.ads.dailyCap} terpakai), jeda {p.ads.cooldownSeconds} detik antar-iklan — semua batas dihitung &amp; divalidasi server.
+              Iklan sponsor AdsGram — aktif setelah pemilik memasukkan blockId dari partner.adsgram.ai; sampai saat itu tombol memberi hadiah langsung seperti biasa. Hadiah {fmt(p.ads.rewardKt)} KT per tontonan, maks {p.ads.dailyCap}× sehari ({p.ads.watchedToday}/{p.ads.dailyCap} terpakai), jeda {p.ads.cooldownSeconds} detik antar-iklan — semua batas dihitung &amp; divalidasi server.
             </p>
           </div>
         </section>

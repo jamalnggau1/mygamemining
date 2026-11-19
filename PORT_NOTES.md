@@ -1356,3 +1356,75 @@ idempotent, safe to re-run. **No new migration for #8** — the
 bonus is a code constant. Then redeploy on Vercel. Until then
 the live deployment still runs the #7 rates from the last push
 (commit `a27af6f0`).
+
+---
+
+## Iklan sponsor — AdsGram Rewarded (2026-11-19)
+
+### Design
+
+Telegram does NOT serve official ads inside a Mini App screen —
+Telegram Ads only run in channels and bot chats — so in-app rewarded
+ads need a third-party network. The game uses **AdsGram** (built for
+Telegram Mini Apps; docs: https://docs.adsgram.ai/publisher/reward-interstitial-integration):
+
+- SDK script in `client/index.html` (exact URL from the docs):
+  `<script src="https://sad.adsgram.ai/js/sad.min.js"></script>`
+- `client/src/ads.ts`: `ADSGRAM_BLOCK_ID` constant (empty placeholder
+  + TODO), lazy one-time `window.Adsgram.init({ blockId })`, and
+  `showRewardedAd(): Promise<boolean>` — true ONLY when
+  `AdController.show()` resolves with `done === true` (user watched
+  the Rewarded ad till the end, per the docs). False on reject
+  (no-fill, early close, error), on a 120-second hung-promise
+  timeout, or when the SDK/blockId is missing. Never throws.
+- `client/src/App.tsx`: the "Tonton Iklan" button calls
+  `showRewardedAd()` FIRST when a blockId is configured, and calls
+  the unchanged server `watchAd` action ONLY on true. On false it
+  shows "Iklan belum tersedia, coba lagi nanti" and grants NOTHING.
+  The button is disabled while an ad plays (`adPlaying`) so a second
+  ad cannot be opened mid-play.
+- Server action `watchAd` is UNCHANGED: +0,375 KT, max 10/day,
+  60-second cooldown, all recomputed server-side — the ad gate is an
+  extra client-side check, the server rules are still the source of
+  truth. No new migration, no new mechanic.
+
+### Dormant until the owner activates it
+
+`ADSGRAM_BLOCK_ID = ""` right now — there is no real blockId yet, so
+the button keeps its CURRENT behavior exactly (direct watchAd call,
+same server rules). Nothing about the game changes until the owner
+activates ads.
+
+### Activation (owner, one step)
+
+1. Register at https://partner.adsgram.ai, register this Mini App,
+   create a **Reward** ad unit, copy its `blockId`.
+2. Paste the blockId into `ADSGRAM_BLOCK_ID` in
+   `client/src/ads.ts` (replace the empty string).
+3. Push + redeploy on Vercel. From then on every "Tonton Iklan" tap
+   plays a real ad first; KT is granted only after the ad is watched
+   to the end.
+
+### Payout facts (AdsGram, per their docs/blog)
+
+Payouts in USDT on the TON network. Minimum withdrawal 10 USDT once
+a month (1st–5th), 100 USDT on any other day; requests processed
+within 1–3 business days. The owner needs a TON wallet ready before
+the first withdrawal. Honest note: ad revenue depends on real player
+volume — do not expect much until the game has real players.
+
+### CSP note
+
+`vercel.json` sets only `frame-ancestors` (Telegram embed rule) plus
+`X-Content-Type-Options` and `Referrer-Policy` — there is no
+`script-src` / `connect-src` / `frame-src` directive, so the AdsGram
+script and ad content load unblocked. No CSP change was needed; the
+Telegram frame-ancestors rule is untouched.
+
+### Verified locally (2026-11-19)
+
+`bun run typecheck` 0 errors (strict AND Vercel-style
+`--strictNullChecks false`), `bun run build:client` OK. Full suite
+60/60 pass vs local Postgres. NOT verified live (no blockId yet —
+live verification needs the owner to activate ads first, then one
+real ad watch end-to-end). NOT pushed to GitHub.
