@@ -1243,3 +1243,116 @@ it again.
 2. Redeploy on Vercel. Until then the live deployment still runs
    the old income rates, the GRAM labels, and the 14-day
    cooldown code from the last push (commit `759d08fb`).
+
+## Economy rebalance #8 — expedition completion bonus halved AGAIN (2026-11-19, implemented, NOT yet deployed)
+
+Why: the owner ordered it ("kurangi bonusnya, kenapa anda
+seperti tertahan tidak mau kurang") — and he is right. At #7
+the completion bonus is 85–89% of ALL KT earned (bonusShare in
+the sim); ore mining itself is only ~10%. The bonus IS the
+biggest lever and the main leak. Rebalances #5–#7 cut
+everything ÷2 each time but kept the bonus proportionally
+dominant; this one cuts ONLY the bonus.
+
+### What changed (bonus only — everything else untouched)
+
+Expedition completion bonus 0,25 + 0,05×sektor → **0,125 +
+0,025×sektor**, cap 17,5 → **8,75 KT**
+(`MAX_COMPLETION_BONUS_KT`, `completionBonusKt`). The cap still
+binds at sector 345 ((8,75 − 0,125) / 0,025 = 345), so the pace
+stays stable across horizons. Ore prices (Regolith 0,025 …
+Helium-3 9 KT), gems, daily bonus 0,625 KT, ads 0,375 KT,
+power, timings, upgrade costs, WD rule (first 100 KT, repeat
+5.000 KT flat, max 5.000 KT, no cooldown), Premium, anti-cheat,
+sessions, USDT — ALL UNCHANGED. No new mechanic, no cooldown.
+No new migration: the bonus is a code constant and the balance
+column is already DOUBLE PRECISION (migration-0003).
+
+### Recalculation (same Monte Carlo + day-by-day model as #4/#5/#6/#7, real constants, 2 runs agreeing within a few percent)
+
+KT per 30-energy tank, ore only (unchanged from #7): Map 1
+~2,8, Map 2 ~3,3, Map 3 ~5,9, Map 4 ~12,7, Map 5 ~19,9. Hull
+fees per tank: Map 1–2 0, Map 3 ~9,7, Map 4 ~44,4, Map 5
+~102,3 — Map 5 is still NET-NEGATIVE on ore minus fees alone
+(−82 KT/tank); only the sector bonus makes the far maps pay,
+and Map 1 still pays the most bonus per energy, so a
+KT-maximising player still farms Map 1.
+
+| Profile | Days to FIRST WD (100 KT) | Days between REPEAT WDs (5.000 KT), days 46–60 | Days between REPEAT WDs, days 166–180 | USDT in month 1 | USDT / 30 days, days 46–60 | USDT / 30 days, days 166–180 | Days to afford all lvl-5 upgrades (23.430 KT) |
+|---|---|---|---|---|---|---|---|
+| (a) Max-effort, no upgrades | 2 | ~25,3 | ~25,4 | ~4,4 | ~5,9 | ~5,9 | ~127 |
+| (b) Active, no upgrades | 4 | ~50,4 | ~50,4 | ~1,5 | ~3,0 | ~3,0 | >180 (never in horizon) |
+| (c) Casual, no upgrades | 15 | ~399 | ~192 | ~0,2 | ~0,4 | ~0,8 | >180 (never in horizon) |
+| (d) Mid-upgrade (all lvl 5) | 1 | ~12,8 | ~12,8 | ~10,2 | ~11,7 | ~11,7 | 64 (payback period — starts fully upgraded) |
+
+Read it plainly: **the ACTIVE repeat interval nearly DOUBLED
+— ~50 days to accumulate 5.000 KT, stable at both horizons**
+(50,4 vs 50,4 days). 100 active players ≈ **300 USDT/month**
+(was ~530 at #7). An ACTIVE player now needs MORE than 180
+days of earnings to afford all level-5 upgrades (was ~149) —
+the upgrade grind itself is now a ~6-month brake on the
+upgraded-player payout problem.
+
+Bonus share of earnings (bonus ÷ total earned): max-effort
+0,77–0,80, active 0,72–0,78, casual 0,37 → 0,65,
+mid-upgrade 0,66–0,68 (60-day window → 180-day steady state).
+Down from 85–89% at #7 — the bonus is still the biggest
+single source of KT, just less overwhelming. Ore mining is now
+~20–30% of earnings instead of ~10%.
+
+### Premium at #8 rates (same model + real Premium multipliers)
+
+| Profile | Standard: first WD / repeat interval / USDT per 30 days | Pro: first WD / repeat interval / USDT per 30 days |
+|---|---|---|
+| (a) Max-effort, no upgrades | 1 hari / ~12,5 hari / ~12,0 | 1 hari / ~12,5 hari / ~12,1 |
+| (b) Active, no upgrades | 2 hari / ~24,9 hari / ~6,0 | 2 hari / ~24,9 hari / ~6,0 |
+| (c) Casual, no upgrades | 7 hari / ~132 → ~97 hari / ~1,1 → ~1,5 | 7 hari / ~133 → ~98 hari / ~1,1 → ~1,5 |
+| (d) Mid-upgrade (all lvl 5) | 1 hari / ~6,2 hari / ~24,1 | 1 hari / ~6,2 hari / ~24,1 |
+
+Premium still roughly DOUBLES the payout rate, and Pro still
+earns the SAME as Standard (dual drill saves wall time only;
+energy binds, not time). Operation time still binds no profile
+(worst case mid-upgrade Standard ~211 min/day of job time, ~224
+taps/day).
+
+### HONEST NOTE — without a cooldown there is STILL no hard ceiling
+
+The fastest profiles still accumulate 5.000 KT in DAYS, not
+weeks — free mid-upgrade ~12,8 days (~11,7 USDT/month),
+Premium mid-upgrade ~6,2 days (~24,1 USDT/month), Premium
+max-effort ~12,5 days (~12 USDT/month). 100 Premium
+mid-upgrade players ≈ 2.400 USDT/month (was ~4.000 at #7).
+The only brakes left on a fast player are the upgrade cost
+itself (>180 days of active play to afford all level-5
+upgrades), the anti-cheat flags, and the owner's MANUAL WD
+approval — every WD still passes through Kendali, nothing is
+paid automatically. That is inherent to accumulation-based
+pacing: no timer, no ceiling. The tests pin this
+(economy.test.ts "HONEST NOTE" tests) instead of hiding it.
+
+### Verified locally (2026-11-19)
+
+`bun run typecheck` 0 errors (strict AND Vercel-style
+`--strictNullChecks false`), `bun run build:client` OK
+(`main-B52NVERI.js`). Full suite **60/60 pass, 3 consecutive
+runs** vs local Postgres (`/tmp/smoke-test/`: `economy.test.ts`
+— new bonus 0,15 KT at sector 1, cap binds at sector 345
+(8,75 KT), windowed sim assertions (active interval 48–53
+days at BOTH horizons, USDT/30d stable within 10%), bonus
+share thresholds (max >0,7, active >0,65, casual >0,3,
+mid >0,6), pinned HONEST NOTE tests (no ceiling: mid-upgrade
+~11,7 and Premium mid-upgrade ~24,1 USDT/month);
+`game.test.ts` expedition completion 0,15 KT; `ceiling.test.ts`,
+`telegram.test.ts`, `anticheat.test.ts` regressions). NOT
+verified live. NOT pushed to GitHub.
+
+### Deploy steps (owner, in order)
+
+Same as #7: push this directory to GitHub, then in Neon run
+`deploy/neon/migration-0002-anticheat.sql` (if not done yet),
+`deploy/neon/migration-0003-fractional-kt.sql`, and
+`deploy/neon/migration-0004-rename-gram-usdt.sql` — all
+idempotent, safe to re-run. **No new migration for #8** — the
+bonus is a code constant. Then redeploy on Vercel. Until then
+the live deployment still runs the #7 rates from the last push
+(commit `a27af6f0`).

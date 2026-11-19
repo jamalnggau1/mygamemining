@@ -297,6 +297,22 @@
 // That is inherent to accumulation-based pacing and the owner
 // was told so plainly.
 //
+// Economy rebalance #8 (2026-11-19, owner: "kurangi bonusnya" —
+// the bonus is 85–89% of ALL earnings at #7, so it is the biggest
+// lever and the main leak; ore is only ~10%): expedition bonus
+// halved AGAIN, 0,25 + 0,05×sektor → 0,125 + 0,025×sektor, cap
+// 17,5 → 8,75 KT (still binds at sector 345, so the pace stays
+// stable). Simulation (same Monte Carlo, verified numbers in
+// PORT_NOTES.md): ACTIVE free player now accumulates 5.000 KT in
+// ~50 days at BOTH horizons (~3 USDT/month); max-effort ~25 days
+// (~5,9 USDT/month), casual ~399 → ~192 days, mid-upgrade ~12,8
+// days (~11,7 USDT/month). Bonus share falls to ~66–80% of
+// earnings (was 85–89%). HONEST NOTE: still NO hard ceiling —
+// Premium mid-upgrade still accumulates 5.000 KT in ~6,2 days
+// (~24 USDT/month; 100 such players ≈ 2.400 USDT/month). An
+// ACTIVE player now needs >180 days to afford all level-5
+// upgrades (was ~149 days at #7).
+//
 // Sponsored ads (owner monetization slot):
 //   A "Tonton Iklan" button pays AD_REWARD_KT (0,375 KT) per view — the
 //   slot where the owner plugs in a real ad provider later. The
@@ -745,9 +761,18 @@ export function mineEnergyCost(vein: Vein, exp: Expedition): number {
 // PORT_NOTES.md, rebalance #7): it is the value that holds an
 // ACTIVE player's repeat-WD interval at ~28 days, stable from days
 // 46–60 through days 166–180.
-export const MAX_COMPLETION_BONUS_KT = 17.5;
+//
+// Rebalance #8 (2026-11-19, owner: "kurangi bonusnya" — the bonus
+// is 85–89% of ALL earnings at #7, so it is the biggest lever and
+// the main leak; ore mining is only ~10%): formula halved AGAIN
+// (0,125 + 0,025×sektor) AND the cap halved with it (17,5 → 8,75
+// KT). The cap still binds at the SAME sector 345
+// (0,125 + 0,025×345 = 8,75), so the pace stays stable across
+// horizons. Everything else is unchanged (ore, gems, daily bonus,
+// ads, power, timings, upgrade costs, WD rule, Premium).
+export const MAX_COMPLETION_BONUS_KT = 8.75;
 export function completionBonusKt(layer: number): number {
-  return roundKt(Math.min(0.25 + layer * 0.05, MAX_COMPLETION_BONUS_KT));
+  return roundKt(Math.min(0.125 + layer * 0.025, MAX_COMPLETION_BONUS_KT));
 }
 
 /** KT is fractional since rebalance #5 (Regolith 0,1 KT),
