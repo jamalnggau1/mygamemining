@@ -11,7 +11,7 @@
 // ad unit). Until a blockId is set, the button keeps its current
 // direct-reward behavior (server-validated watchAd) and no ad SDK
 // call is made at all.
-export const ADSGRAM_BLOCK_ID = "";
+export const ADSGRAM_BLOCK_ID: string = "60605";
 
 /** Rewarded ads are 15–30s; past this the SDK promise is treated as
  *  hung and the tap is answered "no ad" instead of blocking the UI. */
