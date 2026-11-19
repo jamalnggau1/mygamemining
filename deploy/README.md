@@ -20,6 +20,7 @@ Telegram Mini App, dengan database **Neon Postgres**. Aturan utamanya:
 | `deploy/neon/migration-0001-telegram-id.sql` | Migrasi untuk database yang SUDAH berisi tabel versi single-player: menambah `player.telegram_id` + `player_id` di semua tabel per-pemain (data lama dianggap milik pemain web id=1, tidak hilang). |
 | `deploy/neon/migration-0002-anticheat.sql` | Migrasi untuk database yang SUDAH berisi tabel: menambah kolom anti-cheat di `player` (`risk_score`, `flag_reason`, `flagged_at`, `instant_collect_streak`, `tamper_count`, `tamper_since`, `last_eval_hour`, `username`) + tabel `security_flags` (jejak audit) dan `player_ip` (IP per pemain). Idempotent — aman dijalankan ulang. **Jalankan sebelum redeploy kode anti-cheat** (setelah migration-0001 bila database lama). Database kosong tidak perlu: `init.sql` sudah berisi semua ini. |
 | `deploy/neon/migration-0003-fractional-kt.sql` | Migrasi untuk database yang SUDAH berisi tabel: mengubah `player.kt_balance`, `player.total_kt_earned`, dan `activity.amount_kt` dari INTEGER ke DOUBLE PRECISION — KT kini pecahan (Regolith 0,1 KT, rebalance #5: semua penghasilan KT ÷10). Idempotent — aman dijalankan ulang (ALTER hanya berjalan bila kolomnya masih INTEGER). **Jalankan sebelum redeploy kode rebalance #5** (setelah migration-0002). Database kosong tidak perlu: `init.sql` terbaru sudah berisi tipe baru. |
+| `deploy/neon/migration-0004-rename-gram-usdt.sql` | Migrasi untuk database yang SUDAH berisi tabel: mengganti NAMA kolom payout dari GRAM ke USDT — `player.total_wd_paid_gram` → `total_wd_paid_usdt`, `wd_requests.amount_gram` → `amount_usdt` (RENAME COLUMN saja, nilai tidak berubah). Mata uang payout pindah GRAM → USDT 2026-11-19; rasio tetap 1.000 KT = 1 USDT. Idempotent — aman dijalankan ulang (RENAME hanya berjalan bila kolom lama masih ada). **Jalankan sebelum redeploy kode USDT** (setelah migration-0003). Database kosong tidak perlu: `init.sql` terbaru sudah berisi nama baru. |
 | `api/_lib/anticheat.ts` | Deteksi bot server-side (lihat bagian Anti-cheat di bawah). |
 | `client/` | Client React yang sama, dibangun mandiri dengan esbuild + Tailwind CLI (`client/build.mjs`) — tanpa SDK Muse. |
 | `deploy/neon/init.sql` | Skema Postgres lengkap (player, inventory, upgrades, wd_requests, premium_orders, activity) untuk database Neon yang masih kosong. Idempotent — aman dijalankan ulang. |
@@ -48,6 +49,12 @@ Telegram Mini App, dengan database **Neon Postgres**. Aturan utamanya:
    dijalankan ulang) — database lama masih menyimpan saldo KT sebagai
    INTEGER dan kode baru menulis saldo pecahan 0,1 KT. Urutan: 0001,
    0002, baru 0003.
+   **Sudah pernah deploy sebelum payout USDT?** Setelah
+   migration-0003, jalankan juga
+   `deploy/neon/migration-0004-rename-gram-usdt.sql` (sekali saja, aman
+   dijalankan ulang) — database lama masih memakai nama kolom GRAM
+   (`total_wd_paid_gram`, `amount_gram`) dan kode baru membaca nama
+   kolom USDT. Urutan: 0001, 0002, 0003, baru 0004.
 2. **Import project ke Vercel**: New Project → pilih folder/repo ini.
    `vercel.json` sudah mengatur output ke `client/dist` dan functions
    ke `api/`, jadi tidak ada build command tambahan yang perlu diisi.
@@ -138,7 +145,7 @@ aturan). Setiap penandaan tercatat di tabel `security_flags`
   berjalan sebagai `POST /api/game` di atas Drizzle + Neon
   (`api/_lib/game.ts`, `api/_lib/store.ts`), dan client dibangun
   mandiri tanpa SDK Muse (`client/build.mjs`, esbuild + Tailwind CLI).
-  Ekonomi KT/GRAM, aturan WD, Premium, dan semua angka game tidak
+  Ekonomi KT/USDT, aturan WD, Premium, dan semua angka game tidak
   berubah — yang pindah hanya sumber databasenya.
 - Yang masih harus dilakukan pemilik sebelum game bisa dimainkan di
   Vercel: langkah 1–4 di atas (tabel Neon, import Vercel, `DATABASE_URL`,

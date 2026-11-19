@@ -41,7 +41,7 @@
 //   order in-game, pays Stars to the owner in Telegram, and the owner
 //   confirms the order from the Kendali tab, which activates the pass.
 //   The owner can also grant a tier directly (grantPremium) after any
-//   off-platform payment. Premium never changes the KT→GRAM ratio or
+//   off-platform payment. Premium never changes the KT→USDT ratio or
 //   the WD rules.
 //
 // Energy economy (owner-requested rebalance, finishing pass):
@@ -75,18 +75,18 @@
 //
 // Economy (fixed by the owner):
 //   Coin A = Kredit Tambang Antariksa (KT), earned by selling space-mined minerals.
-//   1000 KT = 1 GRAM. The WD minimum has TWO TIERS, no ladder: the
-//   FIRST WD needs only 100 KT (0,1 GRAM) — small change (receh), a
-//   cheap first payout as a hook (owner 2026-11-19: 0,5 GRAM is too
+//   1000 KT = 1 USDT. The WD minimum has TWO TIERS, no ladder: the
+//   FIRST WD needs only 100 KT (0,1 USDT) — small change (receh), a
+//   cheap first payout as a hook (owner 2026-11-19: 0,5 USDT is too
 //   expensive to pay per new player); every WD after that needs at
-//   least 5.000 KT (5 GRAM), FLAT — it never climbs again. Amounts
-//   move in 100 KT (0,1 GRAM) steps, so a repeat WD can be 5.000,
+//   least 5.000 KT (5 USDT), FLAT — it never climbs again. Amounts
+//   move in 100 KT (0,1 USDT) steps, so a repeat WD can be 5.000,
 //   5.100, 5.200 KT, ... — 5.000 KT is the MINIMUM, not the exact
 //   amount. The minimum is computed HERE from the paid-WD history in
 //   the database — the client can display it but can never lower it.
 //   Withdrawals are paid MANUALLY by the owner — a request deducts and
 //   locks the KT, lands in the admin queue, and is marked paid only
-//   after the owner sends the GRAM outside the game. Rejection or
+//   after the owner sends the USDT outside the game. Rejection or
 //   cancellation refunds the locked KT in full.
 //
 // Anti-cheat (owner requirement — never trust the frontend):
@@ -121,8 +121,8 @@
 // Economy rebalance #2 (2026-11-18, owner asked whether the economy
 // still leaks — it did):
 //   The previous pass only slowed energy regen; at ~370 KT per tank on
-//   Map 1 a casual player still reached 1 GRAM in under a day, and one
-//   Map 5 tank paid out more than 1 GRAM by itself. This pass attacks
+//   Map 1 a casual player still reached 1 USDT in under a day, and one
+//   Map 5 tank paid out more than 1 USDT by itself. This pass attacks
 //   the faucet from three sides at once (estimates, expected values —
 //   individual expeditions vary with the loot roll):
 //     - Sell prices cut 40% across every mineral and gemstone.
@@ -168,7 +168,7 @@
 // Economy rebalance #4 (2026-11-19, owner: takut bangkrut — WD tiap
 //   beberapa hari terlalu cepat; tangga DIHAPUS):
 //   WD minimum sekarang DUA TINGKAT, tanpa tangga: WD pertama 500 KT
-//   (0,5 GRAM), WD kedua dan seterusnya minimum 5.000 KT (5 GRAM),
+//   (0,5 USDT), WD kedua dan seterusnya minimum 5.000 KT (5 USDT),
 //   FLAT. Harga jual TIDAK berubah dari rebalance #3 (Regolith 1 …
 //   Helium-3 360 KT, batu map tidak berubah). Recalculation (Monte
 //   Carlo, generator loot asli, 20k ekspedisi/map + simulasi
@@ -176,19 +176,19 @@
 //   WD pertama 500 KT dicapai hari ke-1 (max-effort, aktif,
 //   mid-upgrade) dan hari ke-2–3 (kasual). Jeda antar WD ulang
 //   5.000 KT: ~0,4 hari (max-effort), ~0,9 hari (aktif), ~4 hari
-//   (kasual), ~0,1 hari (mid-upgrade). GRAM yang harus dibayar
+//   (kasual), ~0,1 hari (mid-upgrade). USDT yang harus dibayar
 //   pemilik per pemain: bulan pertama ~330 / ~147 / ~29 / ~1.175
-//   GRAM, dan di kondisi mapan (hari 46–60) ~524 / ~200 / ~40 /
-//   ~1.790 GRAM per 30 hari. Penyebab utamanya BUKAN threshold WD —
+//   USDT, dan di kondisi mapan (hari 46–60) ~524 / ~200 / ~40 /
+//   ~1.790 USDT per 30 hari. Penyebab utamanya BUKAN threshold WD —
 //   bonus penyelesaian ekspedisi (10 + 2×sektor KT) tumbuh TANPA
 //   BATAS mengikuti sektor dan menyumbang 24–38% penghasilan pemain
 //   aktif — threshold ulang saja tidak membatasi total payout,
 //   yang membatasi adalah penghasilan (daya + bonus sektor) pemain.
 //   Opsi rem yang TIDAK diterapkan: cooldown WD 7 hari (maks 1 WD
 //   per 7 hari per pemain) — dengan asumsi tiap WD tepat 5.000 KT,
-//   payout mentok di ~21 GRAM/bulan untuk semua profil; TAPI tanpa
+//   payout mentok di ~21 USDT/bulan untuk semua profil; TAPI tanpa
 //   batas MAKSIMUM per WD, pemain tinggal menabung seminggu lalu WD
-//   sekaligus, jadi total GRAM tidak berubah (hanya jumlah WD turun
+//   sekaligus, jadi total USDT tidak berubah (hanya jumlah WD turun
 //   ke ~4/bulan). Cooldown baru benar-benar membatasi payout bila
 //   dipasangkan dengan batas maksimum per WD. Lihat PORT_NOTES.md
 //   untuk tabel lengkapnya; pemilik yang memutuskan.
@@ -204,7 +204,7 @@
 //   25 → 2,5 KT, ads reward 15 → 1,5 KT (cap 10/day + 60s cooldown
 //   unchanged). WD rule from #4 STAYS: first WD 500 KT, repeat WDs
 //   5.000 KT flat, amounts in 500 KT multiples, ratio 1.000 KT =
-//   1 GRAM. Upgrade costs UNCHANGED (they are sinks, not income) —
+//   1 USDT. Upgrade costs UNCHANGED (they are sinks, not income) —
 //   at the new rates every upgrade takes ~10× longer to afford,
 //   which itself brakes the upgraded-player payout problem.
 //   Balances are fractional now (0,1 KT steps): player.kt_balance,
@@ -218,8 +218,8 @@
 //   first WD day 2 (max-effort), day 5 (active), day 16 (casual),
 //   day 1 (mid-upgrade); repeat WDs every ~2 days (max-effort),
 //   ~7 days (active), ~32 days (casual), ~1 day (mid-upgrade);
-//   GRAM per 30 days at days 46–60: ~108 / ~28 / ~2,3 / ~262 —
-//   i.e. 100 active players ≈ 2.800 GRAM/month (was ~20.000).
+//   USDT per 30 days at days 46–60: ~108 / ~28 / ~2,3 / ~262 —
+//   i.e. 100 active players ≈ 2.800 USDT/month (was ~20.000).
 //   An ACTIVE player needs ~50 days of earnings to afford all
 //   level-5 upgrades (23.430 KT); max-effort ~25 days, casual
 //   >180 days. HONEST CAVEAT: the cut is NOT a clean ÷10 on payout
@@ -228,7 +228,7 @@
 //   grows WITHOUT LIMIT with sector and is now 86–93% of earnings
 //   — and a rational player farms cheap Map 1 for it (most bonus
 //   per energy). There is no true steady state: at days 166–180
-//   the same profiles pay ~349 / ~88 / ~6 / ~935 GRAM per 30 days
+//   the same profiles pay ~349 / ~88 / ~6 / ~935 USDT per 30 days
 //   and keep climbing. Maps 4–5 are net-NEGATIVE on ore minus hull
 //   fees alone (Map 5: 80 KT ore vs ~100 KT fees per tank) — only
 //   the sector bonus makes them pay, and Map 1 pays more bonus per
@@ -264,11 +264,44 @@
 //   for the active profile at BOTH horizons (days 46–60 and
 //   166–180) — that stability is what the cap buys.
 //
+// Economy rebalance #7 + WD cooldown REMOVED (2026-11-19, owner:
+// "buat agar KT-nya terkumpul sampai bisa di-WD, jangan 14 hari"
+// — NO time limit on WD, pacing by slow accumulation, not a
+// timer): the 14-day, then 30-day, WD cooldown
+// (WD_COOLDOWN_DAYS + getWdCooldownStatus + the getGameState
+// cooldown fields + the WD tab banner) is DELETED entirely; the
+// per-WD maximum 5.000 KT (5 USDT) STAYS. ALL KT income halved
+// AGAIN from #6 (÷40 total vs the original economy): Regolith
+// 0,05 → 0,025, Kondrit 0,1 → 0,05, Besi-Nikel 0,25 → 0,125,
+// Kobalt 0,5 → 0,25, Platinum 2,25 → 1,125, Iridium 7,2 → 3,6,
+// Helium-3 18 → 9 KT; map gems halved too (Opal 1,95 → 0,975 …
+// Voidium 72 → 36 KT). Expedition bonus 0,5 + 0,1×sektor → 0,25 +
+// 0,05×sektor, CAPPED at 17,5 KT — the cap is halved WITH the
+// slope so it still binds at sector 345 (~day 38 active); keeping
+// the cap at 35 was measured in the sim to hold the active
+// interval at ~15 days at days 166–180, which fails the ~30-day
+// target. Daily bonus 1,25 → 0,625 KT, ads reward 0,75 → 0,375 KT
+// (cap 10/day + 60s cooldown unchanged). WD rule STAYS (first WD
+// 100 KT = 0,1 USDT, repeat WDs 5.000 KT flat, max 5.000 KT).
+// Upgrade costs UNCHANGED. Prices now need 3 decimals: roundKt
+// and the client formatter round/show 3 decimals; no DB migration
+// (balance is already DOUBLE PRECISION). Simulation (same Monte
+// Carlo + day-by-day model, real constants — verified numbers in
+// PORT_NOTES.md): ACTIVE free player accumulates 5.000 KT in
+// ~28 days at BOTH horizons (28,1 at 46–60, 27,9 at 166–180),
+// ~5,3 USDT/month; max-effort ~14 days (~10,7 USDT/month),
+// casual ~265 → ~111 days, mid-upgrade ~7,6 days (~19,7
+// USDT/month). HONEST NOTE: without any cooldown there is NO hard
+// ceiling — the fastest profiles (Premium mid-upgrade ~3,7 days,
+// ~40 USDT/month) still accumulate 5.000 KT in days, not weeks.
+// That is inherent to accumulation-based pacing and the owner
+// was told so plainly.
+//
 // Sponsored ads (owner monetization slot):
-//   A "Tonton Iklan" button pays AD_REWARD_KT (0,75 KT) per view — the
+//   A "Tonton Iklan" button pays AD_REWARD_KT (0,375 KT) per view — the
 //   slot where the owner plugs in a real ad provider later. The
 //   reward is capped server-side: at most AD_DAILY_CAP (10) views per
-//   calendar day (= 7,5 KT/day max) and a
+//   calendar day (= 3,75 KT/day max) and a
 //   AD_COOLDOWN_SECONDS (60s) gap between views, both recomputed in
 //   watchAd from the ad_reward rows in the activity log. No new table
 //   or migration: the activity log IS the claim history, and ad_reward
@@ -291,9 +324,9 @@ import {
 // Game design constants
 // ---------------------------------------------------------------------------
 
-export const KT_PER_GRAM = 1000;
-export const DAILY_BONUS_KT = 1.25;
-export const AD_REWARD_KT = 0.75;
+export const KT_PER_USDT = 1000;
+export const DAILY_BONUS_KT = 0.625;
+export const AD_REWARD_KT = 0.375;
 export const AD_DAILY_CAP = 10;
 const AD_COOLDOWN_SECONDS = 60;
 export const BASE_MAX_ENERGY = 30;
@@ -305,12 +338,12 @@ const BASE_SCAN_SECONDS = 150; // base scan is deliberately slow (2,5 menit) —
 const TRAVEL_ENERGY_COST = 4; // base hop to the nearest map; +2 per extra map step (distance)
 
 // WD minimum (anti-bangkrut): DUA TINGKAT, tanpa tangga.
-//   - WD pertama: 100 KT (0,1 GRAM) — receh, hook murah. 0,5 GRAM
+//   - WD pertama: 100 KT (0,1 USDT) — receh, hook murah. 0,5 USDT
 //     terlalu mahal dibayar pemilik per pemain baru (owner
 //     2026-11-19). Target WD pertama >10 hari DIGUGURKAN dengan
 //     sengaja oleh pemilik — WD pertama ~1–2 hari untuk pemain aktif.
-//   - WD kedua dan seterusnya: 5.000 KT (5 GRAM) — FLAT, tidak naik lagi.
-// Jumlah WD tetap kelipatan 100 KT (0,1 GRAM), jadi WD ulang bisa
+//   - WD kedua dan seterusnya: 5.000 KT (5 USDT) — FLAT, tidak naik lagi.
+// Jumlah WD tetap kelipatan 100 KT (0,1 USDT), jadi WD ulang bisa
 // 5.000, 5.100, 5.200 KT, dst. — 5.000 KT adalah MINIMUM, bukan
 // jumlah pasti. Sumber kebenaran: riwayat WD terbayar (paidCount==0
 // → 100 KT, paidCount>=1 → 5.000 KT). Zod floor tetap WD_STEP_KT
@@ -322,6 +355,22 @@ export const WD_REPEAT_MIN_KT = 5000;
 export function wdMinKtForPaidCount(paidCount: number): number {
   return paidCount >= 1 ? WD_REPEAT_MIN_KT : WD_FIRST_MIN_KT;
 }
+
+// WD MAXIMUM per WD (anti-bangkrut): MAKSIMUM 5.000 KT (5 USDT)
+// per WD — repeat WD praktis selalu tepat 5.000 KT: min = max =
+// 5.000. WD pertama: min 100 KT, max 5.000 KT. TIDAK ADA jeda
+// waktu antar-WD (cooldown DIHAPUS 2026-11-19 atas perintah
+// pemilik: "buat agar KT-nya terkumpul sampai bisa di-WD, jangan
+// 14 hari" — pacing harus datang dari AKUMULASI KT yang lambat,
+// bukan dari timer). Dulu ada ceiling 14 hari lalu 30 hari
+// (WD_COOLDOWN_DAYS + getWdCooldownStatus); keduanya dihapus
+// total — tidak ada konstanta, helper, pengecekan, atau field
+// state cooldown yang tersisa. Konsekuensi yang JUJUR: tanpa
+// cooldown tidak ada langit-langit keras — pemain tercepat
+// (Premium + upgrade penuh) tetap mengumpulkan 5.000 KT dalam
+// hitungan hari, bukan minggu; yang membatasi mereka hanyalah
+// kecepatan akumulasi KT (lihat rebalance #7 di PORT_NOTES.md).
+export const WD_MAX_KT = 5000;
 
 // Premium Pass plans — priced in Telegram Stars (paid to the owner in
 // Telegram; the owner confirms the order in the Kendali tab).
@@ -348,25 +397,25 @@ type OreDef = {
 };
 
 export const ORES: OreDef[] = [
-  { id: "regolith", name: "Regolith Asteroid", price: 0.05, color: "#9a9186", icon: "regolith", hardness: 1, weights: [34, 20, 12, 8, 5] },
-  { id: "kondrit", name: "Kondrit Karbon", price: 0.1, color: "#4b4f5e", icon: "kondrit", hardness: 1, weights: [26, 34, 18, 10, 6] },
-  { id: "besinikel", name: "Besi-Nikel", price: 0.25, color: "#c97a3a", icon: "besinikel", hardness: 2, weights: [14, 16, 28, 15, 9] },
-  { id: "kobalt", name: "Kobalt Antariksa", price: 0.5, color: "#5b8cff", icon: "kobalt", hardness: 2, weights: [8, 8, 17, 17, 11] },
-  { id: "platinum", name: "Platinum", price: 2.25, color: "#e6ebf2", icon: "platinum", hardness: 3, weights: [4, 3, 8, 18, 15] },
-  { id: "iridium", name: "Iridium", price: 7.2, color: "#f2b705", icon: "iridium", hardness: 3, weights: [2, 1, 4, 12, 18] },
-  { id: "helium3", name: "Kristal Helium-3", price: 18, color: "#6ee7ff", icon: "helium3", hardness: 4, weights: [0, 0, 1, 3, 9] },
+  { id: "regolith", name: "Regolith Asteroid", price: 0.025, color: "#9a9186", icon: "regolith", hardness: 1, weights: [34, 20, 12, 8, 5] },
+  { id: "kondrit", name: "Kondrit Karbon", price: 0.05, color: "#4b4f5e", icon: "kondrit", hardness: 1, weights: [26, 34, 18, 10, 6] },
+  { id: "besinikel", name: "Besi-Nikel", price: 0.125, color: "#c97a3a", icon: "besinikel", hardness: 2, weights: [14, 16, 28, 15, 9] },
+  { id: "kobalt", name: "Kobalt Antariksa", price: 0.25, color: "#5b8cff", icon: "kobalt", hardness: 2, weights: [8, 8, 17, 17, 11] },
+  { id: "platinum", name: "Platinum", price: 1.125, color: "#e6ebf2", icon: "platinum", hardness: 3, weights: [4, 3, 8, 18, 15] },
+  { id: "iridium", name: "Iridium", price: 3.6, color: "#f2b705", icon: "iridium", hardness: 3, weights: [2, 1, 4, 12, 18] },
+  { id: "helium3", name: "Kristal Helium-3", price: 9, color: "#6ee7ff", icon: "helium3", hardness: 4, weights: [0, 0, 1, 3, 9] },
   // Batu mulia khas tiap peta — dua permata unggulan per map, hanya
   // muncul di map-nya (weight di zone lain 0).
-  { id: "opal", name: "Opal Pelangi", price: 1.95, color: "#f9a8d4", icon: "opal", hardness: 2, weights: [7, 0, 0, 0, 0] },
-  { id: "topaz", name: "Topaz Emas", price: 2.55, color: "#fbbf24", icon: "topaz", hardness: 2, weights: [5, 0, 0, 0, 0] },
-  { id: "turkuois", name: "Turkuois Orbit", price: 3.9, color: "#2dd4bf", icon: "turkuois", hardness: 2, weights: [0, 6, 0, 0, 0] },
-  { id: "ametis", name: "Ametis Sabuk", price: 5.25, color: "#a78bfa", icon: "ametis", hardness: 3, weights: [0, 4, 0, 0, 0] },
-  { id: "zamrud", name: "Zamrud Bulan", price: 9.6, color: "#34d399", icon: "zamrud", hardness: 3, weights: [0, 0, 5, 0, 0] },
-  { id: "rubi", name: "Rubi Mare", price: 12.6, color: "#f87171", icon: "rubi", hardness: 3, weights: [0, 0, 3, 0, 0] },
-  { id: "safir", name: "Safir Bintang", price: 21, color: "#60a5fa", icon: "safir", hardness: 4, weights: [0, 0, 0, 5, 0] },
-  { id: "berlian", name: "Berlian Psyche", price: 28.5, color: "#f8fafc", icon: "berlian", hardness: 4, weights: [0, 0, 0, 3, 0] },
-  { id: "opales", name: "Opal Es Hitam", price: 45, color: "#c084fc", icon: "opales", hardness: 4, weights: [0, 0, 0, 0, 4] },
-  { id: "voidium", name: "Kristal Voidium", price: 72, color: "#818cf8", icon: "voidium", hardness: 4, weights: [0, 0, 0, 0, 2] },
+  { id: "opal", name: "Opal Pelangi", price: 0.975, color: "#f9a8d4", icon: "opal", hardness: 2, weights: [7, 0, 0, 0, 0] },
+  { id: "topaz", name: "Topaz Emas", price: 1.275, color: "#fbbf24", icon: "topaz", hardness: 2, weights: [5, 0, 0, 0, 0] },
+  { id: "turkuois", name: "Turkuois Orbit", price: 1.95, color: "#2dd4bf", icon: "turkuois", hardness: 2, weights: [0, 6, 0, 0, 0] },
+  { id: "ametis", name: "Ametis Sabuk", price: 2.625, color: "#a78bfa", icon: "ametis", hardness: 3, weights: [0, 4, 0, 0, 0] },
+  { id: "zamrud", name: "Zamrud Bulan", price: 4.8, color: "#34d399", icon: "zamrud", hardness: 3, weights: [0, 0, 5, 0, 0] },
+  { id: "rubi", name: "Rubi Mare", price: 6.3, color: "#f87171", icon: "rubi", hardness: 3, weights: [0, 0, 3, 0, 0] },
+  { id: "safir", name: "Safir Bintang", price: 10.5, color: "#60a5fa", icon: "safir", hardness: 4, weights: [0, 0, 0, 5, 0] },
+  { id: "berlian", name: "Berlian Psyche", price: 14.25, color: "#f8fafc", icon: "berlian", hardness: 4, weights: [0, 0, 0, 3, 0] },
+  { id: "opales", name: "Opal Es Hitam", price: 22.5, color: "#c084fc", icon: "opales", hardness: 4, weights: [0, 0, 0, 0, 4] },
+  { id: "voidium", name: "Kristal Voidium", price: 36, color: "#818cf8", icon: "voidium", hardness: 4, weights: [0, 0, 0, 0, 2] },
 ];
 const RARE_IDS = new Set([
   "platinum", "iridium", "helium3",
@@ -680,34 +729,46 @@ export function mineEnergyCost(vein: Vein, exp: Expedition): number {
 // bonus grows with sector, but it is CAPPED — without the cap it
 // grew without limit (1 + 0,2×sektor in #5) and became 86–93% of
 // earnings, so the WD pace kept accelerating the longer someone
-// played. The cap value was chosen from the simulation (see
-// PORT_NOTES.md, rebalance #6): it is the value that holds an
-// ACTIVE player's repeat-WD interval at ~14 days, stable from days
-// 46–60 through days 166–180. The bonus binds at sector 345
-// (0,5 + 0,1×345 = 35).
-export const MAX_COMPLETION_BONUS_KT = 35;
+// Rebalance #7 (2026-11-19): the formula is halved AGAIN
+// (0,25 + 0,05×sektor) AND the cap is halved with it (35 → 17,5
+// KT). Halving ONLY the slope while keeping the cap at 35 does
+// NOT halve the steady-state bonus — the bonus is 86–93% of
+// earnings, and at sector 695+ it would still pay the full 35 KT
+// per expedition, so the active repeat-WD interval would stick at
+// ~15 days at days 166–180 no matter how much the ore/faucet
+// were cut (measured in the sim: 21,1 hari at 46–60 → 14,8 hari
+// at 166–180 with cap 35 — not 30 days, not stable). Halving the
+// cap keeps it binding at the SAME sector 345
+// (0,25 + 0,05×345 = 17,5), i.e. the same ~day 38 for an active
+// player as #6 — that is what keeps the pace stable across
+// horizons. The cap value is chosen from the simulation (see
+// PORT_NOTES.md, rebalance #7): it is the value that holds an
+// ACTIVE player's repeat-WD interval at ~28 days, stable from days
+// 46–60 through days 166–180.
+export const MAX_COMPLETION_BONUS_KT = 17.5;
 export function completionBonusKt(layer: number): number {
-  return roundKt(Math.min(0.5 + layer * 0.1, MAX_COMPLETION_BONUS_KT));
+  return roundKt(Math.min(0.25 + layer * 0.05, MAX_COMPLETION_BONUS_KT));
 }
 
-/** KT is fractional since rebalance #5 (Regolith 0,1 KT), and
- *  2-decimal since rebalance #6 (Regolith 0,05 KT). Every KT
- *  credit AND debit is rounded to 2 decimals at the point it
+/** KT is fractional since rebalance #5 (Regolith 0,1 KT),
+ *  2-decimal since rebalance #6 (Regolith 0,05 KT), and
+ *  3-decimal since rebalance #7 (Regolith 0,025 KT). Every KT
+ *  credit AND debit is rounded to 3 decimals at the point it
  *  touches the balance, so the stored balance is always a clean
- *  2-decimal double and binary float dust (0.30000000000000004)
+ *  3-decimal double and binary float dust (0.30000000000000004)
  *  can never accumulate. The DB column is DOUBLE PRECISION (see
  *  schema.pg.ts + migration-0003): Drizzle maps it to a JS number,
  *  unlike NUMERIC which comes back as a string and would break
  *  every `p.ktBalance + x` (string concat) and every `z.number()`
  *  check. */
 export function roundKt(n: number): number {
-  return Math.round(n * 100) / 100;
+  return Math.round(n * 1000) / 1000;
 }
-/** Two-decimal Indonesian formatting for KT amounts inside
+/** Three-decimal Indonesian formatting for KT amounts inside
  *  server-written activity messages (raw `${n}` would print a dot,
  *  e.g. "1.2 KT"). */
 export function fmtKt(n: number): string {
-  return n.toLocaleString("id-ID", { maximumFractionDigits: 2 });
+  return n.toLocaleString("id-ID", { maximumFractionDigits: 3 });
 }
 /** Energy to fly to a map: the base hop plus 2 per map step of distance. */
 function travelCostFor(zoneIdx: number, premium: boolean): number {
@@ -771,7 +832,7 @@ async function insertFreshPlayer(
     asteroidsDone: 0,
     totalDigs: 0,
     totalKtEarned: 0,
-    totalWdPaidGram: 0,
+    totalWdPaidUsdt: 0,
   };
   const inserted =
     id !== null
@@ -1046,7 +1107,7 @@ const wdShape = z.object({
   id: z.number(),
   walletAddress: z.string(),
   amountKt: z.number(),
-  amountGram: z.number(),
+  amountUsdt: z.number(),
   status: z.enum(["pending", "approved", "paid", "rejected", "cancelled"]),
   adminNote: z.string().nullable(),
   txRef: z.string().nullable(),
@@ -1065,7 +1126,7 @@ function toWd(row: WdRow, needsReview: boolean): z.infer<typeof wdShape> {
     id: row.id,
     walletAddress: row.walletAddress,
     amountKt: row.amountKt,
-    amountGram: row.amountGram,
+    amountUsdt: row.amountUsdt,
     status: row.status,
     adminNote: row.adminNote,
     txRef: row.txRef,
@@ -1107,12 +1168,12 @@ function defineGameAction<Req extends z.ZodTypeAny, Res>(def: {
 export const gameActions = {
   getGameState: defineGameAction({
     description:
-      "Returns the full game state: player balances and energy, the two-tier WD minimum computed server-side from the paid-WD history (first WD 100 KT, repeat WDs 5.000 KT flat), premium pass status (tier, dual-drill flag, Telegram Stars plans) and Stars purchase orders, the five mining maps with unlock state, per-map distance, scan duration and challenge profiles, per-map gemstone loot, the asteroid currently being explored (identity, map, scan status, mineral veins), any timed scan/mining job in progress with its remaining seconds (finished jobs also reveal map challenge outcomes: drill jam / hull hit), ore inventory with live sell prices, upgrade levels and costs, recent withdrawals, the sponsored-ad reward state (reward per view, daily cap, views used today, remaining views and cooldown seconds — all computed server-side), and the activity log split into mission and economy categories.",
+      "Returns the full game state: player balances and energy, the two-tier WD minimum computed server-side from the paid-WD history (first WD 100 KT, repeat WDs 5.000 KT flat) and the per-WD maximum of 5.000 KT (5 USDT) — there is NO time limit between WDs; how fast a player can WD depends only on how fast they accumulate KT — premium pass status (tier, dual-drill flag, Telegram Stars plans) and Stars purchase orders, the five mining maps with unlock state, per-map distance, scan duration and challenge profiles, per-map gemstone loot, the asteroid currently being explored (identity, map, scan status, mineral veins), any timed scan/mining job in progress with its remaining seconds (finished jobs also reveal map challenge outcomes: drill jam / hull hit), ore inventory with live sell prices, upgrade levels and costs, recent withdrawals, the sponsored-ad reward state (reward per view, daily cap, views used today, remaining views and cooldown seconds — all computed server-side), and the activity log split into mission and economy categories.",
     request: z.object({}),
     response: z.object({
       player: z.object({
         ktBalance: z.number(),
-        gramEquivalent: z.number(),
+        usdtEquivalent: z.number(),
         energy: z.number(),
         maxEnergy: z.number(),
         regenSeconds: z.number(),
@@ -1140,15 +1201,21 @@ export const gameActions = {
         totalScans: z.number(),
         asteroidsDone: z.number(),
         totalKtEarned: z.number(),
-        totalWdPaidGram: z.number(),
+        totalWdPaidUsdt: z.number(),
         canClaimDailyBonus: z.boolean(),
         dailyBonusKt: z.number(),
-        ktPerGram: z.number(),
+        ktPerUsdt: z.number(),
         wdPaidCount: z.number(),
         wdMinKt: z.number(),
-        wdMinGram: z.number(),
+        wdMinUsdt: z.number(),
         wdNextMinKt: z.number(),
         wdStepKt: z.number(),
+        // WD maximum (anti-bangkrut): maksimum 5.000 KT (5 USDT)
+        // per WD. TIDAK ADA jeda waktu antar-WD — cooldown
+        // dihapus 2026-11-19 atas perintah pemilik; kecepatan WD
+        // hanya dibatasi kecepatan akumulasi KT.
+        wdMaxKt: z.number(),
+        wdMaxUsdt: z.number(),
         isAdmin: z.boolean(),
         ads: z.object({
           rewardKt: z.number(),
@@ -1279,9 +1346,9 @@ export const gameActions = {
         }),
       ),
       // Ringkasan Kendali untuk admin (null untuk pemain biasa):
-      // total GRAM yang sudah dibayar ke semua pemain.
+      // total USDT yang sudah dibayar ke semua pemain.
       adminStats: z
-        .object({ totalWdPaidGram: z.number() })
+        .object({ totalWdPaidUsdt: z.number() })
         .nullable(),
       // Anti-cheat: daftar pemain mencurigakan untuk Kendali (null
       // untuk pemain biasa) — telegram id, username, skor risiko,
@@ -1364,15 +1431,15 @@ export const gameActions = {
       const flaggedPlayers = session.isAdmin
         ? await listFlaggedPlayers(db)
         : null;
-      // Kendali: total GRAM yang sudah dibayar ke SEMUA pemain (hanya
+      // Kendali: total USDT yang sudah dibayar ke SEMUA pemain (hanya
       // untuk admin; pemain biasa mendapat null).
       const adminStats = session.isAdmin
         ? {
-            totalWdPaidGram: Number(
+            totalWdPaidUsdt: Number(
               (
                 await db
                   .select({
-                    total: sql<number>`coalesce(sum(${schema.player.totalWdPaidGram}), 0)`,
+                    total: sql<number>`coalesce(sum(${schema.player.totalWdPaidUsdt}), 0)`,
                   })
                   .from(schema.player)
               )[0]?.total ?? 0,
@@ -1384,7 +1451,7 @@ export const gameActions = {
       return {
         player: {
           ktBalance: p.ktBalance,
-          gramEquivalent: p.ktBalance / KT_PER_GRAM,
+          usdtEquivalent: p.ktBalance / KT_PER_USDT,
           energy: p.energy,
           maxEnergy: maxEnergy(levels),
           regenSeconds: regenSeconds(levels, premium),
@@ -1410,15 +1477,17 @@ export const gameActions = {
           totalScans: p.totalScans,
           asteroidsDone: p.asteroidsDone,
           totalKtEarned: p.totalKtEarned,
-          totalWdPaidGram: p.totalWdPaidGram,
+          totalWdPaidUsdt: p.totalWdPaidUsdt,
           canClaimDailyBonus: await canClaimDailyBonus(db, p.id),
           dailyBonusKt: DAILY_BONUS_KT,
-          ktPerGram: KT_PER_GRAM,
+          ktPerUsdt: KT_PER_USDT,
           wdPaidCount,
           wdMinKt,
-          wdMinGram: wdMinKt / KT_PER_GRAM,
+          wdMinUsdt: wdMinKt / KT_PER_USDT,
           wdNextMinKt: wdMinKtForPaidCount(wdPaidCount + 1),
           wdStepKt: WD_STEP_KT,
+          wdMaxKt: WD_MAX_KT,
+          wdMaxUsdt: WD_MAX_KT / KT_PER_USDT,
           isAdmin: session.isAdmin,
           ads: {
             rewardKt: AD_REWARD_KT,
@@ -1992,7 +2061,7 @@ export const gameActions = {
 
   grantPremium: defineGameAction({
     description:
-      "Owner action: grants or extends a Premium Pass tier (Standard or Pro — Pro unlocks the dual drill) for free — used after the player pays the owner outside the game (Telegram Stars handled manually, transfer, e-wallet, etc.), matching the manual GRAM payout model.",
+      "Owner action: grants or extends a Premium Pass tier (Standard or Pro — Pro unlocks the dual drill) for free — used after the player pays the owner outside the game (Telegram Stars handled manually, transfer, e-wallet, etc.), matching the manual USDT payout model.",
     request: z.object({
       days: z.number().int().min(1).max(365),
       tier: z.enum(["standard", "pro"]),
@@ -2028,7 +2097,7 @@ export const gameActions = {
 
   claimDailyBonus: defineGameAction({
     description:
-      "Claims the once-per-calendar-day login bonus of 1,25 KT.",
+      "Claims the once-per-calendar-day login bonus of 0,625 KT.",
     request: z.object({}),
     response: resultShape.extend({
       bonusKt: z.number(),
@@ -2065,7 +2134,7 @@ export const gameActions = {
 
   watchAd: defineGameAction({
     description:
-      "Claims the sponsored-ad reward: credits 0,75 KT for one ad view. Fully server-validated (anti-cheat): the daily cap of 10 views per calendar day and the 60-second cooldown between views are recomputed here from the ad_reward activity history in the database — a tampered client cannot exceed the cap, skip the cooldown, or change the reward amount. This is the placeholder slot where the owner will plug in a real ad provider later; the reward logic stays identical.",
+      "Claims the sponsored-ad reward: credits 0,375 KT for one ad view. Fully server-validated (anti-cheat): the daily cap of 10 views per calendar day and the 60-second cooldown between views are recomputed here from the ad_reward activity history in the database — a tampered client cannot exceed the cap, skip the cooldown, or change the reward amount. This is the placeholder slot where the owner will plug in a real ad provider later; the reward logic stays identical.",
     request: z.object({}),
     response: resultShape.extend({
       rewardKt: z.number(),
@@ -2142,8 +2211,8 @@ export const gameActions = {
         .limit(1);
       const held = inv[0]?.qty ?? 0;
       if (held < args.qty) return fail(`Bijih tidak cukup — kamu hanya punya ${held} ${ore.name}.`);
-      // Harga per unit bisa pecahan (Regolith 0,05 KT) — total penjualan
-      // dibulatkan ke 1 desimal, BUKAN harga satuan (Math.round di
+      // Harga per unit bisa pecahan (Regolith 0,025 KT) — total penjualan
+      // dibulatkan ke 3 desimal, BUKAN harga satuan (Math.round di
       // satuan akan membuat Regolith bernilai 0 KT).
       const gained = roundKt(ore.price * sellMultiplier(levels, isPremium(p)) * args.qty);
       const newBalance = roundKt(p.ktBalance + gained);
@@ -2190,7 +2259,7 @@ export const gameActions = {
       for (const row of invRows) {
         const ore = oreById(row.oreId);
         if (!ore || row.qty <= 0) continue;
-        // Per-baris dibulatkan ke 1 desimal (harga bisa pecahan) —
+        // Per-baris dibulatkan ke 3 desimal (harga bisa pecahan) —
         // total akhir dibulatkan sekali lagi di bawah.
         gained += roundKt(ore.price * mult * row.qty);
         count += row.qty;
@@ -2289,7 +2358,7 @@ export const gameActions = {
 
   requestWithdrawal: defineGameAction({
     description:
-      "Creates a withdrawal request: locks the KT and puts the request in the owner's manual payout queue with the player's GRAM wallet address. Anti-cheat: the amount arrives in KT and is fully re-validated server-side — it must be a multiple of 100 KT (0,1 GRAM steps), must meet the two-tier minimum computed here from the player's paid-WD history (first WD: 100 KT, repeat WDs: 5.000 KT flat), and must fit the server-side balance. The client cannot lower the minimum or inflate the balance.",
+      "Creates a withdrawal request: locks the KT and puts the request in the owner's manual payout queue with the player's USDT wallet address. Anti-cheat: the amount arrives in KT and is fully re-validated server-side — it must be a multiple of 100 KT (0,1 USDT steps), must meet the two-tier minimum computed here from the player's paid-WD history (first WD: 100 KT, repeat WDs: 5.000 KT flat), and must not exceed the per-WD maximum of 5.000 KT (5 USDT). There is NO time limit between WDs — the cooldown was removed 2026-11-19 on the owner's instruction; how fast a player can WD depends only on how fast they accumulate KT. The client cannot lower the minimum or raise the maximum.",
     request: z.object({
       walletAddress: z.string().trim().min(10).max(120),
       amountKt: z.number().int().min(WD_STEP_KT).max(10000000),
@@ -2302,21 +2371,27 @@ export const gameActions = {
       const db = getDb();
       const p = await loadPlayer(db, session);
       const amountKt = args.amountKt;
-      const amountGram = amountKt / KT_PER_GRAM;
+      const amountUsdt = amountKt / KT_PER_USDT;
       const fail = (error: string) => ({ ok: false, error, wdId: null as number | null, ktBalance: p.ktBalance });
       if (amountKt % WD_STEP_KT !== 0)
-        return fail(`Jumlah WD harus kelipatan ${WD_STEP_KT} KT (${(WD_STEP_KT / KT_PER_GRAM).toLocaleString("id-ID")} GRAM) — ${amountKt} KT tidak valid.`);
+        return fail(`Jumlah WD harus kelipatan ${WD_STEP_KT} KT (${(WD_STEP_KT / KT_PER_USDT).toLocaleString("id-ID")} USDT) — ${amountKt} KT tidak valid.`);
       const paidCount = await countPaidWithdrawals(db, p.id);
       const minKt = wdMinKtForPaidCount(paidCount);
       if (amountKt < minKt)
         return fail(
           paidCount === 0
-            ? `Minimum WD pertama adalah ${minKt.toLocaleString("id-ID")} KT (${minKt / KT_PER_GRAM} GRAM) — kamu mengajukan ${amountKt.toLocaleString("id-ID")} KT. Kumpulkan ${(minKt - amountKt).toLocaleString("id-ID")} KT lagi.`
-            : `Minimum WD setelah WD pertama adalah 5.000 KT (5 GRAM) — kamu sudah ${paidCount}× WD terbayar, jadi minimum WD tetap 5.000 KT — kamu mengajukan ${amountKt.toLocaleString("id-ID")} KT.`,
+            ? `Minimum WD pertama adalah ${minKt.toLocaleString("id-ID")} KT (${minKt / KT_PER_USDT} USDT) — kamu mengajukan ${amountKt.toLocaleString("id-ID")} KT. Kumpulkan ${(minKt - amountKt).toLocaleString("id-ID")} KT lagi.`
+            : `Minimum WD setelah WD pertama adalah 5.000 KT (5 USDT) — kamu sudah ${paidCount}× WD terbayar, jadi minimum WD tetap 5.000 KT — kamu mengajukan ${amountKt.toLocaleString("id-ID")} KT.`,
+        );
+      // Per-WD maximum: 5.000 KT (5 USDT) per WD — tanpa ini
+      // pemain tinggal menabung lalu WD sekaligus besar.
+      if (amountKt > WD_MAX_KT)
+        return fail(
+          `Maksimum WD adalah ${WD_MAX_KT.toLocaleString("id-ID")} KT (5 USDT) per WD — kamu mengajukan ${amountKt.toLocaleString("id-ID")} KT. Ajukan ${WD_MAX_KT.toLocaleString("id-ID")} KT saja.`,
         );
       if (p.ktBalance < amountKt)
         return fail(
-          `Saldo KT tidak cukup — WD ${amountGram} GRAM butuh ${amountKt} KT, saldo kamu ${fmtKt(p.ktBalance)} KT.`,
+          `Saldo KT tidak cukup — WD ${amountUsdt} USDT butuh ${amountKt} KT, saldo kamu ${fmtKt(p.ktBalance)} KT.`,
         );
       const inserted = await db
         .insert(schema.wdRequests)
@@ -2324,7 +2399,7 @@ export const gameActions = {
           playerId: p.id,
           walletAddress: args.walletAddress,
           amountKt,
-          amountGram,
+          amountUsdt,
           status: "pending",
         })
         .returning({ id: schema.wdRequests.id });
@@ -2339,7 +2414,7 @@ export const gameActions = {
         db,
         p.id,
         "wd_request",
-        `Permintaan WD ${amountGram} GRAM (${amountKt} KT) dibuat — menunggu diproses pemilik.`,
+        `Permintaan WD ${amountUsdt} USDT (${amountKt} KT) dibuat — menunggu diproses pemilik.`,
         -amountKt,
       );
       return { ok: true, error: null, wdId: row.id, ktBalance: newBalance };
@@ -2385,7 +2460,7 @@ export const gameActions = {
 
   updateWithdrawal: defineGameAction({
     description:
-      "Admin action for the owner: moves a withdrawal through the manual payout flow (pending → approved → paid, or rejected with a full KT refund). Records an optional note and GRAM transaction reference.",
+      "Admin action for the owner: moves a withdrawal through the manual payout flow (pending → approved → paid, or rejected with a full KT refund). Records an optional note and USDT transaction reference.",
     request: z.object({
       wdId: z.number().int().positive(),
       action: z.enum(["approve", "reject", "pay"]),
@@ -2417,7 +2492,7 @@ export const gameActions = {
           .update(schema.wdRequests)
           .set({ status: "approved", adminNote: args.adminNote ?? wd.adminNote })
           .where(eq(schema.wdRequests.id, wd.id));
-        await logActivity(db, wd.playerId, "wd_approve", `WD #${wd.id} (${wd.amountGram} GRAM) disetujui — siap kirim GRAM manual.`, null);
+        await logActivity(db, wd.playerId, "wd_approve", `WD #${wd.id} (${wd.amountUsdt} USDT) disetujui — siap kirim USDT manual.`, null);
         return { ok: true, error: null, status: "approved" as const };
       }
 
@@ -2435,9 +2510,9 @@ export const gameActions = {
           .where(eq(schema.wdRequests.id, wd.id));
         await db
           .update(schema.player)
-          .set({ totalWdPaidGram: target.totalWdPaidGram + wd.amountGram })
+          .set({ totalWdPaidUsdt: target.totalWdPaidUsdt + wd.amountUsdt })
           .where(eq(schema.player.id, target.id));
-        await logActivity(db, wd.playerId, "wd_paid", `WD #${wd.id} selesai — ${wd.amountGram} GRAM telah dikirim manual ke dompet pemain.`, null);
+        await logActivity(db, wd.playerId, "wd_paid", `WD #${wd.id} selesai — ${wd.amountUsdt} USDT telah dikirim manual ke dompet pemain.`, null);
         return { ok: true, error: null, status: "paid" as const };
       }
 

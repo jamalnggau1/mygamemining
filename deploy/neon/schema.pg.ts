@@ -4,7 +4,7 @@
 //   - SQLite integer "timestamp_ms" columns become TIMESTAMPTZ
 //     (mode: "date", so handlers keep working with Date objects).
 //   - wd amount columns stay floating point (DOUBLE PRECISION) because
-//     WD amounts move in 0,5 GRAM steps.
+//     WD amounts move in 0,1 USDT steps.
 //   - KT balance columns are DOUBLE PRECISION too (rebalance #5,
 //     2026-11-19): KT is fractional now (Regolith 0,1 KT), so
 //     kt_balance, total_kt_earned and activity.amount_kt hold
@@ -85,7 +85,7 @@ export const player = pgTable("player", {
   asteroidsDone: integer("asteroids_done").notNull().default(0),
   totalDigs: integer("total_digs").notNull().default(0),
   totalKtEarned: doublePrecision("total_kt_earned").notNull().default(0),
-  totalWdPaidGram: doublePrecision("total_wd_paid_gram").notNull().default(0),
+  totalWdPaidUsdt: doublePrecision("total_wd_paid_usdt").notNull().default(0),
   // -- Anti-cheat otomatis (deteksi bot, 2026-11-19) -----------------
   // Skor risiko: 0 = bersih. Setiap aturan deteksi yang menyala
   // menambah skor (lihat api/_lib/anticheat.ts) dan mengisi
@@ -144,7 +144,7 @@ export const wdRequests = pgTable(
       .references(() => player.id),
     walletAddress: text("wallet_address").notNull(),
     amountKt: integer("amount_kt").notNull(),
-    amountGram: doublePrecision("amount_gram").notNull(),
+    amountUsdt: doublePrecision("amount_usdt").notNull(),
     status: text("status", {
       enum: ["pending", "approved", "paid", "rejected", "cancelled"],
     })

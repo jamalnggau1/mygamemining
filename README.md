@@ -1,12 +1,13 @@
 # ASTRA MINING — Tambang Luar Angkasa P2E
 
 Web play-to-earn space mining game. Players scan and drill asteroids in real
-time, earn Koin Tambang (KT), and withdraw GRAM manually.
+time, earn Koin Tambang (KT), and withdraw USDT manually.
 
-- **Economy:** 1,000 KT = 1 GRAM. First withdrawal minimum is 0.5 GRAM
-  (500 KT), then the minimum rises after each paid withdrawal.
+- **Economy:** 1,000 KT = 1 USDT. First withdrawal minimum is 0.1 USDT
+  (100 KT), then 5 USDT (5,000 KT) flat for every later withdrawal,
+  at most once per 30 days.
 - **Payout:** manual, no smart contract. Players request a withdrawal, the
-  owner approves it and sends GRAM manually.
+  owner approves it and sends USDT manually.
 - **Premium:** paid with Telegram Stars (Standard 150 Stars / 7 days,
   Pro 500 Stars / 30 days). Pro unlocks dual drills.
 - **Anti-cheat:** balances, timers, drops and withdrawals are validated

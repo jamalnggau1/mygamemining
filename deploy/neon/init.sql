@@ -11,7 +11,7 @@
 -- skema SQLite di runtime Muse): tabel player, inventory, upgrades,
 -- wd_requests, premium_orders, activity. Perbedaan dialect saja:
 --   - timestamp mode "timestamp_ms"  → TIMESTAMPTZ
---   - amount_gram / total_wd_paid_gram (REAL, langkah 0,5 GRAM)
+--   - amount_usdt / total_wd_paid_usdt (REAL, langkah 0,1 USDT)
 --                                    → DOUBLE PRECISION
 --   - KT balance columns (kt_balance, total_kt_earned,
 --     activity.amount_kt) → DOUBLE PRECISION sejak rebalance #5
@@ -53,7 +53,7 @@ CREATE TABLE IF NOT EXISTS player (
   asteroids_done INTEGER NOT NULL DEFAULT 0,
   total_digs INTEGER NOT NULL DEFAULT 0,
   total_kt_earned DOUBLE PRECISION NOT NULL DEFAULT 0,
-  total_wd_paid_gram DOUBLE PRECISION NOT NULL DEFAULT 0,
+  total_wd_paid_usdt DOUBLE PRECISION NOT NULL DEFAULT 0,
   -- Anti-cheat otomatis (2026-11-19): skor risiko (0 = bersih),
   -- alasan flag terakhir, kapan terakhir menyala, streak collect
   -- instan, hitungan percobaan aksi mustahil + awal jendelanya, dan
@@ -87,7 +87,7 @@ CREATE TABLE IF NOT EXISTS wd_requests (
   player_id INTEGER NOT NULL REFERENCES player (id),
   wallet_address TEXT NOT NULL,
   amount_kt INTEGER NOT NULL,
-  amount_gram DOUBLE PRECISION NOT NULL,
+  amount_usdt DOUBLE PRECISION NOT NULL,
   status TEXT NOT NULL DEFAULT 'pending'
     CHECK (status IN ('pending', 'approved', 'paid', 'rejected', 'cancelled')),
   admin_note TEXT,

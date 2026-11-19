@@ -6,6 +6,13 @@ off the Muse runtime because the Vercel build failed at `bun install`:
 (`file:/opt/hatch/.../space-sdk.tgz`) that only exists on the Muse
 machine. The live Muse-hosted game was not touched.
 
+**Catatan mata uang (2026-11-19): payout pindah GRAM → USDT.**
+Semua aturan SAAT INI di dokumen ini memakai USDT. Bagian riwayat
+di bawah (rebalance #3–#6) masih memakai GRAM — itu sesuai zamannya:
+sampai 2026-11-19 mata uang payout memang GRAM, dan angkanya tidak
+diubah. Rasio tidak berubah: 1.000 KT = 1 USDT, sama seperti dulu
+1.000 KT = 1 GRAM.
+
 ## What changed
 
 **Removed — every trace of `@hatch/space-sdk` (verified by grep):**
@@ -61,19 +68,24 @@ machine. The live Muse-hosted game was not touched.
 - `deploy/neon/init.sql` / `schema.pg.ts`: unchanged except comments.
 
 **Unchanged game rules** (owner-settled, verified in the smoke test):
-KT economy (1,000 KT = 1 GRAM, sell prices at the rebalance #6
-level — Regolith 0,05 KT, fractional balances to 2 decimals,
-expedition bonus 0,5 + 0,1×sector CAPPED at 35 KT),
-two-tier WD minimum (first WD 100 KT = 0,1 GRAM; repeat WDs
-minimum 5.000 KT = 5 GRAM FLAT — the escalating ladder was
+KT economy (1,000 KT = 1 USDT, sell prices at the rebalance #7
+level — Regolith 0,025 KT, fractional balances to 3 decimals,
+expedition bonus 0,25 + 0,05×sector CAPPED at 17,5 KT),
+two-tier WD minimum (first WD 100 KT = 0,1 USDT; repeat WDs
+minimum 5.000 KT = 5 USDT FLAT — the escalating ladder was
 ABOLISHED 2026-11-19, see rebalance #4 below; 100 KT steps,
-computed from paid-WD history), manual WD payout (no smart
-contract, reject/cancel refunds in full), Premium in Telegram Stars
-only (Standard 150/7d, Pro 500/30d, Pro = dual drill), power (1/4
-min regen, Tangki = capacity only, Reaktor = −10%/level), scan 2.5
-min base with map factors ×1/×1.3/×1.6/×2.0/×2.5, 5 maps with their
-gems and challenges, ads 10/day +0,75 KT with 60s cooldown,
-server-side validation of everything.
+computed from paid-WD history) PLUS the per-WD maximum 5.000 KT
+(5 USDT) — so a repeat WD is always exactly 5.000 KT. There is
+NO time limit between WDs: the 14-day, then 30-day, cooldown was
+REMOVED 2026-11-19 on the owner's instruction (see rebalance #7
+below) — how fast a player can WD depends only on how fast they
+accumulate KT. Manual WD payout (no smart contract, reject/cancel
+refunds in full), Premium in Telegram Stars only (Standard 150/7d,
+Pro 500/30d, Pro = dual drill), power (1/4 min regen, Tangki =
+capacity only, Reaktor = −10%/level), scan 2.5 min base with map
+factors ×1/×1.3/×1.6/×2.0/×2.5, 5 maps with their gems and
+challenges, ads 10/day +0,375 KT with 60s cooldown, server-side
+validation of everything.
 
 ## Per-player sessions — Telegram initData (2026-11-18, implemented, NOT yet deployed)
 
@@ -107,7 +119,7 @@ single-player code until the owner pushes + redeploys + migrates):
   admin's. The legacy web player (no initData) is a REGULAR player —
   it can play, but it is NOT admin, never sees the Kendali tab, and
   cannot run admin actions. `getGameState` returns `player.isAdmin` +
-  `adminStats` (global paid-GRAM total, admin only); non-admins see only their own WDs/orders.
+  `adminStats` (global paid-USDT total, admin only); non-admins see only their own WDs/orders.
 - Client: `telegram-web-app.js` in `client/index.html`,
   `window.Telegram.WebApp.initData` sent with every `/api/game`
   call (`client/src/api.ts`), `ready()` + `expand()` guarded in
@@ -744,17 +756,17 @@ max-effort/active/mid-upgrade), the pinned HONEST NOTE test
 `telegram.test.ts` 9/9, `anticheat.test.ts` 7/7 regressions).
 NOT verified live. NOT pushed to GitHub.
 
-## WD first minimum lowered to 0,1 GRAM (2026-11-19, implemented, NOT yet deployed)
+## WD first minimum lowered to 0,1 USDT (2026-11-19, implemented, NOT yet deployed)
 
 Owner decision (2026-11-19 09:24 WITA, his words: "turunkan 0,5
-gram jadi 0,1 gram... WD pertama itu receh saja dulu"): 0,5 GRAM
+gram jadi 0,1 gram... WD pertama itu receh saja dulu"): 0,5 USDT
 is too expensive for the owner to pay out per new player, so the
 first WD is now small change — a cheap hook. **New rule: first WD
-minimum 100 KT (0,1 GRAM); repeat WDs minimum 5.000 KT (5 GRAM)
+minimum 100 KT (0,1 USDT); repeat WDs minimum 5.000 KT (5 USDT)
 FLAT, unchanged.** Amount granularity changes from 500 KT to
-**100 KT multiples (0,1 GRAM steps) for ALL WDs**, so a first WD
+**100 KT multiples (0,1 USDT steps) for ALL WDs**, so a first WD
 can be 100, 200, 300 KT, etc., and a repeat WD can be 5.000,
-5.100, 5.200 KT, etc. Ratio stays 1.000 KT = 1 GRAM. Prices,
+5.100, 5.200 KT, etc. Ratio stays 1.000 KT = 1 USDT. Prices,
 bonus cap (35 KT), daily bonus (1,25 KT), ads (0,75 KT), upgrade
 costs, power, timings, Premium, anti-cheat, and sessions are all
 UNCHANGED. No cooldown, no per-WD max, no other new mechanic. No
@@ -762,7 +774,7 @@ DB migration needed — the rule is code constants
 (`WD_FIRST_MIN_KT = 100`, `WD_STEP_KT = 100`,
 `WD_REPEAT_MIN_KT = 5000`, `wdMinKtForPaidCount` in
 `api/_lib/game.ts`); the zod request floor moved with the step
-(`.min(100)`). The WD form reads `wdMinKt`/`wdMinGram`/`wdStepKt`
+(`.min(100)`). The WD form reads `wdMinKt`/`wdMinUsdt`/`wdStepKt`
 from the server, so it needed no logic change — only its labels
 ("kelipatan 0,1", `step={0.1}`) and the rules copy in
 `client/src/App.tsx` (WD tab + rules list).
@@ -773,17 +785,17 @@ The original >10-day target for the first WD (rebalance #3, #6)
 is abandoned here on purpose: a 100 KT first WD cannot take 10
 days at current earnings, and the owner chose the cheap hook over
 the slow first WD. This is a deliberate trade, not a miss — the
-first WD is a ONE-TIME 0,1 GRAM cost per player. It does NOT
+first WD is a ONE-TIME 0,1 USDT cost per player. It does NOT
 change the monthly payout rate: the repeat pace (~14 days for an
-active player, ~10,7 GRAM/30d, 100 active players ≈ 1.070
-GRAM/month, stable at both horizons) is the bankruptcy
+active player, ~10,7 USDT/30d, 100 active players ≈ 1.070
+USDT/month, stable at both horizons) is the bankruptcy
 protection, and it is UNCHANGED by this change — the sim below
-confirms the repeat intervals and GRAM/30d are identical to
+confirms the repeat intervals and USDT/30d are identical to
 rebalance #6.
 
 ### Simulation (same Monte Carlo + day-by-day model as #4/#5/#6, real constants, 2 runs agreeing within a few percent)
 
-| Profile | Days to FIRST WD (100 KT) | Days between REPEAT WDs (5.000 KT), days 46–60 | Days between REPEAT WDs, days 166–180 | GRAM / 30 days, days 46–60 | GRAM / 30 days, days 166–180 |
+| Profile | Days to FIRST WD (100 KT) | Days between REPEAT WDs (5.000 KT), days 46–60 | Days between REPEAT WDs, days 166–180 | USDT / 30 days, days 46–60 | USDT / 30 days, days 166–180 |
 |---|---|---|---|---|---|
 | (a) Max-effort, no upgrades | 1 | ~7,0 | ~7,0 | ~21,4 | ~21,4 |
 | (b) Active, no upgrades | 2 | ~14,0 | ~14,0 | ~10,7 | ~10,7 |
@@ -811,3 +823,423 @@ the pinned note that the >10-day target is superseded);
 `anticheat.test.ts` 7/7 regressions — their 500 KT first-WD
 requests are still valid under the new rule: 500 is a multiple
 of 100 and ≥ 100). NOT verified live. NOT pushed to GitHub.
+
+## WD ceiling — 30-day cooldown + 5.000 KT max (2026-11-19, implemented, NOT yet deployed)
+
+**REMOVED 2026-11-19 — DO NOT RE-APPLY.** The owner rejected any
+time limit on WD ("buat agar KT-nya terkumpul sampai bisa di-WD,
+jangan 14 hari"): `WD_COOLDOWN_DAYS`, `getLastPaidWdAt` /
+`getWdCooldownStatus`, the cooldown check in `requestWithdrawal`,
+the `wdCooldownDaysRemaining` / `nextWdAvailableAt` state fields,
+the WD tab banner + disabled logic, and the cooldown copy are all
+DELETED (see rebalance #7 below). The per-WD MAXIMUM 5.000 KT
+survives. The rest of this section is kept as the record of what
+the ceiling was — the Premium simulation table below is still
+valid as the measurement of the hole (it is re-measured at #7
+rates in the rebalance #7 section).
+
+Owner alarm (2026-11-19 09:39 WITA): "pemain gratis bisa WD
+seminggu sekali 5 gram — apakah anda ingin saya bangkrut?"
+Partly a misunderstanding, partly real. The free-player numbers
+were: weekly 5-USDT WDs only for max-effort grinders (12
+tanks/day, ~7-day interval); an ACTIVE free player is ~14 days,
+a casual player ~55–133 days. BUT the Premium hole was REAL and
+had never been simulated: Premium multiplies KT earnings, so a
+Premium player — especially a Premium UPGRADED player — could
+WD far faster. This section measures Premium exactly and builds
+the ceiling that caps payout for ANYONE.
+
+### Premium simulation (Monte Carlo, real loot generator + real Premium multipliers, 2 runs agreeing within ~1%)
+
+Modelled exactly as the game implements Premium: energy/day ×2
+(regen 2× — active 180→360, casual 45→90, max-effort 360→720,
+mid-upgrade 608→1216 energy/day), sell prices via the REAL
+` sellMultiplier(levels, premium=true)` (+15% on the base — a
+mid-upgrade player goes 1.25 → 1.40, i.e. ×1.12, not ×1.15),
+scan/drill time ×0.75, Pro dual drill halving drill time on top,
+travel free. Same day-by-day model as #4/#5/#6 (real constants,
+sector/map progression, capped bonus, daily bonus + ads).
+
+| Profile | Standard: first WD / repeat interval / USDT per 30 days | Pro: first WD / repeat interval / USDT per 30 days |
+|---|---|---|
+| (a) Max-effort, no upgrades | 1 hari / ~3,5 hari / ~43,1 | 1 hari / ~3,5 hari / ~43,1 |
+| (b) Active, no upgrades | 1 hari / ~6,9 hari / ~21,6 | 1 hari / ~6,9 hari / ~21,6 |
+| (c) Casual, no upgrades | 4 hari / ~38,6 → ~27,7 hari / ~3,9 → ~5,4 | 4 hari / ~38,1 → ~27,7 hari / ~3,9 → ~5,4 |
+| (d) Mid-upgrade (all lvl 5) | 1 hari / ~1,9 hari / ~80,1 | 1 hari / ~1,9 hari / ~79,8 |
+
+Free baseline for comparison (#6): (a) ~7,0 hari / ~21,4 USDT,
+(b) ~14,1 hari / ~10,7 USDT, (c) ~130 → ~55 hari / ~1,2 →
+~2,7 USDT, (d) ~3,8 hari / ~39,4 USDT. So Premium roughly
+DOUBLES the payout rate: an ACTIVE Premium player WD-s ~weekly
+(~21,6 USDT/month), and the WORST case — Premium + fully
+upgraded — pays **~80 USDT/month** (repeat WD every ~1,9 days).
+100 such players would be ~8.000 USDT/month. The owner's fear
+was justified: without a ceiling, Premium is a payout
+multiplier, not just a convenience pass.
+
+Two findings worth stating plainly:
+- **Pro earns the SAME as Standard.** The dual drill saves
+  wall-clock time only — it cannot raise KT earnings, because
+  ENERGY is the binding resource, not time. (If Pro earned
+  more, the 500-Stars tier would be a money printer on top of
+  Standard.) The sim pins this: Standard vs Pro USDT/30d agree
+  within 1 USDT and intervals within 3% for every profile.
+- **Operation time does NOT bind any profile.** Jobs are
+  sequential (one at a time per player), so wall time is the
+  only other possible binding constraint besides energy. Worst
+  case is mid-upgrade Standard at ~211 min/day of job time
+  (Pro ~148 min, dual drill saves ~63 min/day) — far under the
+  24h day (1.440 min) and under a 16h awake budget (960 min).
+  Energy binds, time does not. The practical limit is
+  ATTENTION: the worst profile needs ~224 start/collect taps a
+  day (max-effort Premium ~133, active Premium ~67) — a bot
+  does that trivially, a human barely. That is exactly why the
+  ceiling matters: even a 24/7 bot cannot take more than ~10,7
+  USDT/month once the ceiling is in.
+
+### The ceiling — design + math
+
+- **30-day cooldown between WDs per player** (`WD_COOLDOWN_DAYS
+  = 30`), enforced server-side in `requestWithdrawal`. The clock
+  runs from the last PAID WD's `processedAt` (set by the admin
+  "pay" step; `createdAt` is the fallback for legacy rows) — no
+  schema change was needed, so **no new migration**: the ceiling
+  reads the existing `wd_requests` rows. The first WD has no
+  previous WD, so no cooldown applies to it; after ANY paid WD
+  (even the 100 KT first one) the 30-day clock starts.
+  Rejected/cancelled WDs refund the KT and never start the clock.
+- **Per-WD maximum 5.000 KT (5 USDT)** (`WD_MAX_KT = 5000`),
+  enforced in the handler with a message naming the maximum.
+  Repeat WDs are therefore effectively exactly 5.000 KT (min =
+  max = 5.000); first WD min 100 KT, max 5.000 KT. The zod
+  request cap stays at 10.000.000 on purpose so the handler —
+  not a generic HTTP 400 — returns the clear maximum message.
+- **Ceiling math:** 5.000 KT per WD, max 1 WD per 30 days →
+  (30 / 30) × 5 USDT = **5 USDT/month maximum per player,
+  for ANYONE** (free/Premium, upgraded or not). Verified by sim:
+  every profile above the ceiling is capped at 5 USDT/30d
+  (max-effort free 21,4 → 5; mid-upgrade free 39,4 → 5;
+  Premium mid-upgrade 80,1 → 5); casual profiles are already
+  under the ceiling, so it changes nothing for them.
+- **Why BOTH parts are needed:** a cooldown alone caps nothing
+  without a per-WD maximum — a player would bank two weeks of
+  earnings and withdraw it all at once (shown in rebalance #4:
+  cooldown-only leaves total USDT unchanged). A maximum alone
+  caps nothing without a cooldown — a player would WD 5.000 KT
+  every ~2 days. Only the combination bounds total payout.
+- **`getGameState` returns the cooldown status:** `wdMaxKt`
+  (5.000), `wdMaxUsdt` (5), `wdCooldownDaysRemaining` (0 =
+  available now, rounded up), `nextWdAvailableAt` (ISO date or
+  null). The WD tab shows "WD berikutnya tersedia dalam X hari
+  (tanggal)" while in cooldown and "WD ulang 5 USDT, maksimal
+  1× per 30 hari" in the rules; the form enforces the maximum
+  (input max + error message) and disables submission during
+  the cooldown. The rules copy in Hanggar was updated the same
+  way (the old "5.000, 5.100, 5.200 KT, dst." wording is gone —
+  repeat WDs are now exactly 5.000 KT).
+- **Without this ceiling, total payout is bounded only by
+  earnings.** That is the statement the owner needed: every
+  lever before this one (price cuts, bonus cap, WD minimums)
+  only slowed how fast a player REACHES a WD — none of them
+  limited how much USDT leaves per month once the player is
+  earning at full rate. The ceiling is the first (and only)
+  mechanism that puts a hard number on it: 5 USDT/month
+  per player, 500 USDT/month per 100 players, no matter who
+  they are or what they bought.
+
+### Raised 14 → 30 days (2026-11-19)
+
+Owner verdict (2026-11-19 10:13 WITA), honestly: he CANNOT
+afford the 14-day pace — the 14-day brake is not strong enough.
+So the cooldown was raised to monthly: one WD per 30 days max.
+The ceiling is now 5 USDT/month per player (100 players = max
+500 USDT/month; 1.000 players = max 5.000 USDT/month). Nothing
+else changed: first WD 0,1 USDT, per-WD max 5 USDT, prices,
+bonus cap, Premium, anti-cheat — all untouched. The 14-day
+numbers above (Premium sim, ~10,7 USDT/month ceiling) are kept
+as the record of what the 14-day ceiling WOULD have allowed.
+
+### What did NOT change
+
+Prices, bonus cap (35 KT), daily bonus (1,25 KT), ads
+(0,75 KT), upgrade costs, power costs/regen, scan/drill times,
+Premium prices/benefits, anti-cheat, sessions — all untouched.
+No other new mechanic. No DB migration needed for the ceiling.
+
+### Verified locally (2026-11-19)
+
+`bun run typecheck` 0 errors (strict AND Vercel-style
+`--strictNullChecks false`), `bun run build:client` OK (bundle
+contains the ceiling strings). Full suite **60/60 pass, 3
+consecutive runs** vs local Postgres (`/tmp/smoke-test/`):
+`ceiling.test.ts` 9/9 (second WD within 30 days rejected with
+remaining days; 29 days still blocked / 31 days allowed; 5.000
+KT repeat WD succeeds after cooldown; WD above 5.000 rejected
+for first-timer and repeat alike; first WD not blocked; cooldown
+is per-player; rejected/cancelled WD does not start the clock);
+`economy.test.ts` 26/26 (Premium sim assertions — Standard and
+Pro tables, Pro ≈ Standard, time does not bind, ceiling caps
+every Premium profile at ~10,7 USDT/month, Premium pace stable
+across horizons; the old 7-day-cooldown-reported-only test is
+replaced by the implemented 30-day ceiling test; the (c)+(d)
+test now backdates the paid WD 31 days so it measures the
+minimum, not the ceiling, and asserts 5.100 KT is rejected);
+`game.test.ts` 9/9, `telegram.test.ts` 9/9,
+`anticheat.test.ts` 7/7 regressions. NOT verified live. NOT
+pushed to GitHub.
+
+### Deploy steps (owner)
+
+No new migration for the ceiling — push + redeploy only. The
+earlier pending steps still stand: run
+`deploy/neon/migration-0002-anticheat.sql` and
+`deploy/neon/migration-0003-fractional-kt.sql` in Neon once,
+then redeploy on Vercel.
+
+## Payout currency switched GRAM → USDT (2026-11-19, implemented, NOT yet deployed)
+
+Owner decision (2026-11-19 09:54 WITA): ganti mata uang payout dari
+GRAM ke USDT. Alasannya: harga GRAM membuat kewajiban dolar pemilik
+besar dan berubah-ubah, sementara USDT $1 tetap — jadi yang dibayar
+pemilik per bulan bisa diprediksi. Ini ganti NAMA mata uang saja
+(1:1, angka tidak berubah) — BUKAN pengurang payout: yang benar-benar
+membatasi total payout adalah WD ceiling (30 hari + maks 5.000 KT),
+bukan ganti mata uangnya.
+
+- **Rasio tetap 1.000 KT = 1 USDT** (dulu 1.000 KT = 1 GRAM).
+  WD pertama 100 KT = 0,1 USDT; WD ulang minimum/maksimum 5.000 KT
+  = 5 USDT; ceiling 5 USDT/bulan per pemain yang direncanakan di
+  bagian di atas DIBATALKAN 2026-11-19 (cooldown dihapus — lihat
+  rebalance #7).
+- **Alur WD tetap manual:** pemain mengajukan, pemilik mengirim
+  USDT sendiri, lalu menandai Dibayar dengan referensi transaksi.
+  Kolom dompet tetap string alamat biasa, dilabeli "alamat dompet
+  USDT" — TIDAK ada jaringan yang ditentukan (bukan TRC20/ERC20/dll),
+  pemilik tidak pernah menyebutkannya.
+- **Yang diubah:** `KT_PER_GRAM` → `KT_PER_USDT`; bentuk API
+  (`amountGram` → `amountUsdt`, `wdMinGram` → `wdMinUsdt`,
+  `wdMaxGram` → `wdMaxUsdt`, `gramEquivalent` → `usdtEquivalent`,
+  `totalWdPaidGram` → `totalWdPaidUsdt`, `ktPerGram` →
+  `ktPerUsdt`); semua string user-visible (hero "Dapatkan USDT",
+  tab "WD USDT", aturan WD, antrean Kendali, log aktivitas, pesan
+  error, label form); kolom DB (`total_wd_paid_gram` →
+  `total_wd_paid_usdt`, `amount_gram` → `amount_usdt`) +
+  `deploy/neon/migration-0004-rename-gram-usdt.sql` (RENAME COLUMN
+  idempotent); `deploy/README.md` + `README.md`; sim + test
+  (`WD_CEILING_GRAM_PER_30D` → `WD_CEILING_USDT_PER_30D`,
+  `gramPer30d` → `usdtPer30d`, dst.).
+- **Yang TIDAK berubah:** semua angka, rasio, harga, timing,
+  Premium, anti-cheat, sesi, dan ceiling itu sendiri. Bagian
+  riwayat (rebalance #3–#6) di dokumen ini sengaja masih memakai
+  GRAM sesuai zamannya (lihat catatan mata uang di atas).
+- **Catatan jujur (dari MEMORY):** GRAM (Toncoin) saat dicek
+  2026-11-19 diperdagangkan ~$1,01–1,02 — jadi 10,7 GRAM ≈ $10,90,
+  hampir sama dolarnya dengan 10,7 USDT. Keuntungan USDT yang
+  nyata adalah STABILITAS ($1 tetap), bukan biaya dolar yang
+  lebih rendah hari ini.
+
+### Deploy steps (owner)
+
+Satu migrasi baru: jalankan
+`deploy/neon/migration-0004-rename-gram-usdt.sql` di Neon sekali
+(setelah migration-0002 + migration-0003), lalu redeploy di
+Vercel. Database kosong tidak perlu: `init.sql` terbaru sudah
+berisi nama kolom USDT.
+
+## Economy rebalance #7 — WD cooldown REMOVED + ALL KT income ÷40 total (2026-11-19, implemented, NOT yet deployed)
+
+Owner decision (2026-11-19 10:15 WITA, his words: "anda bukan
+kasi limit WD harus 30 hari tapi buat agar KT-nya itu terkumpul
+sampai bisa di-WD, jangan 14 hari dong, itu terlalu cepat, di atas
+dari itu"): he does NOT want any time limit on WD — no 14-day and
+no 30-day cooldown. The pacing must come from SLOW KT
+ACCUMULATION, not a timer. The 30-day-cooldown build that was in
+flight (subagent 0600bbc3) was STOPPED and undone. Target: an
+ACTIVE free player needs ~30 days to accumulate 5.000 KT.
+
+### What was removed (the whole cooldown, not just the number)
+
+- `WD_COOLDOWN_DAYS` + `WD_COOLDOWN_MS` (was 30, briefly, after
+  the stopped 14→30 change), `getLastPaidWdAt`,
+  `WdCooldownStatus`, `getWdCooldownStatus` — deleted from
+  `api/_lib/game.ts`.
+- The cooldown check in `requestWithdrawal` — deleted. The
+  handler now enforces only: 100 KT multiples, the two-tier
+  minimum (100 / 5.000 KT), the per-WD maximum (5.000 KT), and
+  sufficient balance.
+- `wdCooldownDaysRemaining` / `nextWdAvailableAt` — removed from
+  the `getGameState` response shape and the client (the type is
+  zod-inferred, so the client type updated automatically).
+- The WD tab cooldown banner + disabled logic (`inCooldown`) and
+  the cooldown copy in the WD rules + the rules list — replaced
+  with the accumulation truth: "Tidak ada batas waktu antar-WD:
+  seberapa cepat kamu bisa WD tergantung seberapa cepat kamu
+  mengumpulkan KT."
+- `ceiling.test.ts` — the cooldown tests were DELETED and the
+  file rewritten to prove the removal (see verification below).
+  The sim helpers `usdtPer30dWithCooldown` /
+  `usdtPer30dWithCeiling` + `WD_CEILING_*` are deleted from
+  `/tmp/smoke-test/sim.ts`.
+- Verified by grep: no `WD_COOLDOWN*`, `WdCooldown*`,
+  `wdCooldown*`, `getLastPaidWdAt`, `getWdCooldownStatus`,
+  `nextWdAvailableAt` or `inCooldown` remains anywhere in `api/`
+  or `client/src/` — the only matches are the two removal-note
+  comments in `game.ts` and the historical "WD ceiling" section
+  of this file (kept as removed history). The built bundle
+  (`main-B52NVERI.js`) contains "cooldown" exactly once — the
+  60-second AD cooldown, a different mechanic that stays. The
+  anti-cheat per-rule 24h cooldown also stays (different
+  mechanic, flag-only).
+
+### What was cut (÷2 on top of #6 = ÷40 total vs the original economy)
+
+New prices (KT per unit, halved from #6): Regolith 0,05 → **0,025**,
+Kondrit 0,1 → **0,05**, Besi-Nikel 0,25 → **0,125**, Kobalt 0,5 →
+**0,25**, Platinum 2,25 → **1,125**, Iridium 7,2 → **3,6**,
+Helium-3 18 → **9**; map gems halved too (Opal 1,95 → 0,975,
+Topaz 2,55 → 1,275, Turkuois 3,9 → 1,95, Ametis 5,25 → 2,625,
+Zamrud 9,6 → 4,8, Rubi 12,6 → 6,3, Safir 21 → 10,5, Berlian
+28,5 → 14,25, Opal Es Hitam 45 → 22,5, Voidium 72 → **36**).
+Expedition bonus 0,5 + 0,1×sektor → **0,25 + 0,05×sektor**,
+daily bonus 1,25 → **0,625** KT, ads reward 0,75 → **0,375** KT
+(cap 10/day + 60s cooldown unchanged). WD rule STAYS (first WD
+100 KT = 0,1 USDT, repeat WDs 5.000 KT flat, max 5.000 KT per WD).
+Upgrade costs UNCHANGED (23.430 KT for all level 5). Prices now
+need 3 decimals: `roundKt` rounds every credit/debit to 3
+decimals, the server formatter (`fmtKt`) and the client formatter
+(`fmt` in App.tsx) show max 3 decimals. No DB migration needed
+(balance is already DOUBLE PRECISION). The faucet floor is now
+0,625 + 3,75 = 4,375 KT/day: ~23 days to a first WD and ~1.143
+days to a repeat WD on faucet alone.
+
+### The cap deviation — why the cap is 17,5 KT, not 35 KT
+
+The task said "keep the bonus CAP (35 KT)". That instruction
+CONFLICTS with the target it was attached to, and the sim proves
+it — so the cap was halved with everything else (35 → **17,5
+KT**), and this is why:
+
+- The completion bonus is 86–93% of an active player's earnings.
+  Halving the slope (0,1 → 0,05) while keeping the cap at 35 only
+  delays when the cap binds (sector 345 → 695, ~day 38 → ~day
+  77); it does NOT halve the steady-state bonus. Measured with
+  cap 35 (same ÷40 income, same sim): active repeat interval
+  21,1 days at days 46–60 → **14,8 days at days 166–180**
+  (7,1 → 10,2 USDT/month) — not 28–35 days, and not stable.
+  The 166–180 interval is mathematically capped by the 35 KT
+  bonus alone (9 expeditions/day × 35 KT ≈ 315 KT/day), so NO
+  factor on ore/faucet/slope can push it past ~15 days while the
+  cap stays 35.
+- Halving the cap (35 → 17,5) keeps it binding at the SAME
+  sector 345 (0,25 + 0,05×345 = 17,5) and the same ~day 38 for
+  an active player as #6 — that is what preserves the stability
+  #6 bought. The measured result below is the proof: 28,1 vs
+  27,9 days (0,7% apart).
+
+### Recalculation (same Monte Carlo + day-by-day model as #4/#5/#6, real constants, 2 runs)
+
+KT per 30-energy tank, ore only (no upgrades, completion bonus
+excluded): Map 1 ~2,8, Map 2 ~3,3, Map 3 ~5,8, Map 4 ~12,7,
+Map 5 ~20,2. Hull fees per tank (unchanged costs): Map 1–2 0,
+Map 3 ~9,4, Map 4 ~44,9, Map 5 ~102,1 — Map 5 is still
+NET-NEGATIVE on ore minus fees alone (−82 KT/tank); only the
+sector bonus makes the far maps pay, and Map 1 still pays the
+most bonus per energy, so a KT-maximising player still farms
+Map 1.
+
+| Profile | Days to FIRST WD (100 KT) | Days between REPEAT WDs (5.000 KT), days 46–60 | Days between REPEAT WDs, days 166–180 | USDT in month 1 | USDT / 30 days, days 46–60 | USDT / 30 days, days 166–180 | Days to afford all lvl-5 upgrades (23.430 KT) |
+|---|---|---|---|---|---|---|---|
+| (a) Max-effort, no upgrades | 2 | ~14,0 | ~14,0 | ~7,6 | ~10,7 | ~10,7 | ~75 |
+| (b) Active, no upgrades | 4 | ~28,1 | ~27,9 | ~2,5 | ~5,3 | ~5,4 | ~149 |
+| (c) Casual, no upgrades | 13 | ~265 | ~111 | ~0,3 | ~0,6 | ~1,4 | >180 (never in horizon) |
+| (d) Mid-upgrade (all lvl 5) | 1 | ~7,6 | ~7,6 | ~16,6 | ~19,7 | ~19,7 | 41 (payback period — starts fully upgraded) |
+
+Read it plainly: **the ACTIVE target is HIT — ~28 days to
+accumulate 5.000 KT, stable at both horizons** (28,1 vs 27,9
+days). 100 active players ≈ **530 USDT/month**. An ACTIVE player
+needs ~149 days of earnings to afford all level-5 upgrades.
+
+### Premium at #7 rates (same model + real Premium multipliers)
+
+| Profile | Standard: first WD / repeat interval / USDT per 30 days | Pro: first WD / repeat interval / USDT per 30 days |
+|---|---|---|
+| (a) Max-effort, no upgrades | 1 hari / ~7,0 hari / ~21,6 | 1 hari / ~7,0 hari / ~21,6 |
+| (b) Active, no upgrades | 2 hari / ~13,9 hari / ~10,8 | 2 hari / ~13,9 hari / ~10,8 |
+| (c) Casual, no upgrades | 7 hari / ~77 → ~55 hari / ~1,9 → ~2,7 | 7 hari / ~77 → ~55 hari / ~1,9 → ~2,8 |
+| (d) Mid-upgrade (all lvl 5) | 1 hari / ~3,7 hari / ~40,1 | 1 hari / ~3,7 hari / ~40,2 |
+
+Premium still roughly DOUBLES the payout rate, and Pro still
+earns the SAME as Standard (dual drill saves wall time only;
+energy binds, not time). Operation time still binds no profile
+(worst case mid-upgrade Standard ~211 min/day of job time, ~224
+taps/day).
+
+### HONEST NOTE — without a cooldown there is NO hard ceiling
+
+This is the part the owner must see plainly: **the fastest
+profiles still accumulate 5.000 KT in DAYS, not weeks** — free
+mid-upgrade ~7,6 days (~19,7 USDT/month), Premium mid-upgrade
+~3,7 days (~40,1 USDT/month), Premium max-effort ~7,0 days
+(~21,6 USDT/month). 100 Premium mid-upgrade players ≈ 4.000
+USDT/month. The old ceiling (5 USDT/month for anyone) is gone
+by the owner's explicit choice; the only brakes left on a fast
+player are the upgrade cost itself (~149 days of active play to
+afford all level-5 upgrades, ~5 months before the ~19,7
+USDT/month free pace is even reachable), the anti-cheat flags,
+and the owner's MANUAL WD approval — every WD still passes
+through Kendali, nothing is paid automatically. That is inherent
+to accumulation-based pacing: no timer, no ceiling. The tests
+pin this (economy.test.ts "HONEST NOTE" tests) instead of
+hiding it.
+
+### Verified locally (2026-11-19)
+
+`bun run typecheck` 0 errors (strict AND Vercel-style
+`--strictNullChecks false`), `bun run build:client` OK
+(`main-B52NVERI.js`). Full suite **60/60 pass, 3 consecutive
+runs** vs local Postgres (`/tmp/smoke-test/`: `economy.test.ts`
+26/26 — new ÷40 prices, 3-decimal float-dust tests (40× 0,025
+KT = exactly 1 KT), daily bonus 0,625 KT, expedition bonus 0,3
+KT at sector 1, cap binds at sector 345 (17,5 KT), windowed sim
+assertions (active interval 26–31 days at BOTH horizons,
+USDT/30d stable within 10%), the pinned HONEST NOTE tests (no
+ceiling: mid-upgrade ~19,7 and Premium mid-upgrade ~40,1
+USDT/month); `ceiling.test.ts` rewritten 7/7 — no cooldown
+constant, no cooldown fields in state, a second WD immediately
+after a paid WD succeeds, three WDs in quick succession all
+allowed, per-WD max still enforced (5.100 KT rejected), rejected/
+cancelled WDs refund in full and retry at once;
+`game.test.ts` 10/10, `telegram.test.ts` 10/10,
+`anticheat.test.ts` 7/7 regressions). NOT verified live. NOT
+pushed to GitHub.
+
+**Environment incident while doing this work (2026-11-19):**
+the VM's `/tmp` (tmpfs) was recreated mid-task, wiping the
+whole `/tmp/smoke-test/` suite, and the local Postgres 16
+cluster was gone too (no postgres binaries at all). Both were
+rebuilt: PostgreSQL 16 reinstalled (`16/main` on port 5432,
+test DB `astra_test`), the schema re-applied from
+`deploy/neon/init.sql` + migrations 0001–0004, and the test
+suite RECONSTRUCTED from the game code + PORT_NOTES.md
+(`harness.ts`, `sim.ts`, runners, all five test files). The
+reconstructed game/telegram/anticheat suites are faithful
+recreations of the documented coverage (9→10 game tests, 9
+Telegram tests, 7 anti-cheat tests) — not byte-identical to the
+lost originals. A backup copy of the suite now lives at
+`~/workspace/smoke-test/` so a future `/tmp` wipe cannot lose
+it again.
+
+### Deploy steps (owner, in order)
+
+1. Push this directory to GitHub, then in Neon run
+   `deploy/neon/migration-0002-anticheat.sql` (if not done yet),
+   `deploy/neon/migration-0003-fractional-kt.sql`, and
+   `deploy/neon/migration-0004-rename-gram-usdt.sql` — all
+   idempotent, safe to re-run. Database kosong tidak perlu
+   migrasi: `init.sql` terbaru sudah berisi semuanya. **No new
+   migration for #7** — the income cut, the bonus cap, and the
+   cooldown removal are all code constants; the balance column
+   is already DOUBLE PRECISION from migration-0003.
+2. Redeploy on Vercel. Until then the live deployment still runs
+   the old income rates, the GRAM labels, and the 14-day
+   cooldown code from the last push (commit `759d08fb`).
