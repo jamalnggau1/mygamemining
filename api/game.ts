@@ -30,6 +30,7 @@ import { dispatchGameAction } from "./_lib/game.js";
 type Req = {
   method?: string;
   body?: unknown;
+  headers?: Record<string, string | string[] | undefined>;
 };
 type Res = {
   status: (code: number) => Res;
@@ -78,8 +79,18 @@ export default async function handler(req: Req, res: Res): Promise<void> {
     res.status(400).json({ ok: false, error: "Field 'action' wajib diisi." });
     return;
   }
+  // IP request untuk anti-cheat aturan multi-akun: diambil dari
+  // header x-forwarded-for yang dipasang Vercel edge (entri pertama
+  // = IP klien). TIDAK PERNAH dari body/field kiriman klien — nilai
+  // kiriman klien soal IP tidak dipercaya dan tidak dibaca.
+  const xff = req.headers?.["x-forwarded-for"];
+  const xffFirst = Array.isArray(xff) ? xff[0] : xff;
+  const ip =
+    typeof xffFirst === "string" && xffFirst.length > 0
+      ? (xffFirst.split(",")[0]?.trim() ?? undefined)
+      : undefined;
   try {
-    const result = await dispatchGameAction(action, args ?? {}, initData);
+    const result = await dispatchGameAction(action, args ?? {}, initData, ip);
     res.status(200).json(result);
   } catch (e) {
     if (e instanceof ZodError) {

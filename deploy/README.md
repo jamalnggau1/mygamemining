@@ -18,6 +18,8 @@ Telegram Mini App, dengan database **Neon Postgres**. Aturan utamanya:
 | `api/game.ts` + `api/_lib/game.ts` | Gameplay penuh di Vercel: `POST /api/game` (`{action, args, initData}`) menjalankan 20 aksi game (scan, bor, ekspedisi, jual, upgrade, bonus, iklan, Premium, WD) yang dipindah dari runtime Muse ke Drizzle + Neon. |
 | `api/_lib/telegram.ts` | Validasi Telegram WebApp `initData` server-side (HMAC-SHA256 sesuai spesifikasi Telegram, `auth_date` maks 24 jam) — identitas pemain tidak pernah dipercaya dari klien. Tanpa `initData`, request dianggap pemain web lama. |
 | `deploy/neon/migration-0001-telegram-id.sql` | Migrasi untuk database yang SUDAH berisi tabel versi single-player: menambah `player.telegram_id` + `player_id` di semua tabel per-pemain (data lama dianggap milik pemain web id=1, tidak hilang). |
+| `deploy/neon/migration-0002-anticheat.sql` | Migrasi untuk database yang SUDAH berisi tabel: menambah kolom anti-cheat di `player` (`risk_score`, `flag_reason`, `flagged_at`, `instant_collect_streak`, `tamper_count`, `tamper_since`, `last_eval_hour`, `username`) + tabel `security_flags` (jejak audit) dan `player_ip` (IP per pemain). Idempotent — aman dijalankan ulang. **Jalankan sebelum redeploy kode anti-cheat** (setelah migration-0001 bila database lama). Database kosong tidak perlu: `init.sql` sudah berisi semua ini. |
+| `api/_lib/anticheat.ts` | Deteksi bot server-side (lihat bagian Anti-cheat di bawah). |
 | `client/` | Client React yang sama, dibangun mandiri dengan esbuild + Tailwind CLI (`client/build.mjs`) — tanpa SDK Muse. |
 | `deploy/neon/init.sql` | Skema Postgres lengkap (player, inventory, upgrades, wd_requests, premium_orders, activity) untuk database Neon yang masih kosong. Idempotent — aman dijalankan ulang. |
 | `deploy/neon/schema.pg.ts` | Skema Drizzle Postgres yang dipakai handler game di `api/_lib/game.ts`. |
@@ -33,6 +35,12 @@ Telegram Mini App, dengan database **Neon Postgres**. Aturan utamanya:
    jalankan `deploy/neon/migration-0001-telegram-id.sql` sebagai
    gantinya (sekali saja, aman dijalankan ulang). Data lama dianggap
    milik pemain web lama (id=1) dan tidak hilang.
+   **Sudah pernah deploy sebelum anti-cheat?** Setelah migration-0001,
+   jalankan juga `deploy/neon/migration-0002-anticheat.sql` (sekali
+   saja, aman dijalankan ulang) — database lama belum punya kolom
+   `risk_score`/tabel `security_flags`/`player_ip`, dan kode baru
+   membutuhkannya. Urutan: 0001 dulu, baru 0002. Database kosong
+   tidak perlu migrasi: `init.sql` terbaru sudah berisi semuanya.
 2. **Import project ke Vercel**: New Project → pilih folder/repo ini.
    `vercel.json` sudah mengatur output ke `client/dist` dan functions
    ke `api/`, jadi tidak ada build command tambahan yang perlu diisi.
@@ -77,6 +85,44 @@ Yang penting diingat:
   chat atau tempat terbuka lain, **reset di tempat asalnya**
   (Neon Console untuk password database, BotFather `/revoke` untuk
   token bot) lalu perbarui environment variable di Vercel.
+
+## Anti-cheat otomatis (deteksi bot)
+
+Pemain bisa mengekstrak `initData`-nya sendiri lalu men-script
+panggilan API 24/7 dengan timing sempurna, atau menjalankan banyak
+akun Telegram sekaligus — validasi server-side saja tidak menangkap
+itu. Sejak migrasi 0002, server mendeteksi pola bot secara otomatis
+(`api/_lib/anticheat.ts`, dievaluasi paling sering 1×/jam per pemain
+dan bertahap dari aksi pemain sendiri — tidak ada full-table scan,
+tidak memperlambat permainan normal):
+
+| Aturan | Pemicu | Skor |
+| --- | --- | --- |
+| Main nonstop | Aksi game tercatat di ≥20 dari 24 jam terakhir yang berbeda | +40 |
+| Ambil instan | 10 ambilan hasil terakhir, masing-masing ≤10 detik setelah job selesai (manusia bervariasi, bot metronomis) | +40 |
+| Banyak akun | >3 `telegram_id` berbeda dari IP yang sama dalam 24 jam (IP dari header `x-forwarded-for` Vercel, bukan dari klien) | +30 |
+| Kecepatan mustahil / tampering | Aksi yang datang saat timer server masih berjalan (ambil sebelum selesai, scan kedua saat job aktif) — aksi itu sudah ditolak validasi, di sini dihitung sebagai sinyal; ≥5 dalam 24 jam | +30 |
+
+Aturan yang sama tidak menandai ulang dalam 24 jam (cooldown per
+aturan). Setiap penandaan tercatat di tabel `security_flags`
+(aturan, alasan yang bisa dibaca manusia, poin, waktu) dan menaikkan
+`player.risk_score`.
+
+**Kebijakan — baca ini dulu, ini disengaja:**
+- **Bendera (flag) hanya bersifat penasihat, bukan hukuman.**
+  Pemain yang ditandai **tetap bisa main normal** — tidak ada
+  auto-ban, tidak ada pemblokiran aksi, tidak ada pengurangan saldo.
+- Satu-satunya efek: WD pemain itu ditandai `needsReview` (peringatan
+  kuning di Kendali) dan ia muncul di daftar "Pemain Mencurigakan"
+  di tab Kendali, supaya pemilik memeriksa sebelum menyetujui WD.
+- **False positive ditoleransi oleh desain.** Pemain rajin yang
+  kebetulan main di 20 jam berbeda akan ditandai — itu tidak apa-apa,
+  karena tidak ada yang diblokir. Admin bisa menghapus bendera dari
+  Kendali ("Bersihkan") — hanya admin (`ADMIN_TELEGRAM_ID`) yang bisa
+  melakukannya; pemain biasa dan non-admin tidak bisa.
+- WD tetap manual seperti biasa: pemilik yang memutuskan menyetujui,
+  menolak, atau membayar — bendera hanya membantu keputusan, bukan
+  menggantikannya.
 
 ## Status & langkah berikutnya (jujur)
 

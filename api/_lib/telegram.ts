@@ -52,6 +52,10 @@ export type Session = {
    *  yang id-nya sama dengan ADMIN_TELEGRAM_ID. Pemain web lama
    *  (tanpa initData) bukan admin. */
   isAdmin: boolean;
+  /** IP request (diisi dispatch dari header x-forwarded-for yang
+   *  dipasang Vercel edge — TIDAK PERNAH dari kiriman klien).
+   *  Dipakai anti-cheat aturan multi-akun; null bila tidak ada. */
+  ip?: string | null;
 };
 
 export type SessionResolution =

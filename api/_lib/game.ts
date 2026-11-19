@@ -145,10 +145,17 @@
 //   classifies as an economy event in the split log.
 
 import { z } from "zod";
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import * as schema from "../../deploy/neon/schema.pg.js";
 import { getDb, type Db } from "./store.js";
 import { resolveSession, type Session } from "./telegram.js";
+import {
+  clearPlayerFlag,
+  evaluateAntiCheat,
+  listFlaggedPlayers,
+  recordCollectLatency,
+  recordTamperAttempt,
+} from "./anticheat.js";
 
 // ---------------------------------------------------------------------------
 // Game design constants
@@ -727,6 +734,20 @@ async function loadPlayer(db: Db, session: Session): Promise<PlayerRow> {
       .where(eq(schema.player.id, playerId));
     p = { ...p, expedition: JSON.stringify(parsedExp) };
   }
+  // Username Telegram terakhir (hanya untuk dikenali admin di daftar
+  // pemain mencurigakan — identitas tetap telegram_id).
+  if (session.username && session.username !== p.username) {
+    await db
+      .update(schema.player)
+      .set({ username: session.username })
+      .where(eq(schema.player.id, playerId));
+    p = { ...p, username: session.username };
+  }
+  // Anti-cheat otomatis: evaluasi berkala aturan nonstop +
+  // multi-akun (max 1×/jam/pemain, di dalam fungsi). Tidak pernah
+  // melempar — deteksi gagal = flag sekadar tidak naik, game tetap
+  // jalan.
+  await evaluateAntiCheat(db, p, session);
   return p;
 }
 
@@ -863,10 +884,15 @@ const wdShape = z.object({
   txRef: z.string().nullable(),
   createdAt: z.string(),
   processedAt: z.string().nullable(),
+  // Anti-cheat: true bila pemilik WD sedang berisiko (risk_score > 0)
+  // — dihitung server dari flag TERKINI pemiliknya, bukan dari data
+  // saat WD dibuat, supaya flag yang menyala belakangan (atau sudah
+  // dibersihkan) langsung tercermin di antrean Kendali.
+  needsReview: z.boolean(),
 });
 
 type WdRow = typeof schema.wdRequests.$inferSelect;
-function toWd(row: WdRow): z.infer<typeof wdShape> {
+function toWd(row: WdRow, needsReview: boolean): z.infer<typeof wdShape> {
   return {
     id: row.id,
     walletAddress: row.walletAddress,
@@ -877,6 +903,7 @@ function toWd(row: WdRow): z.infer<typeof wdShape> {
     txRef: row.txRef,
     createdAt: row.createdAt.toISOString(),
     processedAt: row.processedAt ? row.processedAt.toISOString() : null,
+    needsReview,
   };
 }
 
@@ -1088,6 +1115,23 @@ export const gameActions = {
       adminStats: z
         .object({ totalWdPaidGram: z.number() })
         .nullable(),
+      // Anti-cheat: daftar pemain mencurigakan untuk Kendali (null
+      // untuk pemain biasa) — telegram id, username, skor risiko,
+      // alasan, kapan di-flag, saldo KT, jumlah WD terbayar.
+      flaggedPlayers: z
+        .array(
+          z.object({
+            playerId: z.number(),
+            telegramId: z.number().nullable(),
+            username: z.string().nullable(),
+            riskScore: z.number(),
+            flagReason: z.string().nullable(),
+            flaggedAt: z.string().nullable(),
+            ktBalance: z.number(),
+            paidWdCount: z.number(),
+          }),
+        )
+        .nullable(),
     }),
     async handler(_args, session) {
       const db = getDb();
@@ -1137,6 +1181,21 @@ export const gameActions = {
       const wdPaidCount = await countPaidWithdrawals(db, p.id);
       const wdMinKt = wdMinKtForPaidCount(wdPaidCount);
       const adStats = await getAdStats(db, p.id);
+      // Anti-cheat: skor risiko pemilik tiap WD di antrean — WD
+      // pemilik yang sedang berisiko ditandai needsReview.
+      const riskByOwner = new Map<number, number>();
+      if (wdRows.length > 0) {
+        const ownerIds = [...new Set(wdRows.map((w) => w.playerId))];
+        const riskRows = await db
+          .select({ id: schema.player.id, risk: schema.player.riskScore })
+          .from(schema.player)
+          .where(inArray(schema.player.id, ownerIds));
+        for (const r of riskRows) riskByOwner.set(r.id, r.risk);
+      }
+      // Anti-cheat: daftar pemain mencurigakan — hanya untuk admin.
+      const flaggedPlayers = session.isAdmin
+        ? await listFlaggedPlayers(db)
+        : null;
       // Kendali: total GRAM yang sudah dibayar ke SEMUA pemain (hanya
       // untuk admin; pemain biasa mendapat null).
       const adminStats = session.isAdmin
@@ -1296,7 +1355,7 @@ export const gameActions = {
             nextCost: level >= u.maxLevel ? null : upgradeCost(u, level),
           };
         }),
-        withdrawals: wdRows.map(toWd),
+        withdrawals: wdRows.map((w) => toWd(w, (riskByOwner.get(w.playerId) ?? 0) > 0)),
         premiumOrders: orderRows.map((o) => ({
           id: o.id,
           plan: o.plan,
@@ -1316,6 +1375,7 @@ export const gameActions = {
           createdAt: a.createdAt.toISOString(),
         })),
         adminStats,
+        flaggedPlayers,
       };
     },
   }),
@@ -1335,7 +1395,12 @@ export const gameActions = {
       const fail = (error: string) => ({ ok: false, error, durationSec: 0, energy: p.energy });
       const exp = parseExpedition(p.expedition);
       if (!exp) return fail("Data asteroid tidak valid, coba muat ulang.");
-      if (parseJob(p.job)) return fail("Ada operasi yang sedang berjalan. Selesaikan atau batalkan dulu.");
+      if (parseJob(p.job)) {
+        // Anti-cheat (aturan d): operasi kedua saat timer operasi
+        // pertama masih berjalan — sudah ditolak, polanya dicatat.
+        await recordTamperAttempt(db, p, "memulai scan saat operasi masih berjalan");
+        return fail("Ada operasi yang sedang berjalan. Selesaikan atau batalkan dulu.");
+      }
       if (exp.scanned) return fail("Asteroid ini sudah dipindai — komposisi uratnya sudah terbuka.");
       const cost = scanEnergyCost(exp);
       if (p.energy < cost)
@@ -1375,7 +1440,12 @@ export const gameActions = {
       const fail = (error: string) => ({ ok: false, error, durationSec: 0, energy: p.energy, oreName: null as string | null });
       const exp = parseExpedition(p.expedition);
       if (!exp) return fail("Data asteroid tidak valid, coba muat ulang.");
-      if (parseJob(p.job)) return fail("Ada operasi yang sedang berjalan. Selesaikan atau batalkan dulu.");
+      if (parseJob(p.job)) {
+        // Anti-cheat (aturan d): operasi kedua saat timer operasi
+        // pertama masih berjalan — sudah ditolak, polanya dicatat.
+        await recordTamperAttempt(db, p, "memulai pengeboran saat operasi masih berjalan");
+        return fail("Ada operasi yang sedang berjalan. Selesaikan atau batalkan dulu.");
+      }
       if (!exp.scanned) return fail("Pindai asteroid ini dulu — tanpa scan, urat mineralnya tidak terlihat.");
       const vein = exp.veins[args.veinIndex];
       if (!vein) return fail("Urat mineral itu tidak ada di asteroid ini.");
@@ -1435,8 +1505,16 @@ export const gameActions = {
       const job = parseJob(p.job);
       if (!job) return fail("Tidak ada operasi yang bisa diambil hasilnya.");
       const remaining = Math.ceil((job.endsAt - Date.now()) / 1000);
-      if (remaining > 0)
+      if (remaining > 0) {
+        // Anti-cheat (aturan d): ambil hasil sebelum timer operasi
+        // selesai — sudah ditolak, polanya dicatat.
+        await recordTamperAttempt(db, p, "ambil hasil sebelum operasi selesai");
         return fail(`Operasi belum selesai — masih ${remaining} detik lagi. Bor dan spektrometer bekerja dengan waktu nyata.`);
+      }
+      // Anti-cheat (aturan b): selisih waktu collect vs job.endsAt
+      // server-side — bot mengambil hasil dengan timing metronom,
+      // manusia bervariasi.
+      const collectDelayMs = Date.now() - job.endsAt;
 
       if (job.kind === "scan") {
         exp.scanned = true;
@@ -1445,6 +1523,7 @@ export const gameActions = {
           .set({ expedition: JSON.stringify(exp), job: null, totalScans: p.totalScans + 1 })
           .where(eq(schema.player.id, p.id));
         await logActivity(db, p.id, "scan", `Scan ${exp.name} selesai — ${exp.veins.length} urat mineral terdeteksi.`, null);
+        await recordCollectLatency(db, p, collectDelayMs);
         return { ok: true, error: null, kind: "scan" as const, oreId: null, oreName: null, qty: 0, isRare: false, allMined: false, jammed: false, hullHit: false, repairFeeKt: 0 };
       }
 
@@ -1467,6 +1546,7 @@ export const gameActions = {
           .set({ expedition: JSON.stringify(exp), job: null, totalDigs: p.totalDigs + 1 })
           .where(eq(schema.player.id, p.id));
         await logActivity(db, p.id, "jam", `Bor macet saat mengebor urat ${ore?.name ?? vein.oreId} di ${exp.name} — urat hilang, mata bor harus diganti.`, null);
+        await recordCollectLatency(db, p, collectDelayMs);
         return {
           ok: true, error: null, kind: "mine" as const,
           oreId: vein.oreId, oreName: ore?.name ?? null, qty: 0,
@@ -1507,6 +1587,7 @@ export const gameActions = {
         }
         await logActivity(db, p.id, "hull_damage", `Lambung kapal terkena serpihan di ${map.name} — biaya perbaikan ${repairFeeKt} KT.`, -repairFeeKt);
       }
+      await recordCollectLatency(db, p, collectDelayMs);
       return {
         ok: true,
         error: null,
@@ -2200,6 +2281,20 @@ export const gameActions = {
     },
   }),
 
+  clearPlayerFlag: defineGameAction({
+    description:
+      "Admin action for the owner: clears one player's anti-cheat flag after manual review (risk score back to 0, reason and counters reset). The player keeps their balance and progress — clearing a flag is never a punishment, and a genuinely suspicious player will simply be flagged again by the detection rules if the pattern continues.",
+    request: z.object({ playerId: z.number().int().positive() }),
+    response: resultShape,
+    async handler(args, _session) {
+      const db = getDb();
+      const target = await loadPlayerRowOrNull(db, args.playerId);
+      if (!target) return { ok: false, error: "Pemain tidak ditemukan." };
+      await clearPlayerFlag(db, args.playerId);
+      return { ok: true, error: null };
+    },
+  }),
+
 };
 
 /** The action map — the client imports this TYPE only (import type),
@@ -2216,6 +2311,7 @@ export async function dispatchGameAction(
   action: string,
   input: unknown,
   initData?: string | null,
+  ip?: string | null,
 ): Promise<unknown> {
   const entry = (
     gameActions as Record<
@@ -2237,6 +2333,9 @@ export async function dispatchGameAction(
   if (resolved.ok === false) {
     return { ok: false, error: resolved.error };
   }
+  // IP request (dari header Vercel, bukan dari klien) ditempel ke
+  // sesi untuk anti-cheat aturan multi-akun.
+  resolved.session.ip = ip ?? null;
   // Aksi Kendali hanya untuk pemilik — dijaga di sini (satu pintu)
   // supaya tidak ada handler admin yang lupa memeriksa: hanya sesi
   // Telegram yang id-nya cocok dengan ADMIN_TELEGRAM_ID. Pemain web
@@ -2247,6 +2346,7 @@ export async function dispatchGameAction(
     "confirmPremiumOrder",
     "rejectPremiumOrder",
     "grantPremium",
+    "clearPlayerFlag",
   ]);
   if (ADMIN_ACTIONS.has(action) && !resolved.session.isAdmin) {
     return { ok: false, error: "Aksi ini hanya bisa dilakukan pemilik." };

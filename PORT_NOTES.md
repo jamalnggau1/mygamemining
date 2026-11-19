@@ -209,6 +209,77 @@ ADMIN_TELEGRAM_ID in Vercel.
   version, where the SDK validated the same way. Amounts ≥ 500 KT
   below the escalating minimum get the handler's detailed message.
 
+## Anti-cheat — automated bot detection + admin review (2026-11-19, implemented, NOT yet deployed)
+
+- Why: a player can extract their own valid `initData` and script
+  API calls 24/7 with perfect timing, and one person can run many
+  Telegram accounts. Server-side validation alone cannot catch that.
+- Design (flag-for-review only — **no auto-ban, no blocking of
+  play**; false positives are tolerated by design): four server-side
+  rules in `api/_lib/anticheat.ts`, evaluated at most 1×/hour per
+  player (`player.last_eval_hour`) plus incrementally on the player's
+  own actions — never a full-table scan per request:
+  - Nonstop play: game actions in ≥20 of the last 24 distinct
+    hours (from the `activity` log) → +40.
+  - Instant collect: the last 10 collect actions each within 10s
+    of the job's server-side completion (`job.endsAt` vs collect
+    time, streak counter on the player row) → +40.
+  - Multi-account: >3 distinct `telegram_id` from the same IP in
+    24h (IP from the `x-forwarded-for` header set by Vercel edge,
+    never client-sent) → +30.
+  - Impossible speed / tampering: action arriving while the
+    server-side timer still runs (early collect, second scan/mine
+    while a job is active) — already rejected by validation, counted
+    as a tamper signal; ≥5 in 24h → +30.
+  - Same rule does not re-fire within 24h (per-rule cooldown);
+    each firing raises `risk_score` and records a human-readable
+    reason in `security_flags` (audit trail).
+- Storage: `player` gains `username`, `risk_score` (default 0),
+  `flag_reason`, `flagged_at`, `instant_collect_streak`,
+  `tamper_count`, `tamper_since`, `last_eval_hour`; new tables
+  `security_flags` and `player_ip`. `deploy/neon/init.sql` updated
+  for fresh installs (also fixed a pre-existing bug there:
+  `premium_orders` lacked the `player_id` column that
+  `schema.pg.ts` already had, so the index failed on fresh
+  installs with error 42703). Migration
+  `deploy/neon/migration-0002-anticheat.sql` is idempotent and must
+  run BEFORE redeploying the new code on an existing database.
+- Enforcement: a flagged player keeps playing normally; only their
+  WD requests are marked `needsReview` (computed live from the
+  owner's current `risk_score` in `getGameState`) and they appear in
+  the admin review list. Admin clears flags via `clearPlayerFlag`
+  (admin-only, same gating as other Kendali actions).
+- Client: Kendali tab gains a "Pemain Mencurigakan" section
+  (username/Telegram ID, risk score, reason, KT balance, paid-WD
+  count, flagged date, "Bersihkan" button); `AdminWdCard` shows an
+  amber "Perlu ditinjau" warning when `wd.needsReview`. No other UI
+  changes. No game rules, economy numbers, timings, WD minimums, or
+  Premium changed.
+- Detection functions swallow their own errors so detection never
+  breaks gameplay.
+- Tested locally (Postgres 16, `astra_test`): **21/21 tests pass,
+  6 consecutive runs, 0 fail** — 7 anti-cheat tests (67 expects:
+  bot pattern flagged with the right reason, 24h cooldown, human
+  play stays clean, 5× early collect → tamper flag, flagged WD
+  `needsReview` + appears in admin `flaggedPlayers`, multi-account
+  4/IP flagged vs 3/IP clean, flagged player still plays normally,
+  admin clear → drops off the list, non-admin cannot clear), plus
+  the recreated regression suites: 8 game tests + 6 Telegram
+  session tests (player creation, daily bonus, ads, full
+  scan→mine→expedition cycle, sell, upgrade, map locks, WD
+  escalating minimum 500→1,000, Premium Pro, cancel/abandon, log
+  split; independent players, forged/stale/wrong-token initData
+  rejected, non-admin blocked from admin actions, admin approve→pay
+  lands on the owner's row, legacy web player is non-admin). Test
+  files: `/tmp/smoke-test/{anticheat,game,telegram}.test.ts`
+  (not committed). `bun run typecheck` 0 errors under strict AND
+  Vercel-style (`--strictNullChecks false`) settings;
+  `bun run build:client` OK.
+- One test lesson worth keeping: veins with the same ore are merged
+  into one entry in `generateExpedition`, so `exp.veins.length` can
+  be smaller than the rolled vein count — tests must use the actual
+  length, not assume ≥3.
+
 ## What was NOT tested live
 
 - Real Neon connectivity, `/api/health` against real Neon, and
@@ -248,3 +319,9 @@ ADMIN_TELEGRAM_ID in Vercel.
    `ADMIN_TELEGRAM_ID` (Production & Preview). Until then the live
    deployment still shares one player. See `deploy/README.md` →
    "Sesi per pemain (Telegram)".
+9. **Anti-cheat (2026-11-19, code ready in this dir, NOT yet
+   deployed):** push this directory, then in Neon run
+   `deploy/neon/migration-0002-anticheat.sql` once (idempotent —
+   safe to re-run; run AFTER migration-0001), and redeploy. Until
+   then the live deployment has no bot detection. See
+   `deploy/README.md` → "Anti-cheat otomatis (deteksi bot)".

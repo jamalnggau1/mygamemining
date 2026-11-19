@@ -49,6 +49,10 @@ export const player = pgTable("player", {
   // Validated Telegram user id. UNIQUE so one Telegram account can
   // never own two player rows; NULL only for the legacy web player.
   telegramId: bigint("telegram_id", { mode: "number" }).unique(),
+  // Username Telegram terakhir yang terlihat di initData yang
+  // tervalidasi (hanya untuk dikenali admin di daftar pemain
+  // mencurigakan — identitas tetap telegram_id, bukan username).
+  username: text("username"),
   ktBalance: integer("kt_balance").notNull().default(0),
   energy: integer("energy").notNull().default(20),
   energyUpdatedAt: timestamp("energy_updated_at", {
@@ -72,6 +76,29 @@ export const player = pgTable("player", {
   totalDigs: integer("total_digs").notNull().default(0),
   totalKtEarned: integer("total_kt_earned").notNull().default(0),
   totalWdPaidGram: doublePrecision("total_wd_paid_gram").notNull().default(0),
+  // -- Anti-cheat otomatis (deteksi bot, 2026-11-19) -----------------
+  // Skor risiko: 0 = bersih. Setiap aturan deteksi yang menyala
+  // menambah skor (lihat api/_lib/anticheat.ts) dan mengisi
+  // flag_reason + flagged_at. Pemain dengan risk_score > 0 TIDAK
+  // diblokir main — hanya WD-nya ditandai perlu ditinjau dan ia
+  // muncul di daftar "Pemain Mencurigakan" Kendali. Hanya admin yang
+  // bisa membersihkan flag (aksi clearPlayerFlag).
+  riskScore: integer("risk_score").notNull().default(0),
+  flagReason: text("flag_reason"),
+  flaggedAt: timestamp("flagged_at", { withTimezone: true, mode: "date" }),
+  // Streak collect instan berturut-turut (aturan b): naik tiap
+  // collect ≤10 detik setelah job selesai, reset bila collect
+  // lambat, reset juga saat aturan menyala.
+  instantCollectStreak: integer("instant_collect_streak").notNull().default(0),
+  // Percobaan aksi mustahil (aturan d): collect sebelum job selesai
+  // / scan-bor kedua saat operasi berjalan. tamperSince = awal
+  // jendela 24 jam hitungan ini.
+  tamperCount: integer("tamper_count").notNull().default(0),
+  tamperSince: timestamp("tamper_since", { withTimezone: true, mode: "date" }),
+  // Jam epoch terakhir evaluasi aturan (a) + (c) untuk pemain ini —
+  // evaluasi dibatasi max 1×/jam/pemain supaya getGameState yang
+  // di-poll tiap 5 detik tidak membebani database.
+  lastEvalHour: integer("last_eval_hour"),
 });
 
 export const inventory = pgTable(
@@ -168,4 +195,50 @@ export const activity = pgTable(
       .defaultNow(),
   },
   (t) => [index("activity_player_idx").on(t.playerId)],
+);
+
+// Anti-cheat otomatis (2026-11-19): jejak audit setiap aturan
+// deteksi yang menyala (dan setiap pembersihan flag oleh admin).
+// Satu baris per kejadian — alasan lengkapnya tinggal di sini,
+// sementara player.flag_reason hanya ringkasan terakhir untuk
+// ditampilkan di Kendali. Bukan tabel hukuman: baris di sini tidak
+// pernah memblokir pemain main.
+export const securityFlags = pgTable(
+  "security_flags",
+  {
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    playerId: integer("player_id")
+      .notNull()
+      .references(() => player.id),
+    // Aturan yang menyala: nonstop | instant_collect | multi_account
+    // | tamper | flag_cleared (audit pembersihan oleh admin).
+    rule: text("rule").notNull(),
+    reason: text("reason").notNull(),
+    points: integer("points").notNull().default(0),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [index("security_flags_player_idx").on(t.playerId, t.createdAt)],
+);
+
+// Anti-cheat otomatis (2026-11-19): IP terakhir yang terlihat per
+// pemain — bahan aturan multi-akun (c). IP diambil server dari header
+// x-forwarded-for (Vercel edge), TIDAK PERNAH dari kiriman klien.
+// last_seen_at diperbarui max 1×/jam/pemain, bukan tiap request.
+export const playerIp = pgTable(
+  "player_ip",
+  {
+    playerId: integer("player_id")
+      .notNull()
+      .references(() => player.id),
+    ip: text("ip").notNull(),
+    lastSeenAt: timestamp("last_seen_at", { withTimezone: true, mode: "date" })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.playerId, t.ip] }),
+    index("player_ip_ip_idx").on(t.ip, t.lastSeenAt),
+  ],
 );
