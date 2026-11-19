@@ -68,14 +68,20 @@
 //   iklan maks 15 = 17,5 KT/hari — it needs ~29 days to reach the
 //   FIRST WD (500 KT) on its own and ~286 days for a REPEAT WD
 //   (5.000 KT), so the faucet can no longer shortcut any WD.
+//   NOTE (2026-11-19, first WD lowered to 100 KT): the faucet floor
+//   is now 8,75 KT/hari (rebalance #6), so it needs ~12 days to
+//   reach the FIRST WD (100 KT) on its own and ~571 days for a
+//   REPEAT WD (5.000 KT).
 //
 // Economy (fixed by the owner):
 //   Coin A = Kredit Tambang Antariksa (KT), earned by selling space-mined minerals.
 //   1000 KT = 1 GRAM. The WD minimum has TWO TIERS, no ladder: the
-//   FIRST WD needs only 500 KT (0,5 GRAM); every WD after that needs
-//   at least 5.000 KT (5 GRAM), FLAT — it never climbs again. Amounts
-//   move in 500 KT (0,5 GRAM) steps, so a repeat WD can be 5.000,
-//   5.500, 10.000 KT, ... — 5.000 KT is the MINIMUM, not the exact
+//   FIRST WD needs only 100 KT (0,1 GRAM) — small change (receh), a
+//   cheap first payout as a hook (owner 2026-11-19: 0,5 GRAM is too
+//   expensive to pay per new player); every WD after that needs at
+//   least 5.000 KT (5 GRAM), FLAT — it never climbs again. Amounts
+//   move in 100 KT (0,1 GRAM) steps, so a repeat WD can be 5.000,
+//   5.100, 5.200 KT, ... — 5.000 KT is the MINIMUM, not the exact
 //   amount. The minimum is computed HERE from the paid-WD history in
 //   the database — the client can display it but can never lower it.
 //   Withdrawals are paid MANUALLY by the owner — a request deducts and
@@ -299,16 +305,19 @@ const BASE_SCAN_SECONDS = 150; // base scan is deliberately slow (2,5 menit) —
 const TRAVEL_ENERGY_COST = 4; // base hop to the nearest map; +2 per extra map step (distance)
 
 // WD minimum (anti-bangkrut): DUA TINGKAT, tanpa tangga.
-//   - WD pertama: 500 KT (0,5 GRAM).
+//   - WD pertama: 100 KT (0,1 GRAM) — receh, hook murah. 0,5 GRAM
+//     terlalu mahal dibayar pemilik per pemain baru (owner
+//     2026-11-19). Target WD pertama >10 hari DIGUGURKAN dengan
+//     sengaja oleh pemilik — WD pertama ~1–2 hari untuk pemain aktif.
 //   - WD kedua dan seterusnya: 5.000 KT (5 GRAM) — FLAT, tidak naik lagi.
-// Jumlah WD tetap kelipatan 500 KT (0,5 GRAM), jadi WD ulang bisa
-// 5.000, 5.500, 10.000 KT, dst. — 5.000 KT adalah MINIMUM, bukan
+// Jumlah WD tetap kelipatan 100 KT (0,1 GRAM), jadi WD ulang bisa
+// 5.000, 5.100, 5.200 KT, dst. — 5.000 KT adalah MINIMUM, bukan
 // jumlah pasti. Sumber kebenaran: riwayat WD terbayar (paidCount==0
-// → 500 KT, paidCount>=1 → 5.000 KT). Zod floor tetap WD_STEP_KT
-// (500): granularitas, bukan minimum — minimum ditegakkan di handler
+// → 100 KT, paidCount>=1 → 5.000 KT). Zod floor tetap WD_STEP_KT
+// (100): granularitas, bukan minimum — minimum ditegakkan di handler
 // requestWithdrawal dengan pesan detail yang menyebut minimumnya.
-const WD_STEP_KT = 500;
-export const WD_FIRST_MIN_KT = 500;
+const WD_STEP_KT = 100;
+export const WD_FIRST_MIN_KT = 100;
 export const WD_REPEAT_MIN_KT = 5000;
 export function wdMinKtForPaidCount(paidCount: number): number {
   return paidCount >= 1 ? WD_REPEAT_MIN_KT : WD_FIRST_MIN_KT;
@@ -1098,7 +1107,7 @@ function defineGameAction<Req extends z.ZodTypeAny, Res>(def: {
 export const gameActions = {
   getGameState: defineGameAction({
     description:
-      "Returns the full game state: player balances and energy, the two-tier WD minimum computed server-side from the paid-WD history (first WD 500 KT, repeat WDs 5.000 KT flat), premium pass status (tier, dual-drill flag, Telegram Stars plans) and Stars purchase orders, the five mining maps with unlock state, per-map distance, scan duration and challenge profiles, per-map gemstone loot, the asteroid currently being explored (identity, map, scan status, mineral veins), any timed scan/mining job in progress with its remaining seconds (finished jobs also reveal map challenge outcomes: drill jam / hull hit), ore inventory with live sell prices, upgrade levels and costs, recent withdrawals, the sponsored-ad reward state (reward per view, daily cap, views used today, remaining views and cooldown seconds — all computed server-side), and the activity log split into mission and economy categories.",
+      "Returns the full game state: player balances and energy, the two-tier WD minimum computed server-side from the paid-WD history (first WD 100 KT, repeat WDs 5.000 KT flat), premium pass status (tier, dual-drill flag, Telegram Stars plans) and Stars purchase orders, the five mining maps with unlock state, per-map distance, scan duration and challenge profiles, per-map gemstone loot, the asteroid currently being explored (identity, map, scan status, mineral veins), any timed scan/mining job in progress with its remaining seconds (finished jobs also reveal map challenge outcomes: drill jam / hull hit), ore inventory with live sell prices, upgrade levels and costs, recent withdrawals, the sponsored-ad reward state (reward per view, daily cap, views used today, remaining views and cooldown seconds — all computed server-side), and the activity log split into mission and economy categories.",
     request: z.object({}),
     response: z.object({
       player: z.object({
@@ -2280,7 +2289,7 @@ export const gameActions = {
 
   requestWithdrawal: defineGameAction({
     description:
-      "Creates a withdrawal request: locks the KT and puts the request in the owner's manual payout queue with the player's GRAM wallet address. Anti-cheat: the amount arrives in KT and is fully re-validated server-side — it must be a multiple of 500 KT (0,5 GRAM steps), must meet the two-tier minimum computed here from the player's paid-WD history (first WD: 500 KT, repeat WDs: 5.000 KT flat), and must fit the server-side balance. The client cannot lower the minimum or inflate the balance.",
+      "Creates a withdrawal request: locks the KT and puts the request in the owner's manual payout queue with the player's GRAM wallet address. Anti-cheat: the amount arrives in KT and is fully re-validated server-side — it must be a multiple of 100 KT (0,1 GRAM steps), must meet the two-tier minimum computed here from the player's paid-WD history (first WD: 100 KT, repeat WDs: 5.000 KT flat), and must fit the server-side balance. The client cannot lower the minimum or inflate the balance.",
     request: z.object({
       walletAddress: z.string().trim().min(10).max(120),
       amountKt: z.number().int().min(WD_STEP_KT).max(10000000),
@@ -2296,7 +2305,7 @@ export const gameActions = {
       const amountGram = amountKt / KT_PER_GRAM;
       const fail = (error: string) => ({ ok: false, error, wdId: null as number | null, ktBalance: p.ktBalance });
       if (amountKt % WD_STEP_KT !== 0)
-        return fail(`Jumlah WD harus kelipatan ${WD_STEP_KT} KT (0,5 GRAM) — ${amountKt} KT tidak valid.`);
+        return fail(`Jumlah WD harus kelipatan ${WD_STEP_KT} KT (${(WD_STEP_KT / KT_PER_GRAM).toLocaleString("id-ID")} GRAM) — ${amountKt} KT tidak valid.`);
       const paidCount = await countPaidWithdrawals(db, p.id);
       const minKt = wdMinKtForPaidCount(paidCount);
       if (amountKt < minKt)

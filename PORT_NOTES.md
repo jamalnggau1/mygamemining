@@ -64,9 +64,9 @@ machine. The live Muse-hosted game was not touched.
 KT economy (1,000 KT = 1 GRAM, sell prices at the rebalance #6
 level — Regolith 0,05 KT, fractional balances to 2 decimals,
 expedition bonus 0,5 + 0,1×sector CAPPED at 35 KT),
-two-tier WD minimum (first WD 500 KT = 0,5 GRAM; repeat WDs
+two-tier WD minimum (first WD 100 KT = 0,1 GRAM; repeat WDs
 minimum 5.000 KT = 5 GRAM FLAT — the escalating ladder was
-ABOLISHED 2026-11-19, see rebalance #4 below; 500 KT steps,
+ABOLISHED 2026-11-19, see rebalance #4 below; 100 KT steps,
 computed from paid-WD history), manual WD payout (no smart
 contract, reject/cancel refunds in full), Premium in Telegram Stars
 only (Standard 150/7d, Pro 500/30d, Pro = dual drill), power (1/4
@@ -743,3 +743,71 @@ max-effort/active/mid-upgrade), the pinned HONEST NOTE test
 1,25 KT, ads 0,75 KT, expedition bonus 0,6 KT),
 `telegram.test.ts` 9/9, `anticheat.test.ts` 7/7 regressions).
 NOT verified live. NOT pushed to GitHub.
+
+## WD first minimum lowered to 0,1 GRAM (2026-11-19, implemented, NOT yet deployed)
+
+Owner decision (2026-11-19 09:24 WITA, his words: "turunkan 0,5
+gram jadi 0,1 gram... WD pertama itu receh saja dulu"): 0,5 GRAM
+is too expensive for the owner to pay out per new player, so the
+first WD is now small change — a cheap hook. **New rule: first WD
+minimum 100 KT (0,1 GRAM); repeat WDs minimum 5.000 KT (5 GRAM)
+FLAT, unchanged.** Amount granularity changes from 500 KT to
+**100 KT multiples (0,1 GRAM steps) for ALL WDs**, so a first WD
+can be 100, 200, 300 KT, etc., and a repeat WD can be 5.000,
+5.100, 5.200 KT, etc. Ratio stays 1.000 KT = 1 GRAM. Prices,
+bonus cap (35 KT), daily bonus (1,25 KT), ads (0,75 KT), upgrade
+costs, power, timings, Premium, anti-cheat, and sessions are all
+UNCHANGED. No cooldown, no per-WD max, no other new mechanic. No
+DB migration needed — the rule is code constants
+(`WD_FIRST_MIN_KT = 100`, `WD_STEP_KT = 100`,
+`WD_REPEAT_MIN_KT = 5000`, `wdMinKtForPaidCount` in
+`api/_lib/game.ts`); the zod request floor moved with the step
+(`.min(100)`). The WD form reads `wdMinKt`/`wdMinGram`/`wdStepKt`
+from the server, so it needed no logic change — only its labels
+("kelipatan 0,1", `step={0.1}`) and the rules copy in
+`client/src/App.tsx` (WD tab + rules list).
+
+### The >10-day first-WD target is SUPERSEDED — by the owner's explicit choice
+
+The original >10-day target for the first WD (rebalance #3, #6)
+is abandoned here on purpose: a 100 KT first WD cannot take 10
+days at current earnings, and the owner chose the cheap hook over
+the slow first WD. This is a deliberate trade, not a miss — the
+first WD is a ONE-TIME 0,1 GRAM cost per player. It does NOT
+change the monthly payout rate: the repeat pace (~14 days for an
+active player, ~10,7 GRAM/30d, 100 active players ≈ 1.070
+GRAM/month, stable at both horizons) is the bankruptcy
+protection, and it is UNCHANGED by this change — the sim below
+confirms the repeat intervals and GRAM/30d are identical to
+rebalance #6.
+
+### Simulation (same Monte Carlo + day-by-day model as #4/#5/#6, real constants, 2 runs agreeing within a few percent)
+
+| Profile | Days to FIRST WD (100 KT) | Days between REPEAT WDs (5.000 KT), days 46–60 | Days between REPEAT WDs, days 166–180 | GRAM / 30 days, days 46–60 | GRAM / 30 days, days 166–180 |
+|---|---|---|---|---|---|
+| (a) Max-effort, no upgrades | 1 | ~7,0 | ~7,0 | ~21,4 | ~21,4 |
+| (b) Active, no upgrades | 2 | ~14,0 | ~14,0 | ~10,7 | ~10,7 |
+| (c) Casual, no upgrades | 8 | ~134 | ~55 | ~1,1 | ~2,7 |
+| (d) Mid-upgrade (all lvl 5) | 1 | ~3,8 | ~3,8 | ~39,4 | ~39,4 |
+
+The faucet floor (8,75 KT/day) now needs ~12 days for a first WD
+on its own (was ~57 days at 500 KT) and still ~571 days for a
+repeat WD.
+
+### Verified locally (2026-11-19)
+
+`bun run typecheck` 0 errors (strict AND Vercel-style
+`--strictNullChecks false`), `bun run build:client` OK. Full
+suite **46/46 pass, 3 consecutive runs** vs local Postgres
+(`/tmp/smoke-test/`: `economy.test.ts` 21/21 — first WD below
+100 KT rejected by the zod floor, exactly 100 KT succeeds for a
+first-timer and locks 100 KT, 150 KT rejected as not a multiple
+of 100, 200 KT succeeds, after one paid WD the minimum is 5.000
+KT and a 2.000 KT request is rejected, 5.000 and 5.100 KT repeat
+WDs succeed, 5.250 KT rejected as not a multiple of 100,
+simulation assertions (first-WD days + repeat pace UNCHANGED +
+the pinned note that the >10-day target is superseded);
+`game.test.ts` 9/9, `telegram.test.ts` 9/9,
+`anticheat.test.ts` 7/7 regressions — their 500 KT first-WD
+requests are still valid under the new rule: 500 is a multiple
+of 100 and ≥ 100). NOT verified live. NOT pushed to GitHub.
