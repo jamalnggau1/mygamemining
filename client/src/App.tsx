@@ -727,7 +727,7 @@ export function App() {
                     : t("watchAdBtn", { kt: fmt(p.ads.rewardKt) })}
             </button>
             <p className="mt-1.5 text-center text-xs text-[var(--dim)]">
-              {t("adNote", { reward: fmt(p.ads.rewardKt), cap: p.ads.dailyCap, watched: p.ads.watchedToday, cooldown: p.ads.cooldownSeconds })}
+              {t("adNote", { reward: fmt(p.ads.rewardKt), cap: p.ads.dailyCap, watched: p.ads.watchedToday, cooldown: fmtDur(p.ads.cooldownSeconds) })}
             </p>
           </div>
         </section>
@@ -842,7 +842,7 @@ export function App() {
                 <li>{trich("rule10")}</li>
                 <li>{trich("rule11")}</li>
                 <li>{t("rule12", { dailyBonus: fmt(p.dailyBonusKt) })}</li>
-                <li>{trich("rule13", { adReward: fmt(p.ads.rewardKt), adCap: p.ads.dailyCap, adCooldown: p.ads.cooldownSeconds, adDailyMax: fmt(p.ads.rewardKt * p.ads.dailyCap) })}</li>
+                <li>{trich("rule13", { adReward: fmt(p.ads.rewardKt), adCap: p.ads.dailyCap, adCooldown: fmtDur(p.ads.cooldownSeconds), adDailyMax: fmt(p.ads.rewardKt * p.ads.dailyCap) })}</li>
                 <li>{trich("rule14", { travelNear: data.maps[0]?.travelCost ?? 4, travelFar: data.maps[4]?.travelCost ?? 12 })}</li>
                 <li>{trich("rule15")}</li>
                 <li>{trich("rule16")}</li>

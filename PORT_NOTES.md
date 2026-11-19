@@ -84,7 +84,7 @@ refunds in full), Premium in Telegram Stars only (Standard 150/7d,
 Pro 500/30d, Pro = dual drill), power (1/4 min regen, Tangki =
 capacity only, Reaktor = −10%/level), scan 2.5 min base with map
 factors ×1/×1.3/×1.6/×2.0/×2.5, 5 maps with their gems and
-challenges, ads 10/day +0,375 KT with 60s cooldown, server-side
+challenges, ads 10/day +0,375 KT with 1h cooldown, server-side
 validation of everything.
 
 ## Per-player sessions — Telegram initData (2026-11-18, implemented, NOT yet deployed)
@@ -1383,10 +1383,11 @@ Telegram Mini Apps; docs: https://docs.adsgram.ai/publisher/reward-interstitial-
   shows "Iklan belum tersedia, coba lagi nanti" and grants NOTHING.
   The button is disabled while an ad plays (`adPlaying`) so a second
   ad cannot be opened mid-play.
-- Server action `watchAd` is UNCHANGED: +0,375 KT, max 10/day,
-  60-second cooldown, all recomputed server-side — the ad gate is an
-  extra client-side check, the server rules are still the source of
-  truth. No new migration, no new mechanic.
+- Server action `watchAd`: +0,375 KT, max 10/day, 1-hour cooldown
+  (changed 2026-11-19 from 60s on the owner's instruction — stop ad
+  farming), all recomputed server-side — the ad gate is an extra
+  client-side check, the server rules are still the source of truth.
+  No new migration, no new mechanic.
 
 ### Dormant until the owner activates it
 

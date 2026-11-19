@@ -37,6 +37,23 @@ export function fmtNum(n: number, lang: Lang): string {
   });
 }
 
+/** Duration in seconds → "1 jam 5 mnt" (id) / "1 hr 5 min" (en).
+ *  Server-side twin of the client's fmtDur in client/src/i18n.ts. */
+export function fmtDur(sec: number, lang: Lang): string {
+  const s = Math.max(0, Math.ceil(sec));
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const r = s % 60;
+  if (lang === "en") {
+    if (h > 0) return m > 0 ? `${h} hr ${m} min` : `${h} hr`;
+    if (m > 0) return r > 0 ? `${m} min ${r} sec` : `${m} min`;
+    return `${r} sec`;
+  }
+  if (h > 0) return m > 0 ? `${h} jam ${m} mnt` : `${h} jam`;
+  if (m > 0) return r > 0 ? `${m} mnt ${r} dtk` : `${m} mnt`;
+  return `${r} dtk`;
+}
+
 /** KT amounts: same as fmtNum (kept as a named alias for clarity). */
 export function fmtKtLang(n: number, lang: Lang): string {
   return fmtNum(n, lang);
@@ -262,7 +279,7 @@ const id: ServerStrings = {
   errAdCapReached: (cap) =>
     `Batas iklan hari ini sudah tercapai (${cap}× sehari). Hadiah iklan direset besok — kembali lagi ya!`,
   errAdCooldown: (seconds, cooldown) =>
-    `Sabar — iklan berikutnya bisa ditonton dalam ${seconds} detik lagi (jeda ${cooldown} detik antar-iklan).`,
+    `Sabar — iklan berikutnya bisa ditonton dalam ${fmtDur(seconds, "id")} lagi (jeda ${fmtDur(cooldown, "id")} antar-iklan).`,
   errOreUnknown: "Jenis mineral tidak dikenal.",
   errNotEnoughOre: (held, oreName) =>
     `Bijih tidak cukup — kamu hanya punya ${held} ${oreName}.`,
@@ -403,7 +420,7 @@ const en: ServerStrings = {
   errAdCapReached: (cap) =>
     `Today's ad limit is reached (${cap}× per day). Ad rewards reset tomorrow — come back then!`,
   errAdCooldown: (seconds, cooldown) =>
-    `Hold on — the next ad is available in ${seconds} more seconds (${cooldown}s between ads).`,
+    `Hold on — the next ad is available in ${fmtDur(seconds, "en")} (${fmtDur(cooldown, "en")} between ads).`,
   errOreUnknown: "Unknown mineral type.",
   errNotEnoughOre: (held, oreName) =>
     `Not enough ore — you only have ${held} ${oreName}.`,

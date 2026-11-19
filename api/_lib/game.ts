@@ -318,7 +318,7 @@
 //   slot where the owner plugs in a real ad provider later. The
 //   reward is capped server-side: at most AD_DAILY_CAP (10) views per
 //   calendar day (= 3,75 KT/day max) and a
-//   AD_COOLDOWN_SECONDS (60s) gap between views, both recomputed in
+//   AD_COOLDOWN_SECONDS (1h) gap between views, both recomputed in
 //   watchAd from the ad_reward rows in the activity log. No new table
 //   or migration: the activity log IS the claim history, and ad_reward
 //   classifies as an economy event in the split log.
@@ -354,7 +354,7 @@ export const KT_PER_USDT = 1000;
 export const DAILY_BONUS_KT = 0.625;
 export const AD_REWARD_KT = 0.375;
 export const AD_DAILY_CAP = 10;
-const AD_COOLDOWN_SECONDS = 60;
+const AD_COOLDOWN_SECONDS = 3600; // 1 jam antar-iklan (owner 2026-11-19: cegah farming iklan)
 export const BASE_MAX_ENERGY = 30;
 export const BASE_REGEN_SECONDS = 240; // 1 energy per 4 minutes — deliberately slow (see economy note above)
 const REGEN_MIN_SECONDS = 60; // hard floor for the Reaktor upgrade curve (pre-Premium)
