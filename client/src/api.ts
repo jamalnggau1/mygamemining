@@ -104,7 +104,23 @@ async function callAction<K extends keyof Actions>(
 }
 
 export const api: Api = {
-  getGameState: (args) => callAction("getGameState", args),
+  // getGameState is the one call whose failure must THROW: business
+  // failures arrive as HTTP 200 {ok:false} (callAction only throws
+  // on a non-2xx status), and if the {ok:false} object reached the
+  // query as data, App would render with data.player === undefined
+  // and crash to a blank screen. Throwing routes it to React Query's
+  // error state instead, so the connection-lost screen (with retry)
+  // is shown. Mutations keep receiving {ok:false} — their onSuccess
+  // handlers show the error in a banner.
+  getGameState: async (args) => {
+    const r = await callAction("getGameState", args);
+    // The handler's type is the success shape only, but at runtime a
+    // business failure arrives as {ok:false, error} — check it via a
+    // cast and throw so React Query shows the connection-lost screen.
+    const raw = r as unknown as { ok?: boolean; error?: string };
+    if (raw.ok === false) throw new Error(raw.error ?? t("genericFail"));
+    return r;
+  },
   startScan: (args) => callAction("startScan", args),
   startMine: (args) => callAction("startMine", args),
   collectJob: (args) => callAction("collectJob", args),
