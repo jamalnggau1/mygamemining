@@ -1232,10 +1232,13 @@ function AdminWdCard({ wd, onDone }: { wd: Wd; onDone: (ok: boolean, error: stri
 // Untuk SEMUA pemain (Kendali tetap admin-only). Isinya: gabung channel
 // resmi, gabung grup diskusi (segera hadir — belum ada link grup), dan
 // referral. Referral SUDAH dilacak server: saat pemain membuka Mini
-// App pertama kali lewat link ?start=ref_<telegramId>, server
-// mencatatnya di tabel referrals; saat pemain yang diundang
-// menyelesaikan ekspedisi pertamanya, pengundang otomatis mendapat
-// 10 KT (lihat api/_lib/game.ts — recordReferralAttribution /
+// App pertama kali lewat link startapp
+// ?startapp=ref_<telegramId> (link langsung membuka Mini App dengan
+// kode referral menempel — jauh lebih andal daripada ?start= yang
+// hanya membuka chat bot dan kode bisa hilang), server mencatatnya
+// di tabel referrals; saat pemain yang diundang menyelesaikan
+// ekspedisi pertamanya, pengundang otomatis mendapat 10 KT (lihat
+// api/_lib/game.ts — recordReferralAttribution /
 // payReferralRewardIfPending). Statistiknya tampil di kartu referral.
 
 /** Channel Telegram resmi ASTRA MINING. */
@@ -1260,10 +1263,13 @@ function openExternalLink(url: string) {
 
 function KomunitasTab({ userId, referrals }: { userId: number | null; referrals: { invited: number; rewarded: number; earnedKt: number } }) {
   const [copied, setCopied] = useState(false);
-  // Link referral: bot + start payload ref_<telegramId>. Tanpa
-  // userId (pemain web/legacy) tidak ada link — minta buka lewat
-  // Telegram.
-  const refLink = userId != null ? `https://t.me/astra_mining_bot?start=ref_${userId}` : null;
+  // Link referral: Mini App + startapp payload ref_<telegramId>.
+  // startapp membuka Mini App LANGSUNG dengan kode menempel
+  // (Telegram memasukkannya ke initData.start_param), jadi deteksi
+  // dijamin — beda dengan ?start= yang hanya membuka chat bot.
+  // Tanpa userId (pemain web/legacy) tidak ada link — minta buka
+  // lewat Telegram.
+  const refLink = userId != null ? `https://t.me/astra_mining_bot/astra_mining?startapp=ref_${userId}` : null;
   const copyLink = async () => {
     if (!refLink) return;
     let ok = false;

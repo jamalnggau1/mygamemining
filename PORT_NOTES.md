@@ -1618,14 +1618,15 @@ economy changes.
    userId (web/legacy player) the card shows "Buka lewat Telegram
    untuk mendapatkan link referralmu" instead of a link.
 
-### Referral link format + later phase
-- Link: `https://t.me/astra_mining_bot?start=ref_<telegramId>`,
-  built from `getTelegramSessionInfo().userId`. When a player opens
-  the Mini App through such a link, Telegram puts the payload in
-  `initDataUnsafe.start_param` — the LATER logic phase reads it
-  server-side for attribution, then tracks referred players and
-  credits the 10 KT automatically. This task deliberately builds
-  NO attribution, tracking, or crediting.
+### Referral link format (CHANGED 2026-11-20 — was `?start=`, see referral-logic section)
+- Link: `https://t.me/astra_mining_bot/astra_mining?startapp=ref_<telegramId>`,
+  built from `getTelegramSessionInfo().userId`. The startapp link
+  opens the Mini App DIRECTLY with the payload attached — Telegram
+  puts it in `initDataUnsafe.start_param`, so attribution is
+  guaranteed. (The old `?start=ref_<id>` link only opened the bot
+  chat; the payload could be lost if the friend opened the Mini App
+  another way. The owner tested a referral with the old format and
+  it did not register.)
 
 ### i18n
 15 new keys (`tabCommunity`, `commChannel*`, `commGroup*`,
@@ -1644,7 +1645,7 @@ DB-independent i18n dictionary tests pass 3/3 (key symmetry,
 non-empty values, placeholder matching), covering the 15 new keys.
 NOT pushed to GitHub; NOT verified live.
 
-## Logika referral — pelacakan + hadiah otomatis (2026-11-20, implemented, push pending)
+## Logika referral — pelacakan + hadiah otomatis (2026-11-20, implemented, PUSHED 2026-11-20 commit f8209623)
 
 The Komunitas tab already showed a referral link + the note
 "Pelacakan referral dan pemberian hadiah otomatis segera hadir".
@@ -1652,10 +1653,20 @@ That note is now gone — the logic is built. The user asked
 "jadi referral ini belum terdeteksi?" — correct, it was not
 tracked at all before this change; now it is.
 
-### Link format (unchanged)
-`https://t.me/astra_mining_bot?start=ref_<telegramId>`, built
-client-side from `getTelegramSessionInfo().userId`. Copy button
-unchanged.
+### Link format (CHANGED 2026-11-20 — was `?start=ref_<id>`)
+`https://t.me/astra_mining_bot/astra_mining?startapp=ref_<telegramId>`,
+built client-side from `getTelegramSessionInfo().userId`. Copy button
+unchanged. Why the change: the owner tested a referral with the old
+`?start=` link and it did not register — that link only opens the bot
+chat, and the payload is lost if the friend opens the Mini App any
+other way. The startapp link opens the Mini App directly with the
+payload attached, so `start_param` is always present. Server side is
+unchanged: it reads `start_param` from validated initData either way
+(the regex `^ref_(\d+)$` matches the `ref_<id>` value in both cases).
+NOTE: a referral also does NOT register until migration-0005 has run
+in Neon (no `referrals` table → attribution is silently skipped) —
+the owner's failed test may have been the missing migration, the old
+link format, or both.
 
 ### Attribution — start_param, first-join-only
 - Telegram puts the `?start=` payload into initData as
