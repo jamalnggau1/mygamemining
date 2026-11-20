@@ -626,7 +626,13 @@ export function App() {
   const complete = useMutation({
     mutationFn: () => api.completeExpedition({}),
     onSuccess: (r) => {
-      showResult(r.ok, r.error, <>{t("expeditionDone", { bonus: fmt(r.bonusKt), layer: r.layer })}</>);
+      // Pesan berbeda bila sektor TIDAK naik: "Warp ke Sektor X"
+      // salah kalau pemain tetap di sektor yang sama — tampilkan
+      // progres menuju sektor berikutnya.
+      const msg = r.ok && r.advanced === false && r.sectorProgress
+        ? <>{t("expeditionDoneProgress", { bonus: fmt(r.bonusKt), current: r.sectorProgress.current, needed: r.sectorProgress.needed, next: r.layer + 1 })}</>
+        : <>{t("expeditionDone", { bonus: fmt(r.bonusKt), layer: r.layer })}</>;
+      showResult(r.ok, r.error, msg);
       if (r.ok) fireBurst("expedition");
       refresh();
     },
@@ -846,6 +852,7 @@ export function App() {
             <div className="text-right">
               <p className="text-[11px] font-bold uppercase tracking-[0.25em] text-[var(--dim)]">{t("missionPos")}</p>
               <p className="font-display text-xl leading-tight">{t("sector", { n: p.layer })}</p>
+              {p.sectorProgress && (<p className="text-xs text-[var(--dim)]">{t("sectorProgress", { current: p.sectorProgress.current, needed: p.sectorProgress.needed, next: p.layer + 1 })}</p>)}
               <p className="text-sm text-[var(--dim)]">{t("kmFromEarth", { km: fmt(p.depthMeters) })}</p>
             </div>
           </div>
@@ -989,27 +996,12 @@ export function App() {
               </ol>
             </details>
 
-            {data.activity.length > 0 && (() => {
-              const missionLog = data.activity.filter((a) => a.category === "mission").slice(0, 8);
-              const economyLog = data.activity.filter((a) => a.category === "economy").slice(0, 8);
-              const renderLog = (items: typeof data.activity) => items.length === 0
-                ? (<p className="mt-2 text-sm text-[var(--dim)]">{t("logEmpty")}</p>)
-                : (<ul className="mt-2 space-y-2">{items.map((a) => (<li key={a.id} className="flex items-baseline justify-between gap-3 text-sm"><div className="min-w-0 flex-1"><ExpandableText className="text-sm">{a.message}{a.amountKt != null && (<span className={`ml-1.5 whitespace-nowrap font-bold ${a.amountKt >= 0 ? "text-emerald-300" : "text-red-300"}`}>{a.amountKt >= 0 ? "+" : ""}{fmt(a.amountKt)} KT</span>)}</ExpandableText></div><span className="shrink-0 text-xs text-[var(--dim)]">{fmtDateTime(a.createdAt)}</span></li>))}</ul>);
-              return (
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <div className="rounded-2xl bg-[var(--surface)] border border-[var(--border)] p-3">
-                    <h3 className="font-display inline-flex items-center gap-2 text-sm"><span className="text-cyan-300"><RocketIcon size={15} /></span>{t("logMission")}</h3>
-                    <p className="mt-0.5 text-xs text-[var(--dim)]">{t("logMissionDesc")}</p>
-                    {renderLog(missionLog)}
-                  </div>
-                  <div className="rounded-2xl bg-[var(--surface)] border border-[var(--border)] p-3">
-                    <h3 className="font-display inline-flex items-center gap-2 text-sm"><span className="text-emerald-300"><GemIcon size={15} /></span>{t("logEconomy")}</h3>
-                    <p className="mt-0.5 text-xs text-[var(--dim)]">{t("logEconomyDesc")}</p>
-                    {renderLog(economyLog)}
-                  </div>
-                </div>
-              );
-            })()}
+            {data.activity.length > 0 && (
+              <div className="grid gap-3 sm:grid-cols-2">
+                <LogCard icon={<span className="text-cyan-300"><RocketIcon size={15} /></span>} title={t("logMission")} desc={t("logMissionDesc")} items={data.activity.filter((a) => a.category === "mission")} />
+                <LogCard icon={<span className="text-emerald-300"><GemIcon size={15} /></span>} title={t("logEconomy")} desc={t("logEconomyDesc")} items={data.activity.filter((a) => a.category === "economy")} />
+              </div>
+            )}
           </section>
         )}
 
@@ -1097,6 +1089,34 @@ function PremiumCard({ data, onBuy, buying, onBuyGram, buyingGram, gramPhase, in
         </div>
       )}
       <p className="mt-3 text-xs text-[var(--dim)]">{t("premiumHint")}</p>
+    </div>
+  );
+}
+
+/** One activity-log card (Log Misi / Log Ekonomi). Entries render
+ *  fully, one line each — but the CARD never stretches down the
+ *  page: only the first 5 entries show by default, and "Lihat
+ *  selengkapnya (N lagi)" expands to all of them. Each card keeps
+ *  its own expanded state. */
+function LogCard({ icon, title, desc, items }: { icon: ReactNode; title: string; desc: string; items: GameState["activity"] }) {
+  const [expanded, setExpanded] = useState(false);
+  const shown = expanded ? items : items.slice(0, 5);
+  return (
+    <div className="rounded-2xl bg-[var(--surface)] border border-[var(--border)] p-3">
+      <h3 className="font-display inline-flex items-center gap-2 text-sm">{icon}{title}</h3>
+      <p className="mt-0.5 text-xs text-[var(--dim)]">{desc}</p>
+      {items.length === 0 ? (
+        <p className="mt-2 text-sm text-[var(--dim)]">{t("logEmpty")}</p>
+      ) : (
+        <>
+          <ul className="mt-2 space-y-2">{shown.map((a) => (<li key={a.id} className="flex items-baseline justify-between gap-3 text-sm"><p className="min-w-0 flex-1 text-sm">{a.message}{a.amountKt != null && (<span className={`ml-1.5 whitespace-nowrap font-bold ${a.amountKt >= 0 ? "text-emerald-300" : "text-red-300"}`}>{a.amountKt >= 0 ? "+" : ""}{fmt(a.amountKt)} KT</span>)}</p><span className="shrink-0 text-xs text-[var(--dim)]">{fmtDateTime(a.createdAt)}</span></li>))}</ul>
+          {items.length > 5 && (
+            <button type="button" onClick={() => setExpanded((v) => !v)} className="btn-press mt-2 w-full rounded-xl border border-[var(--border)] bg-[var(--surface2)] px-3 py-1.5 text-sm font-bold text-cyan-300">
+              {expanded ? t("logShowLess") : t("logShowMore", { n: items.length - 5 })}
+            </button>
+          )}
+        </>
+      )}
     </div>
   );
 }

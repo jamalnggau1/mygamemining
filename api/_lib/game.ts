@@ -853,6 +853,18 @@ export function completionBonusKt(layer: number): number {
   return roundKt(Math.min(0.125 + layer * 0.025, MAX_COMPLETION_BONUS_KT));
 }
 
+/** Ekspedisi yang dibutuhkan untuk naik dari sektor L ke L+1.
+ *  Aturan progres sektor (2026-11-20, perintah pemilik — naik map
+ *  harus susah): Sektor 1→2 butuh 1 ekspedisi, 2→3 butuh 2, 3→4
+ *  butuh 3, dst. Total ekspedisi untuk membuka peta: Peta 2
+ *  (Sektor 3) = 3, Peta 3 (Sektor 6) = 15, Peta 4 (Sektor 10) =
+ *  45, Peta 5 (Sektor 15) = 105. Bonus ekspedisinya TIDAK berubah
+ *  (masih 0,125 + 0,025×sektor, cap 8,75) — ia hanya tumbuh lebih
+ *  lambat karena sektornya naik lebih lambat. */
+export function expeditionsToAdvance(layer: number): number {
+  return layer;
+}
+
 /** KT is fractional since rebalance #5 (Regolith 0,1 KT),
  *  2-decimal since rebalance #6 (Regolith 0,05 KT), and
  *  3-decimal since rebalance #7 (Regolith 0,025 KT). Every KT
@@ -1650,6 +1662,12 @@ export const gameActions = {
         maxEnergy: z.number(),
         regenSeconds: z.number(),
         layer: z.number(),
+        // Progres sektor: ekspedisi selesai di sektor ini + syarat
+        // naiknya (L ekspedisi untuk naik dari sektor L).
+        sectorProgress: z.object({
+          current: z.number(),
+          needed: z.number(),
+        }),
         depthMeters: z.number(),
         zoneName: z.string(),
         zoneDesc: z.string(),
@@ -1978,6 +1996,10 @@ export const gameActions = {
           maxEnergy: maxEnergy(levels),
           regenSeconds: regenSeconds(levels, premium),
           layer: p.layer,
+          sectorProgress: {
+            current: p.sectorProgress,
+            needed: expeditionsToAdvance(p.layer),
+          },
           depthMeters: p.layer * 12500,
           zoneName: mapName(zone, lang),
           zoneDesc: mapDesc(zone, lang),
@@ -2398,12 +2420,22 @@ export const gameActions = {
 
   completeExpedition: defineGameAction({
     description:
-      "Finishes the current asteroid once every vein has been mined: pays the completion KT bonus, advances one sector, and warps to a freshly generated asteroid.",
+      "Finishes the current asteroid once every vein has been mined: pays the completion KT bonus and warps to a freshly generated asteroid. The sector advances only when the player has completed as many expeditions in the current sector as the sector number (sector L → L+1 needs L expeditions); otherwise the sector progress counter just grows by one.",
     request: z.object({}),
     response: resultShape.extend({
       layer: z.number(),
       bonusKt: z.number(),
       ktBalance: z.number(),
+      /** True bila ekspedisi ini menaikkan sektor (klien memakai
+       *  ini untuk memilih pesan "Warp ke Sektor X" vs pesan
+       *  progres "n/m ekspedisi menuju Sektor Y"). */
+      advanced: z.boolean(),
+      /** Progres sektor setelah ekspedisi ini: ekspedisi selesai
+       *  di sektor ini + syarat naiknya. */
+      sectorProgress: z.object({
+        current: z.number(),
+        needed: z.number(),
+      }),
     }),
     async handler(_args, session) {
       const db = getDb();
@@ -2412,7 +2444,18 @@ export const gameActions = {
       const S = serverStrings(lang);
       const p = await loadPlayer(db, session);
       const levels = await loadLevels(db, p.id);
-      const fail = (error: string) => ({ ok: false, error, layer: p.layer, bonusKt: 0, ktBalance: p.ktBalance });
+      const fail = (error: string) => ({
+        ok: false,
+        error,
+        layer: p.layer,
+        bonusKt: 0,
+        ktBalance: p.ktBalance,
+        advanced: false,
+        sectorProgress: {
+          current: p.sectorProgress,
+          needed: expeditionsToAdvance(p.layer),
+        },
+      });
       const exp = parseExpedition(p.expedition);
       if (!exp) return fail(S.errInvalidAsteroid);
       if (parseJob(p.job)) return fail(S.errCompleteJobRunning);
@@ -2421,10 +2464,20 @@ export const gameActions = {
       const bonus = completionBonusKt(p.layer);
       const newExp = generateExpedition(p.currentZone, levels);
       const newBalance = roundKt(p.ktBalance + bonus);
+      // Progres sektor: satu ekspedisi selesai menambah progres;
+      // sektor hanya naik bila progres mencapai syarat sektor ini
+      // (L ekspedisi untuk naik dari sektor L), lalu progres reset
+      // ke 0. Bonus dan warp ke asteroid baru tidak berubah.
+      const progress = p.sectorProgress + 1;
+      const needed = expeditionsToAdvance(p.layer);
+      const advanced = progress >= needed;
+      const newLayer = advanced ? p.layer + 1 : p.layer;
+      const newProgress = advanced ? 0 : progress;
       await db
         .update(schema.player)
         .set({
-          layer: p.layer + 1,
+          layer: newLayer,
+          sectorProgress: newProgress,
           expedition: JSON.stringify(newExp),
           asteroidsDone: p.asteroidsDone + 1,
           ktBalance: newBalance,
@@ -2435,7 +2488,9 @@ export const gameActions = {
         db,
         p.id,
         "expedition_bonus",
-        S.logExpedition(localizeExpeditionName(exp.name, lang), bonus, p.layer + 1, localizeExpeditionName(newExp.name, lang)),
+        advanced
+          ? S.logExpedition(localizeExpeditionName(exp.name, lang), bonus, newLayer, localizeExpeditionName(newExp.name, lang))
+          : S.logExpeditionProgress(localizeExpeditionName(exp.name, lang), bonus, newProgress, needed, newLayer + 1, localizeExpeditionName(newExp.name, lang)),
         bonus,
       );
       // Referral: ekspedisi pertama pemain yang diundang membayar
@@ -2443,7 +2498,15 @@ export const gameActions = {
       // berubah pending → rewarded; ekspedisi berikutnya tidak
       // membayar lagi). Tidak pernah merusak penyelesaian ekspedisi.
       await payReferralRewardIfPending(db, p.id, lang);
-      return { ok: true, error: null, layer: p.layer + 1, bonusKt: bonus, ktBalance: newBalance };
+      return {
+        ok: true,
+        error: null,
+        layer: newLayer,
+        bonusKt: bonus,
+        ktBalance: newBalance,
+        advanced,
+        sectorProgress: { current: newProgress, needed },
+      };
     },
   }),
 

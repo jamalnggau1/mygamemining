@@ -75,6 +75,12 @@ export const player = pgTable("player", {
     .notNull()
     .defaultNow(),
   layer: integer("layer").notNull().default(1),
+  // Progres sektor (2026-11-20): ekspedisi yang sudah diselesaikan
+  // di sektor saat ini. Naik dari sektor L ke L+1 butuh L ekspedisi
+  // (1→2 butuh 1, 2→3 butuh 2, ...); saat sektor naik, kembali 0.
+  // Ini yang membuat peta jauh sulit dicapai (Sektor 15 = 105
+  // ekspedisi total) — bukan timer, melainkan jumlah ekspedisi.
+  sectorProgress: integer("sector_progress").notNull().default(0),
   currentZone: integer("current_zone").notNull().default(0),
   premiumUntil: timestamp("premium_until", {
     withTimezone: true,

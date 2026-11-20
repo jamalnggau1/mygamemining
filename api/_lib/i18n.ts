@@ -201,6 +201,16 @@ export interface ServerStrings {
     layer: number,
     newExpName: string,
   ) => string;
+  // Ekspedisi selesai TANPA naik sektor (progres belum cukup):
+  // log-nya menulis progres, bukan "warp ke sektor baru".
+  logExpeditionProgress: (
+    expName: string,
+    bonus: number,
+    progress: number,
+    needed: number,
+    nextLayer: number,
+    newExpName: string,
+  ) => string;
   logAbandon: (newExpName: string) => string;
   logTravel: (mapName: string, newExpName: string) => string;
   logPremiumOrder: (label: string, stars: number) => string;
@@ -355,6 +365,8 @@ const id: ServerStrings = {
     `Lambung kapal terkena serpihan di ${mapName} — biaya perbaikan ${fmtNum(fee, "id")} KT.`,
   logExpedition: (expName, bonus, layer, newExpName) =>
     `Ekspedisi ${expName} tuntas. Bonus ${fmtNum(bonus, "id")} KT, warp ke Sektor ${layer}: ${newExpName}.`,
+  logExpeditionProgress: (expName, bonus, progress, needed, nextLayer, newExpName) =>
+    `Ekspedisi ${expName} tuntas. Bonus ${fmtNum(bonus, "id")} KT, ${progress}/${needed} ekspedisi menuju Sektor ${nextLayer}: ${newExpName}.`,
   logAbandon: (newExpName) =>
     `Meninggalkan asteroid lama, warp ke ${newExpName}.`,
   logTravel: (mapName, newExpName) =>
@@ -521,6 +533,8 @@ const en: ServerStrings = {
     `Hull hit by debris on ${mapName} — repair cost ${fmtNum(fee, "en")} KT.`,
   logExpedition: (expName, bonus, layer, newExpName) =>
     `Expedition ${expName} complete. Bonus ${fmtNum(bonus, "en")} KT, warping to Sector ${layer}: ${newExpName}.`,
+  logExpeditionProgress: (expName, bonus, progress, needed, nextLayer, newExpName) =>
+    `Expedition ${expName} complete. Bonus ${fmtNum(bonus, "en")} KT, ${progress}/${needed} expeditions to Sector ${nextLayer}: ${newExpName}.`,
   logAbandon: (newExpName) =>
     `Leaving the old asteroid, warping to ${newExpName}.`,
   logTravel: (mapName, newExpName) =>

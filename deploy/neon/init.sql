@@ -43,6 +43,7 @@ CREATE TABLE IF NOT EXISTS player (
   energy INTEGER NOT NULL DEFAULT 20,
   energy_updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   layer INTEGER NOT NULL DEFAULT 1,
+  sector_progress INTEGER NOT NULL DEFAULT 0,
   current_zone INTEGER NOT NULL DEFAULT 0,
   premium_until TIMESTAMPTZ,
   premium_tier TEXT CHECK (premium_tier IN ('standard', 'pro')),

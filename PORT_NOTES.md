@@ -2309,3 +2309,128 @@ VERIFIKASI: typecheck 0 (strict + Vercel-style), build OK
 (main-2OJNK2EH.js), full suite 107/107 (2.814 expects), harness
 Node tanpa global Buffer + data getGameState live: bundle
 dievaluasi bersih, UI lengkap me-render (hero, 6 tab).
+
+KOREKSI pemilik (2026-11-20, commit f8bfd3bb): pemilik hanya
+menyarankan POSISI tombol, bukan mengubah kalimat — versi pertama
+di atas (satu judul "Beli Premium", tagline tombol dibuang)
+salah. Judul dikembalikan ke "Beli dengan Stars" / "Beli dengan
+GRAM" + tagline di tombol; yang berubah hanya posisi grid-nya
+(grid-cols-2 per metode). Kunci `premiumBuyTitleAll` dihapus dari
+dict. Verifikasi: typecheck 0, build OK (main-DOG4ZROH.js), full
+suite 107/107 (2.814 expects).
+
+## Kartu log "Lihat selengkapnya" + progres sektor triangular (2026-11-20, belum di-push)
+
+Dua permintaan pemilik — DAN keduanya butuh koreksi atas
+pekerjaan sebelumnya:
+
+### 1. Kartu log: 5 entri + tombol, BUKAN expandable per entri
+
+- Koreksi pemilik: expandable per entri log (pass sebelumnya)
+  salah paham — yang harus tidak memanjang ke bawah adalah
+  KARTU log-nya. `ExpandableText` per entri sudah DICABUT:
+  entri log kembali tampil penuh seperti semula (satu baris,
+  badge +/− KT menempel, timestamp di kanan).
+- Sebagai gantinya, komponen baru `LogCard` di
+  client/src/App.tsx (state `expanded` sendiri per kartu —
+  Log Misi dan Log Ekonomi buka-tutup independen): tiap kartu
+  hanya menampilkan 5 entri pertama; bila ada lebih, tombol di
+  bawah daftar: "Lihat selengkapnya (N lagi)" → menampilkan
+  SEMUA entri; saat terbuka tombolnya jadi "Tutup". Kunci i18n
+  baru `logShowMore` / `logShowLess` (id + en). Server
+  mengembalikan max 30 entri activity, jadi tombol muncul bila
+  satu kategori punya >5 entri. Riwayat WD tidak diubah (baris
+  pendek terstruktur, bukan prosa).
+- Verifikasi: typecheck 0, build OK (main-B2K7FCEA.js). Catatan
+  jujur: data uji harness punya 0 entri activity, jadi kartu log
+  tidak ikut me-render di harness — perubahan log terverifikasi
+  lewat typecheck + build, bukan render langsung.
+
+### 2. Progres sektor: naik sektor makin sulit (biaya triangular)
+
+- Perintah pemilik: "setiap naik sektor itu semakin sulit,
+  jangan berikan mereka gampang naik map". Dulu 1 ekspedisi = 1
+  sektor, jadi Peta 5 (Sektor 15) terbuka setelah 14 ekspedisi.
+- ATURAN BARU: naik dari sektor L ke L+1 butuh L ekspedisi di
+  sektor itu (Sektor 1→2 butuh 1, 2→3 butuh 2, 3→4 butuh 3,
+  dst). Total ekspedisi untuk membuka peta: Peta 2 (Sektor 3) =
+  3, Peta 3 (Sektor 6) = 15, Peta 4 (Sektor 10) = 45, Peta 5
+  (Sektor 15) = 105.
+- Implementasi server (`api/_lib/game.ts`):
+  - Helper baru `expeditionsToAdvance(layer)` (= layer).
+  - Kolom baru player `sector_progress` (lihat migrasi di bawah).
+  - `completeExpedition`: progres +1; sektor naik hanya bila
+    progres mencapai syarat (lalu progres reset 0). Bonus KT
+    TIDAK berubah (masih 0,125 + 0,025×sektor, cap 8,75) — ia
+    hanya tumbuh lebih lambat karena sektor naik lebih lambat.
+    Warp ke asteroid baru juga tidak berubah. Respons kini
+    mengembalikan `advanced` (bool) + `sectorProgress`
+    {current, needed}; log memakai `logExpeditionProgress` baru
+    bila sektor tidak naik (kalau tidak, log akan berbohong
+    "warp ke Sektor X").
+  - `getGameState` mengembalikan `player.sectorProgress`
+    {current, needed}.
+- Klien: kartu Posisi Misi menampilkan satu baris di bawah
+  sektor: "{current}/{needed} ekspedisi menuju Sektor {next}"
+  (kunci `sectorProgress`, id + en). Pesan toast selesai
+  ekspedisi memakai `expeditionDoneProgress` baru bila sektor
+  tidak naik. Aturan 8 diperbarui minimal (kalimat asli
+  dipertahankan + syarat sektor ditambahkan).
+- MIGRASI — `deploy/neon/migration-0008-sector-progress.sql`
+  (idempotent, `ADD COLUMN IF NOT EXISTS sector_progress
+  INTEGER NOT NULL DEFAULT 0` pada player; kolom juga ditambah
+  ke `deploy/neon/init.sql` + `deploy/neon/schema.pg.ts`).
+  ⚠️ JALANKAN MIGRASI INI DI NEON SEBELUM PUSH: Drizzle membaca
+  kolom baru di getGameState — tanpa kolom ini game tidak bisa
+  dibuka (sama seperti migrasi 0006/0007).
+- Sim diukur ulang (aturan baru, `/tmp/smoke-test/run-sim.ts`
+  + `run-premium-sim.ts`): bonus share jatuh dari ~66–80% ke
+  ~20–36% (ORE kini sumber utama ~75%); cap bonus (Sektor 345)
+  tidak terjangkau dalam 180 hari (layer tertinggi di sim: 102
+  mid-upgrade) — rem aktifnya kini syarat sektor, bukan cap.
+  Pace membaik PELAN antar horizon (~15–20%), tidak pernah
+  runtuh.
+
+  Gratis (180 hari) — first WD / repeat 46–60 / USDT-30d 46–60
+  / repeat 166–180 / USDT-30d 166–180:
+  - max-effort: 3 hari / ~78 hari / ~1,9 / ~63 hari / ~2,4
+    (dulu: 2–3 / ~25 / ~5,9 / ~25 / ~5,9)
+  - aktif: 5 hari / ~168 hari / ~0,9 / ~143 hari / ~1,0
+    (dulu: 4 / ~50 / ~3,0 / ~50 / ~3,0)
+  - kasual: 15 hari / ~669 hari / ~0,2 / ~629 hari / ~0,2
+    (dulu: 13–17 / ~399→~192 / ~0,4→~0,8)
+  - mid-upgrade (lvl 5): 1 hari / ~29 hari / ~5,2 / ~24 hari /
+    ~6,2 (dulu: 1–2 / ~12,8 / ~11,7); butuh ~133 hari untuk
+    mampu beli semua lvl 5 (dulu ~64); max-effort pun kini >180
+    hari (dulu ~120–135).
+  - 100 pemain aktif ≈ 100 USDT/bulan (dulu ~300).
+
+  Premium Standard (180 hari):
+  - max-effort: 1 / ~33 / ~4,5 / ~26 / ~5,8 (dulu ~12,5 / ~12)
+  - aktif: 2 / ~74 / ~2,0 / ~60 / ~2,5 (dulu ~24,9 / ~6,0)
+  - kasual: 8 / ~326 / ~0,5 / ~287 / ~0,5 (dulu ~132→~97)
+  - mid-upgrade: 1 / ~12,3 / ~12,2 / ~10,0 / ~14,9 — kasus
+    terburuk (dulu ~6,2 / ~24,1); 100 pemain seperti itu ≈
+    1.200–1.500 USDT/bulan (dulu ~2.400).
+  - Pro tetap menghasilkan KT SAMA dengan Standard (dual drill
+    hanya menghemat waktu).
+- Tes: `game.test.ts` — 3 tes baru (progres triangular 6
+  ekspedisi: 1→2→2→3→3→4; respons `advanced`/`sectorProgress`
+  + bonus 0,175 KT di sektor 2; `expeditionsToAdvance` +
+  total 3/15/45/105). `economy.test.ts` — semua pin angka
+  diukur ulang ke angka baru di atas; tes "bonus cap works /
+  pace STABLE" ditulis ulang (cap kini tidak terjangkau; pace
+  membaik pelan, dibatasi rasio) dan tes "bonus dominates"
+  ditulis ulang (bonus kini MINORITAS ~20–36%).
+- Verifikasi: typecheck 0 (strict + Vercel-style), build OK
+  (main-B2K7FCEA.js), i18n dict tests 3/3, full suite 110/110
+  (2.880 expects, 2× berturut-turut — termasuk 3 tes progres
+  sektor baru). Harness render (jsdom, tanpa global Buffer, data
+  getGameState live): bundle dievaluasi bersih, UI lengkap
+  me-render; dengan 7 entri misi + 6 entri ekonomi, tiap kartu
+  log menampilkan tepat 5 entri + tombol "Lihat selengkapnya",
+  dan baris "1/2 ekspedisi menuju Sektor 2" tampil di Posisi
+  Misi. Catatan: instalasi PostgreSQL lokal sempat hilang total
+  akibat VM restart — diinstal ulang via apt (postgresql-16),
+  cluster 16/main dinyalakan, astra_test dibuat ulang dari
+  init.sql + migrasi 0001–0008.
