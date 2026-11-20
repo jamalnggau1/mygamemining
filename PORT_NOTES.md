@@ -2266,6 +2266,45 @@ untuk membaca penjelasan lengkapnya; ketuk lagi untuk menutup.
   layar tetap ringkas; teks lengkap hanya muncul saat diketuk.
   Tidak ada perubahan logika game, harga, reward, atau waktu.
 
+## Log expandable + tombol Premium horizontal (2026-11-20, belum di-push)
+
+Dua permintaan pemilik lanjutan dari tap-to-expand:
+
+- **Log Misi / Log Ekonomi expandable.** `renderLog` di
+  client/src/App.tsx (~baris 997): pesan tiap entri log kini
+  dibungkus `ExpandableText` (preview 2 baris, ketuk untuk buka
+  penuh, ketuk lagi untuk tutup; tombol disembunyikan bila pesannya
+  muat). Badge +/− KT tetap menempel di dalam teks yang bisa
+  dibuka, timestamp tetap di kanan (`min-w-0 flex-1` pada wrapper
+  supaya tanggal tidak terdorong). Isi, timestamp, dan klasifikasi
+  log TIDAK berubah — hanya rendering. Riwayat WD tidak diubah:
+  baris-barisnya bukan entri log (bukan `renderLog`) melainkan
+  field pendek terstruktur (nomor, USDT, alamat dompet, status,
+  referensi) — tidak ada teks panjang yang perlu dibuka.
+- **Tombol Premium horizontal.** `PremiumCard` di App.tsx
+  (~baris 1073–1096): 4 tombol bayar yang tadinya dua seksi
+  bertumpuk (`grid-cols-1`, "Beli dengan Stars" lalu "Beli dengan
+  GRAM") kini SATU grid `grid-cols-2` — baris 1 Standard/Pro
+  Stars (amber), baris 2 Standard/Pro GRAM (teal) — dengan satu
+  judul bersama "Beli Premium" (kunci i18n baru
+  `premiumBuyTitleAll`, id + en). Metode tetap jelas dari warna
+  + label harga ("300 Stars" / "4 GRAM"). Baris tag
+  (planProTag/planStdTag) dihapus dari tombol: selebar ~165px
+  tag itu membungkus 3–4 baris dan membuat tombol tinggi lagi —
+  manfaatnya sudah ada di daftar benefit di atas tombol.
+  `premiumGramNote` tetap di bawah grid. TIDAK berubah: onClick
+  (onBuy/onBuyGram), disabled, aria-label, teks paying/verifying
+  GRAM, pending-order box, catatan "Buka lewat Telegram". Kunci
+  lama premiumBuyTitle/premiumBuyTitleGram kini tidak dipakai di
+  App.tsx tapi tetap ada di dict (tidak berbahaya).
+- Verifikasi: typecheck 0 (strict + Vercel-style), build OK
+  (main-MIPDPGQW.js), full suite 107/107 (2.819 expects), harness
+  render tanpa global Buffer OK. Catatan jujur: data uji harness
+  punya 0 entri activity, jadi kartu log tidak ikut me-render di
+  harness — perubahan log terverifikasi lewat typecheck + build,
+  bukan render langsung; pemilik sebaiknya cek satu entri log
+  panjang di HP setelah deploy.
+
 VERIFIKASI: typecheck 0 (strict + Vercel-style), build OK
 (main-2OJNK2EH.js), full suite 107/107 (2.814 expects), harness
 Node tanpa global Buffer + data getGameState live: bundle

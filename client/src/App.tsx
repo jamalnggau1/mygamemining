@@ -994,7 +994,7 @@ export function App() {
               const economyLog = data.activity.filter((a) => a.category === "economy").slice(0, 8);
               const renderLog = (items: typeof data.activity) => items.length === 0
                 ? (<p className="mt-2 text-sm text-[var(--dim)]">{t("logEmpty")}</p>)
-                : (<ul className="mt-2 space-y-2">{items.map((a) => (<li key={a.id} className="flex items-baseline justify-between gap-3 text-sm"><span>{a.message}{a.amountKt != null && (<span className={`ml-1.5 whitespace-nowrap font-bold ${a.amountKt >= 0 ? "text-emerald-300" : "text-red-300"}`}>{a.amountKt >= 0 ? "+" : ""}{fmt(a.amountKt)} KT</span>)}</span><span className="shrink-0 text-xs text-[var(--dim)]">{fmtDateTime(a.createdAt)}</span></li>))}</ul>);
+                : (<ul className="mt-2 space-y-2">{items.map((a) => (<li key={a.id} className="flex items-baseline justify-between gap-3 text-sm"><div className="min-w-0 flex-1"><ExpandableText className="text-sm">{a.message}{a.amountKt != null && (<span className={`ml-1.5 whitespace-nowrap font-bold ${a.amountKt >= 0 ? "text-emerald-300" : "text-red-300"}`}>{a.amountKt >= 0 ? "+" : ""}{fmt(a.amountKt)} KT</span>)}</ExpandableText></div><span className="shrink-0 text-xs text-[var(--dim)]">{fmtDateTime(a.createdAt)}</span></li>))}</ul>);
               return (
                 <div className="grid gap-3 sm:grid-cols-2">
                   <div className="rounded-2xl bg-[var(--surface)] border border-[var(--border)] p-3">
@@ -1074,7 +1074,7 @@ function PremiumCard({ data, onBuy, buying, onBuyGram, buyingGram, gramPhase, in
       ) : (
         <div className="mt-3">
           <p className="text-sm font-bold">{t("premiumBuyTitle")}</p>
-          <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
+          <div className="mt-2 grid grid-cols-2 gap-2">
             {p.premium.plans.map((plan) => (
               <button key={plan.id} type="button" onClick={() => onBuy(plan.id as "standard" | "pro")} disabled={buying || buyingGram} aria-label={t("orderPlanAria", { label: plan.label, stars: fmt(plan.stars) })} className={`btn-press rounded-xl px-3 py-2.5 text-black disabled:opacity-40 ${plan.tier === "pro" ? "bg-gradient-to-b from-amber-300 to-amber-500 ring-2 ring-amber-200/60" : "bg-amber-400"}`}>
                 <span className="block font-display text-sm">{t("planLine", { tier: plan.tier === "pro" ? "PRO" : "STANDARD", days: plan.days })}</span>
@@ -1084,7 +1084,7 @@ function PremiumCard({ data, onBuy, buying, onBuyGram, buyingGram, gramPhase, in
             ))}
           </div>
           <p className="mt-3 text-sm font-bold">{t("premiumBuyTitleGram")}</p>
-          <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
+          <div className="mt-2 grid grid-cols-2 gap-2">
             {p.premium.plans.map((plan) => (
               <button key={`gram-${plan.id}`} type="button" onClick={() => onBuyGram(plan.id as "standard" | "pro")} disabled={buying || buyingGram} aria-label={t("orderPlanAriaGram", { label: plan.label, gram: fmt(plan.gram) })} className={`btn-press rounded-xl px-3 py-2.5 text-black disabled:opacity-40 ${plan.tier === "pro" ? "bg-gradient-to-b from-teal-300 to-teal-500 ring-2 ring-teal-200/60" : "bg-teal-400"}`}>
                 <span className="block font-display text-sm">{t("planLine", { tier: plan.tier === "pro" ? "PRO" : "STANDARD", days: plan.days })}</span>
