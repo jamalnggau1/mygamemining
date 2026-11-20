@@ -6,7 +6,8 @@ declare module "*.jpg";
 // Minimal Telegram WebApp typing — only the surface the game uses.
 // The full @telegram-apps/sdk is intentionally NOT a dependency:
 // the game reads initData (validated server-side), calls
-// ready()/expand(), and opens t.me links via openTelegramLink.
+// ready()/expand(), opens t.me links via openTelegramLink, and opens
+// Stars invoices via openInvoice.
 // window.Telegram is absent in a plain browser, so every access is
 // guarded at runtime.
 interface TelegramWebApp {
@@ -28,6 +29,14 @@ interface TelegramWebApp {
   expand: () => void;
   /** Open a t.me link inside Telegram (channel, group, bot). */
   openTelegramLink: (url: string) => void;
+  /** Open a Telegram Stars invoice (native payment sheet). The
+   *  callback receives the payment status: "paid" when the user
+   *  completed the payment, "cancelled" / "failed" / "pending"
+   *  otherwise. */
+  openInvoice: (
+    url: string,
+    callback?: (status: "paid" | "cancelled" | "failed" | "pending") => void,
+  ) => void;
 }
 
 interface Window {

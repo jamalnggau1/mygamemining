@@ -345,6 +345,13 @@ import {
   recordCollectLatency,
   recordTamperAttempt,
 } from "./anticheat.js";
+import {
+  buildInvoicePayload,
+  createInvoiceLink,
+  parseInvoicePayload,
+  setWebhook,
+  STARS_WEBHOOK_URL,
+} from "./stars.js";
 
 // ---------------------------------------------------------------------------
 // Game design constants
@@ -1368,6 +1375,172 @@ async function getAdStats(db: Db, playerId: number): Promise<AdStats> {
 }
 
 // ---------------------------------------------------------------------------
+// Telegram Stars (XTR) Premium — aktivasi + webhook
+// ---------------------------------------------------------------------------
+// Aturan perpanjangan Premium yang SAMA untuk konfirmasi manual admin
+// (confirmPremiumOrder) dan pembayaran otomatis via webhook Stars
+// (applyStarsPayment): basis = premium_until saat ini bila masih di
+// masa depan, kalau tidak sekarang; pesanan Pro selalu menetapkan
+// Pro; pesanan Standard tidak pernah menurunkan Pro yang masih aktif.
+// ---------------------------------------------------------------------------
+
+type PremiumOrderRow = typeof schema.premiumOrders.$inferSelect;
+
+/** Mengaktifkan (atau memperpanjang) Premium dari sebuah baris
+ *  premium_orders yang sudah dibayar/dikonfirmasi — menulis
+ *  premiumUntil + premiumTier pemain dan entri Log Ekonomi
+ *  (premium_confirm). Mengembalikan tanggal akhir Premium yang baru. */
+async function activatePremiumOrder(
+  db: Db,
+  order: PremiumOrderRow,
+  target: PlayerRow,
+  lang: Lang,
+): Promise<Date> {
+  const base =
+    target.premiumUntil && target.premiumUntil.getTime() > Date.now()
+      ? target.premiumUntil.getTime()
+      : Date.now();
+  const until = new Date(base + order.days * 24 * 60 * 60 * 1000);
+  // Tier: a Pro order always sets Pro; a Standard order never
+  // downgrades an active Pro pass.
+  const tier: PremiumTier =
+    order.tier === "pro" ||
+    (isPremium(target) && target.premiumTier === "pro")
+      ? "pro"
+      : "standard";
+  await db
+    .update(schema.player)
+    .set({ premiumUntil: until, premiumTier: tier })
+    .where(eq(schema.player.id, target.id));
+  await logActivity(
+    db,
+    order.playerId,
+    "premium_confirm",
+    serverStrings(lang).logPremiumConfirm(
+      order.stars,
+      tier === "pro"
+        ? lang === "en"
+          ? "Pro (dual drill)"
+          : "Pro (bor ganda)"
+        : "Standard",
+      order.days,
+      fmtDateLang(until, lang),
+    ),
+    null,
+  );
+  return until;
+}
+
+export type StarsPreCheckoutQuery = {
+  id: string;
+  from: { id: number };
+  currency: string;
+  total_amount: number;
+  invoice_payload: string;
+};
+
+/** Memvalidasi pre_checkout_query Telegram terhadap pesanan yang
+ *  tersimpan: currency harus XTR, payload harus terurai, pesanan
+ *  harus ada dan masih pending, pemilik pesanan harus sama dengan
+ *  pembayar, dan jumlah harus sama persis dengan Stars paketnya.
+ *  Mengembalikan ok:false dengan pesan singkat bila ada yang tidak
+ *  cocok — Telegram menampilkan pesan itu di lembar bayar, jadi
+ *  pesannya harus pendek. */
+export async function validateStarsPreCheckout(
+  db: Db,
+  query: StarsPreCheckoutQuery,
+  lang: Lang,
+): Promise<{ ok: boolean; errorMessage?: string }> {
+  const S = serverStrings(lang);
+  const invalid = {
+    ok: false as const,
+    errorMessage: S.starsPrecheckoutInvalid,
+  };
+  if (query.currency !== "XTR") return invalid;
+  const payload = parseInvoicePayload(query.invoice_payload);
+  if (!payload) return invalid;
+  const rows = await db
+    .select()
+    .from(schema.premiumOrders)
+    .where(eq(schema.premiumOrders.id, payload.orderId))
+    .limit(1);
+  const order = rows[0];
+  if (!order || order.status !== "pending") return invalid;
+  if (order.playerId !== payload.playerId) return invalid;
+  if (order.tier !== payload.tier) return invalid;
+  if (order.stars !== query.total_amount) return invalid;
+  const owner = await loadPlayerRowOrNull(db, order.playerId);
+  if (!owner || owner.telegramId !== query.from.id) return invalid;
+  return { ok: true };
+}
+
+export type StarsSuccessfulPayment = {
+  currency: string;
+  total_amount: number;
+  invoice_payload: string;
+  telegram_payment_charge_id: string;
+};
+
+/** Menerapkan successful_payment Telegram: idempotent — hanya
+ *  pesanan yang masih pending yang diaktifkan (update ganda dari
+ *  Telegram retry menemukan pesanan sudah paid dan tidak melakukan
+ *  apa-apa). Klaim atomik dulu (pending → paid, bukti bayar +
+ *  jumlah tersimpan), lalu aktifkan Premium dengan aturan yang sama
+ *  seperti confirmPremiumOrder. Kegagalan apa pun (termasuk kolom
+ *  charge belum ada karena migrasi 0006 belum dijalankan) membiarkan
+ *  pesanan tetap pending untuk konfirmasi manual di Kendali — masalah
+ *  webhook tidak pernah menghilangkan pesanan yang sudah dibayar. */
+export async function applyStarsPayment(
+  db: Db,
+  payment: StarsSuccessfulPayment,
+  fromTelegramId: number,
+  lang: Lang,
+): Promise<{ applied: boolean }> {
+  try {
+    if (payment.currency !== "XTR") return { applied: false };
+    const payload = parseInvoicePayload(payment.invoice_payload);
+    if (!payload) return { applied: false };
+    const rows = await db
+      .select()
+      .from(schema.premiumOrders)
+      .where(eq(schema.premiumOrders.id, payload.orderId))
+      .limit(1);
+    const order = rows[0];
+    if (!order || order.status !== "pending") return { applied: false };
+    if (order.playerId !== payload.playerId || order.tier !== payload.tier)
+      return { applied: false };
+    if (order.stars !== payment.total_amount) return { applied: false };
+    const target = await loadPlayerRowOrNull(db, order.playerId);
+    if (!target || target.telegramId !== fromTelegramId)
+      return { applied: false };
+    // Klaim atomik: hanya baris yang masih pending yang berubah —
+    // pengiriman ganda (Telegram retry) tidak bisa membayar dua kali.
+    const claimed = await db
+      .update(schema.premiumOrders)
+      .set({
+        status: "paid",
+        processedAt: new Date(),
+        telegramPaymentChargeId: payment.telegram_payment_charge_id,
+        totalAmount: payment.total_amount,
+      })
+      .where(
+        and(
+          eq(schema.premiumOrders.id, order.id),
+          eq(schema.premiumOrders.status, "pending"),
+        ),
+      )
+      .returning({ id: schema.premiumOrders.id });
+    if (!claimed[0]) return { applied: false };
+    await activatePremiumOrder(db, order, target, lang);
+    return { applied: true };
+  } catch {
+    // Gagal apa pun → pesanan tetap pending; admin bisa mengonfirmasi
+    // manual dari Kendali. Webhook tidak pernah merusak apa pun.
+    return { applied: false };
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Shared response shapes
 // ---------------------------------------------------------------------------
 
@@ -1606,7 +1779,7 @@ export const gameActions = {
           stars: z.number(),
           days: z.number(),
           tier: z.enum(["standard", "pro"]),
-          status: z.enum(["pending", "confirmed", "rejected"]),
+          status: z.enum(["pending", "confirmed", "rejected", "paid"]),
           createdAt: z.string(),
           processedAt: z.string().nullable(),
         }),
@@ -2287,12 +2460,13 @@ export const gameActions = {
     },
   }),
 
-  createPremiumOrder: defineGameAction({
+  createStarsInvoice: defineGameAction({
     description:
-      "Creates a Premium Pass purchase order priced in Telegram Stars (Standard 150 Stars / 7 days, Pro 500 Stars / 30 days with the dual drill). The player pays the Stars to the owner in Telegram; the owner then confirms the order from the Kendali tab, which activates the pass. Only one pending order at a time.",
+      "Creates a REAL Telegram Stars (XTR) payment for a Premium Pass plan (Standard 150 Stars / 7 days, Pro 500 Stars / 30 days with the dual drill). Creates the pending premium_orders row (one pending order per player), then asks the Bot API for an invoice link (currency XTR, empty provider_token) that the client opens with Telegram.WebApp.openInvoice. The pass activates automatically when Telegram posts the successful payment to /api/telegram-webhook. If the player is not inside Telegram (web/legacy), the invoice cannot be opened — the action fails with a note to open the game via the Mini App.",
     request: z.object({ plan: z.enum(["standard", "pro"]) }),
     response: resultShape.extend({
       orderId: z.number().nullable(),
+      invoiceUrl: z.string().nullable(),
       stars: z.number(),
     }),
     async handler(args, session) {
@@ -2300,11 +2474,16 @@ export const gameActions = {
       // i18n: request language — user-facing strings only.
       const lang = session.lang;
       const S = serverStrings(lang);
+      const plan = PREMIUM_PLANS[args.plan];
+      const fail = (error: string) => ({ ok: false, error, orderId: null as number | null, invoiceUrl: null as string | null, stars: plan.stars });
+      // Stars hanya bisa dibayar dari dalam Telegram (lembar invoice
+      // Telegram). Pemain web tidak punya Telegram.WebApp.
+      if (session.telegramId === null) {
+        return fail(S.errStarsNeedTelegram);
+      }
       // Creates the player row (and applies regen) if this is the
       // first ever action.
       const p = await loadPlayer(db, session);
-      const plan = PREMIUM_PLANS[args.plan];
-      const fail = (error: string) => ({ ok: false, error, orderId: null as number | null, stars: plan.stars });
       const pending = await db
         .select()
         .from(schema.premiumOrders)
@@ -2323,14 +2502,45 @@ export const gameActions = {
         .returning({ id: schema.premiumOrders.id });
       const row = inserted[0];
       if (!row) return fail(S.errPremiumOrderCreateFail);
+      const invoice = await createInvoiceLink({
+        title: premiumPlanLabel(plan, lang),
+        description: `${premiumPlanLabel(plan, lang)} · ASTRA MINING`,
+        payload: buildInvoicePayload(row.id, p.id, plan.tier),
+        prices: [{ label: premiumPlanLabel(plan, lang), amount: plan.stars }],
+      });
+      if (invoice.ok === false) {
+        // Invoice gagal dibuat — hapus pesanan pending yang baru
+        // dibuat supaya pemain bisa langsung mencoba lagi (satu
+        // pending saja). Tanpa token / body mentah API di error.
+        await db
+          .delete(schema.premiumOrders)
+          .where(eq(schema.premiumOrders.id, row.id))
+          .catch(() => undefined);
+        return fail(S.errStarsInvoiceFail);
+      }
       await logActivity(db, p.id, "premium_order", S.logPremiumOrder(premiumPlanLabel(plan, lang), plan.stars), null);
-      return { ok: true, error: null, orderId: row.id, stars: plan.stars };
+      return { ok: true, error: null, orderId: row.id, invoiceUrl: invoice.invoiceUrl, stars: plan.stars };
+    },
+  }),
+
+  setupStarsWebhook: defineGameAction({
+    description:
+      "Owner action (one-time setup): registers the Telegram Stars webhook (https://mygamemining.vercel.app/api/telegram-webhook) with the Bot API so Stars payments activate Premium automatically. The webhook secret is derived server-side from BOT_TOKEN — no new env var. Triggered once from the Kendali tab after deploy.",
+    request: z.object({}),
+    response: resultShape,
+    async handler(_args, session) {
+      // i18n: request language — user-facing strings only.
+      const lang = session.lang;
+      const S = serverStrings(lang);
+      const ok = await setWebhook({ url: STARS_WEBHOOK_URL });
+      if (!ok) return { ok: false, error: S.errStarsWebhookFail };
+      return { ok: true, error: null };
     },
   }),
 
   confirmPremiumOrder: defineGameAction({
     description:
-      "Owner action: confirms a pending Telegram Stars premium order after the Stars payment arrived in Telegram — activates (or extends) the Premium Pass with the order's tier and days, unlocking the dual drill for the Pro tier.",
+      "Owner action (fallback): confirms a pending Telegram Stars premium order manually — e.g. the Stars payment went through but the webhook missed it (stuck pending order). Activates (or extends) the Premium Pass with the order's tier and days, unlocking the dual drill for the Pro tier. Normally the webhook does this automatically; this stays as the manual fallback.",
     request: z.object({ orderId: z.number().int().positive() }),
     response: resultShape.extend({
       premiumUntil: z.string().nullable(),
@@ -2353,20 +2563,11 @@ export const gameActions = {
       // yang mengonfirmasi.
       const target = await loadPlayerRowOrNull(db, order.playerId);
       if (!target) return { ok: false, error: S.errOrderOwnerNotFound, premiumUntil: null };
-      const base = target.premiumUntil && target.premiumUntil.getTime() > Date.now() ? target.premiumUntil.getTime() : Date.now();
-      const until = new Date(base + order.days * 24 * 60 * 60 * 1000);
-      // Tier: a Pro order always sets Pro; a Standard order never
-      // downgrades an active Pro pass.
-      const tier: PremiumTier = order.tier === "pro" || (isPremium(target) && target.premiumTier === "pro") ? "pro" : "standard";
       await db
         .update(schema.premiumOrders)
         .set({ status: "confirmed", processedAt: new Date() })
         .where(eq(schema.premiumOrders.id, order.id));
-      await db
-        .update(schema.player)
-        .set({ premiumUntil: until, premiumTier: tier })
-        .where(eq(schema.player.id, target.id));
-      await logActivity(db, order.playerId, "premium_confirm", S.logPremiumConfirm(order.stars, tier === "pro" ? (lang === "en" ? "Pro (dual drill)" : "Pro (bor ganda)") : "Standard", order.days, fmtDateLang(until, lang)), null);
+      const until = await activatePremiumOrder(db, order, target, lang);
       return { ok: true, error: null, premiumUntil: until.toISOString() };
     },
   }),
@@ -2975,6 +3176,7 @@ export async function dispatchGameAction(
     "rejectPremiumOrder",
     "grantPremium",
     "clearPlayerFlag",
+    "setupStarsWebhook",
   ]);
   if (ADMIN_ACTIONS.has(action) && !resolved.session.isAdmin) {
     return { ok: false, error: serverStrings(resolved.session.lang).errAdminOnly };

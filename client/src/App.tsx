@@ -625,9 +625,26 @@ export function App() {
     mutationFn: (zoneIndex: number) => api.travelToMap({ zoneIndex }),
     onSuccess: (r) => { showResult(r.ok, r.error, <>{t("travelDone", { map: r.mapName ?? "", name: r.asteroidName ?? t("asteroidNew") })}</>); if (r.ok) setTab("tambang"); refresh(); },
   });
-  const orderPremium = useMutation({
-    mutationFn: (plan: "standard" | "pro") => api.createPremiumOrder({ plan }),
-    onSuccess: (r) => { showResult(r.ok, r.error, <>{trich("premiumOrderCreated", { id: r.orderId ?? "", stars: fmt(r.stars) })}</>); refresh(); },
+  // Beli Premium dengan Telegram Stars (XTR) — alur nyata:
+  // server membuat invoice (createStarsInvoice) → lembar bayar
+  // Stars dibuka via Telegram.WebApp.openInvoice → status "paid"
+  // berarti Stars sudah dibayar; Premium diaktifkan otomatis oleh
+  // webhook Telegram (/api/telegram-webhook). refresh() memuat
+  // ulang state supaya badge Premium + pesanan terbaru tampil.
+  const buyPremium = useMutation({
+    mutationFn: (plan: "standard" | "pro") => api.createStarsInvoice({ plan }),
+    onSuccess: (r) => {
+      if (!r.ok || !r.invoiceUrl) { showResult(r.ok, r.error, null); refresh(); return; }
+      const wa = window.Telegram?.WebApp;
+      if (!wa || typeof wa.openInvoice !== "function") { showBanner("bad", t("premiumStarsNeedTelegram")); refresh(); return; }
+      wa.openInvoice(r.invoiceUrl, (status) => {
+        if (status === "paid") { showBanner("good", t("premiumStarsPaid")); }
+        else if (status === "cancelled") { showBanner("bad", t("premiumStarsCancelled")); }
+        else if (status === "failed") { showBanner("bad", t("premiumStarsFailed")); }
+        else { showBanner("info", t("premiumStarsPending")); }
+        refresh();
+      });
+    },
   });
   const claimBonus = useMutation({ mutationFn: () => api.claimDailyBonus({}), onSuccess: (r) => { showResult(r.ok, r.error, t("dailyBonusClaimed", { bonus: fmt(r.bonusKt) })); refresh(); } });
   const watchAd = useMutation({ mutationFn: () => api.watchAd({}), onSuccess: (r) => { showResult(r.ok, r.error, <>{t("adRewarded", { reward: fmt(r.rewardKt), remaining: r.remainingToday })}</>); if (r.ok) fireBurst("mine"); refresh(); } });
@@ -903,7 +920,7 @@ export function App() {
 
         {tab === "upgrade" && (
           <section className="mt-4 space-y-3">
-            <PremiumCard data={data} onOrder={(plan) => orderPremium.mutate(plan)} ordering={orderPremium.isPending} />
+            <PremiumCard data={data} onBuy={(plan) => buyPremium.mutate(plan)} buying={buyPremium.isPending} inTelegram={sessionInfo.inTelegram} />
             <div className="relative overflow-hidden rounded-2xl border border-[var(--border)]"><img src={stationImg} alt={t("stationImgAlt")} className="h-40 w-full object-cover" /><div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent flex items-end p-4"><p className="text-sm font-semibold text-white">{t("hanggarCaption")}</p></div></div>
             {data.upgrades.map((u) => (<div key={u.id} className="vein-tile rounded-2xl bg-[var(--surface)] border border-[var(--border)] p-4"><div className="flex items-start justify-between gap-3"><div className="flex items-start gap-3"><span aria-hidden="true" className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-[var(--border)] bg-[var(--surface2)]"><UpgradeIcon id={u.id} size={22} /></span><div><h3 className="font-display text-sm">{u.name}</h3><p className="mt-1 text-sm text-[var(--dim)]">{u.desc}</p><div className="mt-2 flex gap-1" aria-label={t("levelAria", { l: u.level, m: u.maxLevel })}>{Array.from({ length: u.maxLevel }, (_, i) => (<span key={i} className={`h-2 w-4 rounded-full ${i < u.level ? "bg-cyan-400" : "bg-[var(--surface2)]"}`} />))}</div></div></div><div className="shrink-0 text-right"><p className="text-xs font-semibold text-[var(--dim)]">{t("levelLabel")}</p><p className="font-display text-xl">{u.level}<span className="text-sm text-[var(--dim)]">/{u.maxLevel}</span></p></div></div>{u.nextCost != null ? (<button type="button" onClick={() => buy.mutate(u.id)} disabled={buy.isPending || p.ktBalance < u.nextCost} aria-label={t("buyAria", { name: u.name, l: u.level + 1, cost: fmt(u.nextCost) })} className="btn-press mt-3 w-full rounded-xl bg-cyan-400 px-4 py-2 font-bold text-black disabled:opacity-40">{p.ktBalance < u.nextCost ? t("needKt", { cost: fmt(u.nextCost) }) : t("installUpgrade", { cost: fmt(u.nextCost) })}</button>) : (<p className="mt-3 rounded-xl bg-[var(--surface2)] px-4 py-2 text-center font-bold">{t("maxLevel")}</p>)}</div>))}
           </section>
@@ -918,7 +935,7 @@ export function App() {
   );
 }
 
-function PremiumCard({ data, onOrder, ordering }: { data: GameState; onOrder: (plan: "standard" | "pro") => void; ordering: boolean }) {
+function PremiumCard({ data, onBuy, buying, inTelegram }: { data: GameState; onBuy: (plan: "standard" | "pro") => void; buying: boolean; inTelegram: boolean }) {
   const p = data.player;
   const pendingOrder = data.premiumOrders.find((o) => o.status === "pending");
   const benefits = [t("ben1"), t("ben2"), t("ben3"), t("ben4")];
@@ -938,17 +955,22 @@ function PremiumCard({ data, onOrder, ordering }: { data: GameState; onOrder: (p
       {pendingOrder ? (
         <div className="mt-4 rounded-xl border border-amber-400/50 bg-amber-400/10 px-4 py-3">
           <p className="font-display text-sm text-amber-200">{t("pendingOrderTitle", { id: pendingOrder.id, tier: pendingOrder.tier === "pro" ? "Pro" : "Standard", stars: fmt(pendingOrder.stars) })}</p>
-          <p className="mt-1 text-sm text-[var(--dim)]">{trich("pendingOrderDesc", { stars: fmt(pendingOrder.stars), id: pendingOrder.id })}</p>
+          <p className="mt-1 text-sm text-[var(--dim)]">{t("pendingOrderDesc")}</p>
         </div>
+      ) : !inTelegram ? (
+        <p className="mt-4 rounded-xl border border-[var(--border)] bg-[var(--surface2)] px-4 py-3 text-sm text-[var(--dim)]">{t("premiumStarsNeedTelegram")}</p>
       ) : (
-        <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
-          {p.premium.plans.map((plan) => (
-            <button key={plan.id} type="button" onClick={() => onOrder(plan.id as "standard" | "pro")} disabled={ordering} aria-label={t("orderPlanAria", { label: plan.label, stars: fmt(plan.stars) })} className={`btn-press rounded-xl px-3 py-3 text-black disabled:opacity-40 ${plan.tier === "pro" ? "bg-gradient-to-b from-amber-300 to-amber-500 ring-2 ring-amber-200/60" : "bg-amber-400"}`}>
-              <span className="block font-display text-sm">{t("planLine", { tier: plan.tier === "pro" ? "PRO" : "STANDARD", days: plan.days })}</span>
-              <span className="mt-0.5 flex items-center justify-center gap-1 text-sm font-bold"><SparkleIcon size={14} /> {t("planStars", { stars: fmt(plan.stars) })}</span>
-              <span className="block text-xs font-semibold">{plan.tier === "pro" ? t("planProTag") : t("planStdTag")}</span>
-            </button>
-          ))}
+        <div className="mt-4">
+          <p className="text-sm font-bold">{t("premiumBuyTitle")}</p>
+          <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
+            {p.premium.plans.map((plan) => (
+              <button key={plan.id} type="button" onClick={() => onBuy(plan.id as "standard" | "pro")} disabled={buying} aria-label={t("orderPlanAria", { label: plan.label, stars: fmt(plan.stars) })} className={`btn-press rounded-xl px-3 py-3 text-black disabled:opacity-40 ${plan.tier === "pro" ? "bg-gradient-to-b from-amber-300 to-amber-500 ring-2 ring-amber-200/60" : "bg-amber-400"}`}>
+                <span className="block font-display text-sm">{t("planLine", { tier: plan.tier === "pro" ? "PRO" : "STANDARD", days: plan.days })}</span>
+                <span className="mt-0.5 flex items-center justify-center gap-1 text-sm font-bold"><SparkleIcon size={14} /> {t("planStars", { stars: fmt(plan.stars) })}</span>
+                <span className="block text-xs font-semibold">{plan.tier === "pro" ? t("planProTag") : t("planStdTag")}</span>
+              </button>
+            ))}
+          </div>
         </div>
       )}
       <p className="mt-3 text-xs text-[var(--dim)]">{t("premiumHint")}</p>
@@ -1153,6 +1175,12 @@ function GrantPremiumCard({ data, onDone }: { data: GameState; onDone: (ok: bool
     mutationFn: (orderId: number) => api.rejectPremiumOrder({ orderId }),
     onSuccess: (r) => onDone(r.ok, r.error, t("premiumRejected")),
   });
+  // Setup satu kali: daftarkan webhook Stars ke Bot API supaya
+  // pembayaran Stars langsung mengaktifkan Premium otomatis.
+  const setupWebhook = useMutation({
+    mutationFn: () => api.setupStarsWebhook({}),
+    onSuccess: (r) => onDone(r.ok, r.error, t("starsWebhookConnected")),
+  });
   const p = data.player;
   const pendingOrders = data.premiumOrders.filter((o) => o.status === "pending");
   const pastOrders = data.premiumOrders.filter((o) => o.status !== "pending").slice(0, 5);
@@ -1184,7 +1212,7 @@ function GrantPremiumCard({ data, onDone }: { data: GameState; onDone: (ok: bool
       )}
       {pastOrders.length > 0 && (
         <ul className="mt-3 space-y-1 text-xs text-[var(--dim)]">
-          {pastOrders.map((o) => (<li key={o.id}>#{o.id} · {o.tier === "pro" ? "Pro" : "Standard"} · {fmt(o.stars)} Stars — {o.status === "confirmed" ? t("grantPastConfirmed") : t("grantPastRejected")}{o.processedAt ? ` · ${fmtDateTime(o.processedAt)}` : ""}</li>))}
+          {pastOrders.map((o) => (<li key={o.id}>#{o.id} · {o.tier === "pro" ? "Pro" : "Standard"} · {fmt(o.stars)} Stars — {o.status === "confirmed" ? t("grantPastConfirmed") : o.status === "paid" ? t("grantPastPaid") : t("grantPastRejected")}{o.processedAt ? ` · ${fmtDateTime(o.processedAt)}` : ""}</li>))}
         </ul>
       )}
 
@@ -1204,6 +1232,10 @@ function GrantPremiumCard({ data, onDone }: { data: GameState; onDone: (ok: bool
         <button type="submit" disabled={grant.isPending} className="btn-press rounded-xl bg-amber-400 px-4 py-2 font-bold text-black disabled:opacity-40">{p.premium.active ? t("grantExtend") : t("grantActivate")}</button>
       </form>
       <p className="mt-2 text-xs text-[var(--dim)]">{t("grantNote")}</p>
+
+      <h4 className="mt-4 text-xs font-bold uppercase tracking-[0.18em] text-[var(--dim)]">{t("starsWebhookTitle")}</h4>
+      <p className="mt-1 text-sm text-[var(--dim)]">{t("starsWebhookDesc")}</p>
+      <button type="button" onClick={() => setupWebhook.mutate()} disabled={setupWebhook.isPending} className="btn-press mt-2 rounded-xl bg-amber-400 px-4 py-2 font-bold text-black disabled:opacity-40">{t("starsWebhookBtn")}</button>
     </div>
   );
 }

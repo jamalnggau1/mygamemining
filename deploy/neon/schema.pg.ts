@@ -175,10 +175,18 @@ export const premiumOrders = pgTable(
     days: integer("days").notNull(),
     tier: text("tier", { enum: ["standard", "pro"] }).notNull(),
     status: text("status", {
-      enum: ["pending", "confirmed", "rejected"],
+      enum: ["pending", "confirmed", "rejected", "paid"],
     })
       .notNull()
       .default("pending"),
+    // Bukti bayar Telegram Stars (XTR) — diisi webhook
+    // /api/telegram-webhook saat successful_payment diterima:
+    // telegram_payment_charge_id = id unik bukti bayar dari
+    // Telegram, total_amount = Stars yang benar-benar dibayar
+    // (dicocokkan dengan kolom stars). Null untuk pesanan manual
+    // (konfirmasi Kendali) dan untuk pesanan yang belum dibayar.
+    telegramPaymentChargeId: text("telegram_payment_charge_id"),
+    totalAmount: integer("total_amount"),
     createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
       .notNull()
       .defaultNow(),

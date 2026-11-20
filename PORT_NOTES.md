@@ -1768,3 +1768,179 @@ new `commRefStats` key. Run the full suite once Postgres is back
 (the test DB also needs migration-0005 applied — or a fresh
 init.sql — before the referral tests can run). NOT pushed to
 GitHub; NOT verified live.
+
+## Telegram Stars (XTR) Premium — pembayaran asli (2026-11-20, implemented, NOT yet pushed)
+
+Replaces the manual Stars flow. Before: the player created a
+pending `premium_orders` row (`createPremiumOrder`), paid Stars to
+the owner somehow in Telegram, and the owner confirmed it from
+Kendali. Now the payment is a real Telegram Stars invoice, and
+Premium activates automatically via a webhook. Prices UNCHANGED:
+Standard 150 Stars / 7 days, Pro 500 Stars / 30 days (dual drill).
+
+### Architecture (invoice → openInvoice → webhook → activation)
+
+1. Player taps a plan in Hanggar → client calls the new game
+   action `createStarsInvoice({plan})` (replaces
+   `createPremiumOrder` — the old action and its client call are
+   REMOVED).
+2. Server creates the pending `premium_orders` row (same "one
+   pending order per player" rule), then calls the Bot API
+   `createInvoiceLink` with title/description = plan label,
+   `provider_token: ""` (empty — required for Stars), currency
+   `"XTR"`, `prices: [{label, amount: plan stars}]`, and payload
+   `premium:<orderId>:<playerId>:<tier>`. Returns
+   `{invoiceUrl, orderId}`. On Bot API failure the pending row is
+   deleted again (so the player can retry immediately) and a clean
+   error is returned — no token, no raw API body.
+3. Client opens the invoice with
+   `Telegram.WebApp.openInvoice(invoiceUrl, callback)` (typing
+   added to `client/src/globals.d.ts`). Callback statuses:
+   `"paid"` → refresh + success banner; `"cancelled"` /
+   `"failed"` / `"pending"` → matching banner + refresh. Outside
+   Telegram (web/legacy player, no `Telegram.WebApp`) the buy
+   buttons are replaced by a note: "Buka lewat Telegram untuk
+   membeli Premium dengan Stars" — and the server also rejects
+   `createStarsInvoice` for non-Telegram sessions.
+4. Before charging, Telegram sends `pre_checkout_query` to the
+   webhook. The server validates it against the stored order
+   (currency XTR, payload parses, order exists + still pending,
+   owner = payer, amount = plan Stars) and answers
+   `answerPreCheckoutQuery` ok:true, or ok:false + a short
+   message (Telegram shows it in the payment sheet). Must be
+   answered within ~10s.
+5. After payment, Telegram POSTs `message.successful_payment`
+   to the webhook. The server validates the payload the same
+   way, enforces idempotency (atomic claim: only a still-pending
+   order flips to `paid`; a redelivered update finds it already
+   paid and does nothing), activates Premium with the SAME
+   extension rule `confirmPremiumOrder` uses (base = current
+   `premium_until` if still in the future, else now; a Pro order
+   always sets Pro; a Standard order never downgrades an active
+   Pro pass — now shared in `activatePremiumOrder`), marks the
+   order `paid` and stores `telegram_payment_charge_id` +
+   `total_amount`, and writes the Economy log entry
+   (`premium_confirm`).
+6. A pending order (invoice created, webhook not yet confirmed)
+   is still shown in Hanggar with a "menunggu pembayaran" note +
+   a hint that the owner can confirm it in Kendali if the
+   payment went through but was not auto-activated.
+
+### Webhook
+
+- URL: `https://mygamemining.vercel.app/api/telegram-webhook`
+  (new Vercel function `api/telegram-webhook.ts`, POST only,
+  `maxDuration: 30` in `vercel.json`). Always returns HTTP 200
+  quickly — Telegram retries non-200 deliveries — and never
+  throws; any failure leaves the order pending for manual
+  confirmation.
+- Secret: derived server-side as
+  `HMAC-SHA256(BOT_TOKEN, "astra-mining-webhook")` (hex) — NO
+  new env var. `setWebhook` registers it as `secret_token`; the
+  handler verifies the `X-Telegram-Bot-Api-Secret-Token` header
+  against the same derivation (constant-time compare, 403 on
+  mismatch). BOT_TOKEN is never logged, and full update bodies
+  are never logged.
+- Non-XTR payments are ignored; malformed payloads are ignored.
+
+### One-time setup (owner, after deploy)
+
+Kendali → new "Hubungkan Webhook Stars" button (in the
+GrantPremiumCard, admin-only game action `setupStarsWebhook`)
+registers the webhook URL + secret with the Bot API. Press it
+ONCE after the deploy. It needs no new env var — BOT_TOKEN is
+already in Vercel env.
+
+### Manual fallback (still there)
+
+`confirmPremiumOrder` + `rejectPremiumOrder` stay as the admin
+fallback for payments the webhook misses (stuck pending
+orders). The Kendali pending-orders list now also shows orders
+with status `paid` in the history ("dibayar via Stars" /
+"paid via Stars"). `grantPremium` (free grant) is unchanged.
+
+### Migration 0006 — RUN BEFORE DEPLOY
+
+New idempotent `deploy/neon/migration-0006-stars-charge.sql`
+(+ `init.sql` + `schema.pg.ts`): adds
+`premium_orders.telegram_payment_charge_id` (TEXT) and
+`premium_orders.total_amount` (INTEGER), and extends the status
+CHECK to `('pending','confirmed','rejected','paid')`.
+⚠️  DEPLOY ORDER MATTERS: run migration-0006 in Neon BEFORE
+the code deploys. Unlike migration-0005 (new table, handlers
+swallow the missing-table error), migration-0006 adds columns
+to a table `getGameState` selects on every request — without
+the columns the live game breaks (missing-column error) until
+the migration runs. Vercel auto-deploys on push, so run the
+migration first, then push. (The webhook handler itself still
+catches a missing-column failure and leaves the order pending
+for manual confirmation — belt and braces only.)
+
+### i18n
+
+Every new string in `client/src/i18n.ts` AND `api/_lib/i18n.ts`,
+id + en symmetric: `premiumBuyTitle`,
+`premiumStarsNeedTelegram`, `premiumStarsPaid`,
+`premiumStarsCancelled`, `premiumStarsFailed`,
+`premiumStarsPending`, `starsWebhookTitle/Desc/Btn/Connected`,
+`grantPastPaid`, `errStarsNeedTelegram`,
+`errStarsInvoiceFail`, `errStarsWebhookFail`,
+`starsPrecheckoutInvalid`. Removed dead/manual-flow keys:
+`premPendingTitle`, `premPendingDesc`, `premiumHowTo`,
+`premiumOrderCreated`, `planOrderAria` (all unused). Reworded:
+`pendingOrderDesc` (waiting for Stars payment + manual fallback
+hint), `premiumHint` (auto-activation), `grantDesc` (webhook is
+now the normal path).
+
+### Files changed
+
+- NEW `api/_lib/stars.ts` — Bot API client: `createInvoiceLink`,
+  `answerPreCheckoutQuery`, `setWebhook`,
+  `buildInvoicePayload` / `parseInvoicePayload`,
+  `deriveWebhookSecret` / `verifyWebhookSecret`,
+  `STARS_WEBHOOK_URL`; test seam `setBotFetchForTests` /
+  `resetBotFetchForTests` (the Bot API fetch is swappable so
+  tests never hit api.telegram.org).
+- NEW `api/telegram-webhook.ts` — POST webhook route.
+- `api/_lib/game.ts` — new actions `createStarsInvoice` +
+  `setupStarsWebhook` (admin-gated); `createPremiumOrder`
+  REMOVED; `confirmPremiumOrder` refactored onto the shared
+  `activatePremiumOrder` helper; new exported webhook helpers
+  `validateStarsPreCheckout` + `applyStarsPayment`;
+  `getGameState` premiumOrders status enum gains `"paid"`.
+- `api/_lib/i18n.ts` — 4 new server strings (id + en).
+- `client/src/api.ts` — `createStarsInvoice` +
+  `setupStarsWebhook` (replaces `createPremiumOrder`).
+- `client/src/globals.d.ts` — `openInvoice` typing.
+- `client/src/App.tsx` — `buyPremium` mutation (invoice →
+  openInvoice → status banners), PremiumCard reworked
+  ("Beli dengan Stars", non-Telegram note, pending-order box),
+  GrantPremiumCard gains the webhook setup button + `"paid"`
+  history branch.
+- `client/src/i18n.ts` — keys above (id + en).
+- `deploy/neon/migration-0006-stars-charge.sql` (NEW),
+  `deploy/neon/init.sql`, `deploy/neon/schema.pg.ts`.
+- `vercel.json` — `api/telegram-webhook.ts` maxDuration 30.
+- Tests: NEW `/tmp/smoke-test/stars.test.ts` (8 tests —
+  invoice payload per plan, web-player refusal,
+  pre_checkout valid/invalid ×5, successful_payment
+  activation + charge storage + idempotency, non-XTR ignored,
+  wrong secret → 403, webhook setup admin-only, admin
+  confirm fallback); `game.test.ts` premium test + 
+  `telegram.test.ts` admin-gate test updated to
+  `createStarsInvoice` (stubbed Bot API). Mirrored to
+  `~/workspace/smoke-test/`.
+
+### Verified locally (2026-11-20)
+
+`bun run typecheck` 0 errors (strict AND Vercel-style
+`--strictNullChecks false`), `bun run build:client` OK
+(bundle `main-HUJA5EZT.js`). Full suite: **86/86 tests pass,
+2.615 expects, 3 consecutive runs** (includes the 8 new Stars
+tests + the 9 referral tests — the local Postgres test DB was
+restored for this run: the existing 16/main cluster was started,
+the missing `astra_test` role/database were recreated, and
+`init.sql` + migrations 0001–0006 were applied; PostgreSQL
+itself was NOT reinstalled). NOT pushed to GitHub; NOT verified
+live. Live test note: there is NO sandbox for Stars — a live
+end-to-end test costs real Stars (150 for Standard).

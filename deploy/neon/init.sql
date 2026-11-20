@@ -104,7 +104,9 @@ CREATE TABLE IF NOT EXISTS premium_orders (
   days INTEGER NOT NULL,
   tier TEXT NOT NULL CHECK (tier IN ('standard', 'pro')),
   status TEXT NOT NULL DEFAULT 'pending'
-    CHECK (status IN ('pending', 'confirmed', 'rejected')),
+    CHECK (status IN ('pending', 'confirmed', 'rejected', 'paid')),
+  telegram_payment_charge_id TEXT,
+  total_amount INTEGER,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   processed_at TIMESTAMPTZ
 );

@@ -146,6 +146,10 @@ export interface ServerStrings {
   errTravelEnergy: (cost: number, energy: number) => string;
   errPremiumOrderPending: string;
   errPremiumOrderCreateFail: string;
+  errStarsNeedTelegram: string;
+  errStarsInvoiceFail: string;
+  errStarsWebhookFail: string;
+  starsPrecheckoutInvalid: string;
   errPremiumOrderNotFound: string;
   errOrderAlreadyProcessed: string;
   errOrderOwnerNotFound: string;
@@ -273,6 +277,10 @@ const id: ServerStrings = {
   errPremiumOrderPending:
     "Masih ada pesanan Premium yang menunggu konfirmasi pemilik. Selesaikan pembayaran Stars untuk pesanan itu dulu, atau tunggu pemilik memprosesnya.",
   errPremiumOrderCreateFail: "Gagal membuat pesanan Premium, coba lagi.",
+  errStarsNeedTelegram: "Premium Stars hanya bisa dibeli dari dalam Telegram — buka game lewat Mini App Telegram.",
+  errStarsInvoiceFail: "Gagal membuat pembayaran Stars, coba lagi.",
+  errStarsWebhookFail: "Gagal menghubungkan webhook Stars, coba lagi.",
+  starsPrecheckoutInvalid: "Pesanan Premium tidak valid.",
   errPremiumOrderNotFound: "Pesanan Premium tidak ditemukan.",
   errOrderAlreadyProcessed: "Pesanan ini sudah diproses.",
   errOrderOwnerNotFound: "Pemain pemilik pesanan tidak ditemukan.",
@@ -416,6 +424,10 @@ const en: ServerStrings = {
   errPremiumOrderPending:
     "You still have a Premium order waiting for the owner's confirmation. Finish paying Stars for that order first, or wait for the owner to process it.",
   errPremiumOrderCreateFail: "Failed to create the Premium order, please try again.",
+  errStarsNeedTelegram: "Stars Premium can only be bought inside Telegram — open the game via the Telegram Mini App.",
+  errStarsInvoiceFail: "Could not start the Stars payment, please try again.",
+  errStarsWebhookFail: "Could not connect the Stars webhook, please try again.",
+  starsPrecheckoutInvalid: "Invalid Premium order.",
   errPremiumOrderNotFound: "Premium order not found.",
   errOrderAlreadyProcessed: "This order has already been processed.",
   errOrderOwnerNotFound: "The player who owns this order was not found.",
