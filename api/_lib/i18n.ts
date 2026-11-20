@@ -202,6 +202,7 @@ export interface ServerStrings {
     until: string,
   ) => string;
   logPremiumReject: (orderId: number, stars: number) => string;
+  logPremiumCancel: (orderId: number, stars: number) => string;
   logPremiumGrant: (tierLabel: string, days: number, until: string) => string;
   logDailyBonus: (amount: number) => string;
   logAd: (amount: number) => string;
@@ -275,7 +276,7 @@ const id: ServerStrings = {
   errTravelEnergy: (cost, energy) =>
     `Bahan bakar tidak cukup — perjalanan antar-peta butuh ${cost} daya, kamu punya ${energy}.`,
   errPremiumOrderPending:
-    "Masih ada pesanan Premium yang menunggu konfirmasi pemilik. Selesaikan pembayaran Stars untuk pesanan itu dulu, atau tunggu pemilik memprosesnya.",
+    "Masih ada pesanan Premium yang menunggu pembayaran. Selesaikan pembayaran Stars untuk pesanan itu dulu, atau batalkan pesanan itu dari kartu Premium.",
   errPremiumOrderCreateFail: "Gagal membuat pesanan Premium, coba lagi.",
   errStarsNeedTelegram: "Premium Stars hanya bisa dibeli dari dalam Telegram — buka game lewat Mini App Telegram.",
   errStarsInvoiceFail: "Gagal membuat pembayaran Stars, coba lagi.",
@@ -337,6 +338,8 @@ const id: ServerStrings = {
     `Pembayaran ${stars} Telegram Stars terkonfirmasi — Premium ${tierLabel} ${days} hari aktif sampai ${until}.`,
   logPremiumReject: (orderId, stars) =>
     `Pesanan Premium #${orderId} (${stars} Stars) ditolak pemilik — pembayaran tidak terkonfirmasi.`,
+  logPremiumCancel: (orderId, stars) =>
+    `Pesanan Premium #${orderId} (${stars} Stars) dibatalkan pemain — tidak ada pembayaran, pesanan dihapus.`,
   logPremiumGrant: (tierLabel, days, until) =>
     `Pemilik mengaktifkan Premium ${tierLabel} ${days} hari (pembayaran di luar game) — aktif sampai ${until}.`,
   logDailyBonus: (amount) =>
@@ -422,7 +425,7 @@ const en: ServerStrings = {
   errTravelEnergy: (cost, energy) =>
     `Not enough fuel — inter-map travel needs ${cost} energy, you have ${energy}.`,
   errPremiumOrderPending:
-    "You still have a Premium order waiting for the owner's confirmation. Finish paying Stars for that order first, or wait for the owner to process it.",
+    "You still have a Premium order waiting for payment. Finish paying Stars for that order first, or cancel it from the Premium card.",
   errPremiumOrderCreateFail: "Failed to create the Premium order, please try again.",
   errStarsNeedTelegram: "Stars Premium can only be bought inside Telegram — open the game via the Telegram Mini App.",
   errStarsInvoiceFail: "Could not start the Stars payment, please try again.",
@@ -484,6 +487,8 @@ const en: ServerStrings = {
     `Payment of ${stars} Telegram Stars confirmed — Premium ${tierLabel} active for ${days} days until ${until}.`,
   logPremiumReject: (orderId, stars) =>
     `Premium order #${orderId} (${stars} Stars) rejected by the owner — payment not confirmed.`,
+  logPremiumCancel: (orderId, stars) =>
+    `Premium order #${orderId} (${stars} Stars) cancelled by the player — no payment was made, order deleted.`,
   logPremiumGrant: (tierLabel, days, until) =>
     `The owner activated Premium ${tierLabel} for ${days} days (payment outside the game) — active until ${until}.`,
   logDailyBonus: (amount) =>

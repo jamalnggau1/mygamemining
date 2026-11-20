@@ -631,20 +631,44 @@ export function App() {
   // berarti Stars sudah dibayar; Premium diaktifkan otomatis oleh
   // webhook Telegram (/api/telegram-webhook). refresh() memuat
   // ulang state supaya badge Premium + pesanan terbaru tampil.
+  // Status "cancelled" / "failed" berarti TIDAK ada pembelian —
+  // pesanan pending langsung dibatalkan (cancelStarsOrder, baris
+  // dihapus) supaya tombol beli langsung kembali tanpa kerja
+  // admin. Status "pending" dibiarkan menunggu webhook.
   const buyPremium = useMutation({
     mutationFn: (plan: "standard" | "pro") => api.createStarsInvoice({ plan }),
     onSuccess: (r) => {
       if (!r.ok || !r.invoiceUrl) { showResult(r.ok, r.error, null); refresh(); return; }
+      const orderId = r.orderId;
       const wa = window.Telegram?.WebApp;
-      if (!wa || typeof wa.openInvoice !== "function") { showBanner("bad", t("premiumStarsNeedTelegram")); refresh(); return; }
+      if (!wa || typeof wa.openInvoice !== "function") {
+        showBanner("bad", t("premiumStarsNeedTelegram"));
+        // Lembar bayar tidak pernah terbuka, tapi pesanan pending
+        // sudah dibuat — hapus supaya tombol beli langsung kembali.
+        if (orderId != null) { api.cancelStarsOrder({ orderId }).then(() => refresh(), () => refresh()); }
+        else { refresh(); }
+        return;
+      }
       wa.openInvoice(r.invoiceUrl, (status) => {
-        if (status === "paid") { showBanner("good", t("premiumStarsPaid")); }
-        else if (status === "cancelled") { showBanner("bad", t("premiumStarsCancelled")); }
-        else if (status === "failed") { showBanner("bad", t("premiumStarsFailed")); }
-        else { showBanner("info", t("premiumStarsPending")); }
-        refresh();
+        if (status === "paid") { showBanner("good", t("premiumStarsPaid")); refresh(); }
+        else if (status === "cancelled" || status === "failed") {
+          showBanner("bad", t(status === "cancelled" ? "premiumStarsCancelled" : "premiumStarsFailed"));
+          // Tidak ada pembelian — batalkan pesanan pending supaya
+          // tombol beli langsung kembali, tanpa kerja admin.
+          if (orderId != null) { api.cancelStarsOrder({ orderId }).then(() => refresh(), () => refresh()); }
+          else { refresh(); }
+        }
+        else { showBanner("info", t("premiumStarsPending")); refresh(); }
       });
     },
+  });
+  // Batalkan pesanan Premium yang masih pending (tombol di kartu
+  // Premium) — untuk pemain yang menutup aplikasi di tengah
+  // pembayaran dan kembali ke pesanan yang macet. Baris pesanan
+  // dihapus, tombol beli langsung kembali.
+  const cancelStarsOrder = useMutation({
+    mutationFn: (orderId: number) => api.cancelStarsOrder({ orderId }),
+    onSuccess: (r) => { showResult(r.ok, r.error, r.ok ? t("premiumOrderCancelled") : null); refresh(); },
   });
   const claimBonus = useMutation({ mutationFn: () => api.claimDailyBonus({}), onSuccess: (r) => { showResult(r.ok, r.error, t("dailyBonusClaimed", { bonus: fmt(r.bonusKt) })); refresh(); } });
   const watchAd = useMutation({ mutationFn: () => api.watchAd({}), onSuccess: (r) => { showResult(r.ok, r.error, <>{t("adRewarded", { reward: fmt(r.rewardKt), remaining: r.remainingToday })}</>); if (r.ok) fireBurst("mine"); refresh(); } });
@@ -920,7 +944,7 @@ export function App() {
 
         {tab === "upgrade" && (
           <section className="mt-4 space-y-3">
-            <PremiumCard data={data} onBuy={(plan) => buyPremium.mutate(plan)} buying={buyPremium.isPending} inTelegram={sessionInfo.inTelegram} />
+            <PremiumCard data={data} onBuy={(plan) => buyPremium.mutate(plan)} buying={buyPremium.isPending} inTelegram={sessionInfo.inTelegram} onCancelOrder={(id) => cancelStarsOrder.mutate(id)} cancelling={cancelStarsOrder.isPending} />
             <div className="relative overflow-hidden rounded-2xl border border-[var(--border)]"><img src={stationImg} alt={t("stationImgAlt")} className="h-40 w-full object-cover" /><div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent flex items-end p-4"><p className="text-sm font-semibold text-white">{t("hanggarCaption")}</p></div></div>
             {data.upgrades.map((u) => (<div key={u.id} className="vein-tile rounded-2xl bg-[var(--surface)] border border-[var(--border)] p-4"><div className="flex items-start justify-between gap-3"><div className="flex items-start gap-3"><span aria-hidden="true" className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-[var(--border)] bg-[var(--surface2)]"><UpgradeIcon id={u.id} size={22} /></span><div><h3 className="font-display text-sm">{u.name}</h3><p className="mt-1 text-sm text-[var(--dim)]">{u.desc}</p><div className="mt-2 flex gap-1" aria-label={t("levelAria", { l: u.level, m: u.maxLevel })}>{Array.from({ length: u.maxLevel }, (_, i) => (<span key={i} className={`h-2 w-4 rounded-full ${i < u.level ? "bg-cyan-400" : "bg-[var(--surface2)]"}`} />))}</div></div></div><div className="shrink-0 text-right"><p className="text-xs font-semibold text-[var(--dim)]">{t("levelLabel")}</p><p className="font-display text-xl">{u.level}<span className="text-sm text-[var(--dim)]">/{u.maxLevel}</span></p></div></div>{u.nextCost != null ? (<button type="button" onClick={() => buy.mutate(u.id)} disabled={buy.isPending || p.ktBalance < u.nextCost} aria-label={t("buyAria", { name: u.name, l: u.level + 1, cost: fmt(u.nextCost) })} className="btn-press mt-3 w-full rounded-xl bg-cyan-400 px-4 py-2 font-bold text-black disabled:opacity-40">{p.ktBalance < u.nextCost ? t("needKt", { cost: fmt(u.nextCost) }) : t("installUpgrade", { cost: fmt(u.nextCost) })}</button>) : (<p className="mt-3 rounded-xl bg-[var(--surface2)] px-4 py-2 text-center font-bold">{t("maxLevel")}</p>)}</div>))}
           </section>
@@ -935,7 +959,7 @@ export function App() {
   );
 }
 
-function PremiumCard({ data, onBuy, buying, inTelegram }: { data: GameState; onBuy: (plan: "standard" | "pro") => void; buying: boolean; inTelegram: boolean }) {
+function PremiumCard({ data, onBuy, buying, inTelegram, onCancelOrder, cancelling }: { data: GameState; onBuy: (plan: "standard" | "pro") => void; buying: boolean; inTelegram: boolean; onCancelOrder: (orderId: number) => void; cancelling: boolean }) {
   const p = data.player;
   const pendingOrder = data.premiumOrders.find((o) => o.status === "pending");
   const benefits = [t("ben1"), t("ben2"), t("ben3"), t("ben4")];
@@ -956,6 +980,7 @@ function PremiumCard({ data, onBuy, buying, inTelegram }: { data: GameState; onB
         <div className="mt-4 rounded-xl border border-amber-400/50 bg-amber-400/10 px-4 py-3">
           <p className="font-display text-sm text-amber-200">{t("pendingOrderTitle", { id: pendingOrder.id, tier: pendingOrder.tier === "pro" ? "Pro" : "Standard", stars: fmt(pendingOrder.stars) })}</p>
           <p className="mt-1 text-sm text-[var(--dim)]">{t("pendingOrderDesc")}</p>
+          <button type="button" onClick={() => onCancelOrder(pendingOrder.id)} disabled={cancelling} aria-label={t("cancelOrderAria", { id: pendingOrder.id })} className="btn-press mt-3 w-full rounded-xl border border-amber-400/60 bg-transparent px-4 py-2 font-bold text-amber-200 disabled:opacity-40">{t("cancelOrderBtn")}</button>
         </div>
       ) : !inTelegram ? (
         <p className="mt-4 rounded-xl border border-[var(--border)] bg-[var(--surface2)] px-4 py-3 text-sm text-[var(--dim)]">{t("premiumStarsNeedTelegram")}</p>

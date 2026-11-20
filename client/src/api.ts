@@ -129,6 +129,7 @@ export const api: Api = {
   abandonAsteroid: (args) => callAction("abandonAsteroid", args),
   travelToMap: (args) => callAction("travelToMap", args),
   createStarsInvoice: (args) => callAction("createStarsInvoice", args),
+  cancelStarsOrder: (args) => callAction("cancelStarsOrder", args),
   setupStarsWebhook: (args) => callAction("setupStarsWebhook", args),
   confirmPremiumOrder: (args) => callAction("confirmPremiumOrder", args),
   rejectPremiumOrder: (args) => callAction("rejectPremiumOrder", args),

@@ -2523,6 +2523,45 @@ export const gameActions = {
     },
   }),
 
+  cancelStarsOrder: defineGameAction({
+    description:
+      "Player action: cancels the caller's own still-pending Telegram Stars premium order and DELETES the row — no payment was made, so there is nothing to keep. A cancelled (or failed) payment, or an invoice sheet that never opened, must free the buy button at once with no admin work. Only the order's owner may cancel it, and only while it is still pending: a paid/confirmed/rejected order is already processed, and another player's order id never matches the ownership check. Race-safe against the webhook: applyStarsPayment claims pending→paid atomically, so a payment that landed first cannot be cancelled away; conversely a late successful_payment for a deleted order finds no row and is ignored.",
+    request: z.object({ orderId: z.number().int().positive() }),
+    response: resultShape,
+    async handler(args, session) {
+      const db = getDb();
+      // i18n: request language — user-facing strings only.
+      const lang = session.lang;
+      const S = serverStrings(lang);
+      const p = await loadPlayer(db, session);
+      // Hanya pesanan milik sendiri yang bisa dibatalkan — id pesanan
+      // pemain lain tidak akan ketemu di sini.
+      const rows = await db
+        .select()
+        .from(schema.premiumOrders)
+        .where(
+          and(
+            eq(schema.premiumOrders.id, args.orderId),
+            eq(schema.premiumOrders.playerId, p.id),
+          ),
+        )
+        .limit(1);
+      const order = rows[0];
+      if (!order) return { ok: false, error: S.errPremiumOrderNotFound };
+      if (order.status !== "pending")
+        return { ok: false, error: S.errOrderAlreadyProcessed };
+      // Dihapus, bukan diubah status: tidak ada pembayaran, jadi
+      // tidak ada yang perlu disimpan. successful_payment yang
+      // terlambat untuk pesanan ini tidak menemukan baris dan
+      // diabaikan oleh applyStarsPayment.
+      await db
+        .delete(schema.premiumOrders)
+        .where(eq(schema.premiumOrders.id, order.id));
+      await logActivity(db, p.id, "premium_cancel", S.logPremiumCancel(order.id, order.stars), null);
+      return { ok: true, error: null };
+    },
+  }),
+
   setupStarsWebhook: defineGameAction({
     description:
       "Owner action (one-time setup): registers the Telegram Stars webhook (https://mygamemining.vercel.app/api/telegram-webhook) with the Bot API so Stars payments activate Premium automatically. The webhook secret is derived server-side from BOT_TOKEN — no new env var. Triggered once from the Kendali tab after deploy.",

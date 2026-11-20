@@ -1769,7 +1769,7 @@ new `commRefStats` key. Run the full suite once Postgres is back
 init.sql — before the referral tests can run). NOT pushed to
 GitHub; NOT verified live.
 
-## Telegram Stars (XTR) Premium — pembayaran asli (2026-11-20, implemented, NOT yet pushed)
+## Telegram Stars (XTR) Premium — pembayaran asli (2026-11-20, implemented, PUSHED 2026-11-20 commit 7d2d24bc)
 
 Replaces the manual Stars flow. Before: the player created a
 pending `premium_orders` row (`createPremiumOrder`), paid Stars to
@@ -1796,8 +1796,15 @@ Standard 150 Stars / 7 days, Pro 500 Stars / 30 days (dual drill).
 3. Client opens the invoice with
    `Telegram.WebApp.openInvoice(invoiceUrl, callback)` (typing
    added to `client/src/globals.d.ts`). Callback statuses:
-   `"paid"` → refresh + success banner; `"cancelled"` /
-   `"failed"` / `"pending"` → matching banner + refresh. Outside
+   `"paid"` → refresh + success banner; `"pending"` → matching
+   banner + refresh, order stays pending for the webhook.
+   `"cancelled"` / `"failed"` → matching banner AND the client
+   calls the player action `cancelStarsOrder({orderId})`, which
+   DELETES the pending row — no purchase happened, so the buy
+   buttons return at once with no admin work (see "Cancelled /
+   failed payments auto-release" below). If the invoice sheet
+   never opens (`Telegram.WebApp.openInvoice` unavailable), the
+   just-created pending row is cancelled the same way. Outside
    Telegram (web/legacy player, no `Telegram.WebApp`) the buy
    buttons are replaced by a note: "Buka lewat Telegram untuk
    membeli Premium dengan Stars" — and the server also rejects
@@ -1822,9 +1829,44 @@ Standard 150 Stars / 7 days, Pro 500 Stars / 30 days (dual drill).
    `total_amount`, and writes the Economy log entry
    (`premium_confirm`).
 6. A pending order (invoice created, webhook not yet confirmed)
-   is still shown in Hanggar with a "menunggu pembayaran" note +
-   a hint that the owner can confirm it in Kendali if the
-   payment went through but was not auto-activated.
+   is still shown in Hanggar with a "menunggu pembayaran" note —
+   and now with a **"Batalkan pesanan"** button (player-side,
+   `cancelStarsOrder`): it frees players whose openInvoice
+   callback never fired (e.g. they closed the app mid-payment and
+   came back to a stuck pending order). After cancelling, the plan
+   buy buttons are visible again.
+
+### Cancelled / failed payments auto-release (2026-11-20)
+
+The owner found the bug live: cancelling the Stars payment sheet
+left the pending row in place, the buy buttons were replaced by
+the pending-order card, and `createStarsInvoice` refused a new
+invoice until an admin rejected the stuck order. That is wrong —
+a cancelled payment means no purchase happened, so nothing
+should remain.
+
+- New player-side game action `cancelStarsOrder({orderId})`
+  (`api/_lib/game.ts`, NOT admin-gated): only the order's OWN
+  player may cancel it (ownership in the WHERE clause, same
+  pattern as `cancelWithdrawal`), and only while its status is
+  `"pending"` — a paid/confirmed/rejected order answers
+  `errOrderAlreadyProcessed`, a missing/other-player order
+  answers `errPremiumOrderNotFound`. Effect: the row is DELETED
+  (no `'cancelled'` status — nothing was paid, so there is
+  nothing to keep), plus a `premium_cancel` Economy log entry.
+  NO Neon migration needed.
+- Called automatically by the client: openInvoice `"cancelled"`
+  / `"failed"`, and the invoice-never-opened path (openInvoice
+  unavailable after the row was created). Plus the manual
+  "Batalkan pesanan" button on the pending-order card.
+- Race-safe against the webhook: `applyStarsPayment` claims
+  pending→paid atomically, so a payment that landed first cannot
+  be cancelled away; conversely a late `successful_payment` for a
+  deleted order finds no row and is ignored (tested).
+- `errPremiumOrderPending` (shown when buying with a pending
+  order open) now points at the cancel button instead of telling
+  the player to wait for the owner; `pendingOrderDesc` says the
+  same.
 
 ### Webhook
 
@@ -1851,11 +1893,13 @@ registers the webhook URL + secret with the Bot API. Press it
 ONCE after the deploy. It needs no new env var — BOT_TOKEN is
 already in Vercel env.
 
-### Manual fallback (still there)
+### Manual fallback (still there — ONLY for webhook-missed payments)
 
 `confirmPremiumOrder` + `rejectPremiumOrder` stay as the admin
 fallback for payments the webhook misses (stuck pending
-orders). The Kendali pending-orders list now also shows orders
+orders) — the owner no longer has to work for cancelled or
+failed payments, those release themselves. The Kendali
+pending-orders list now also shows orders
 with status `paid` in the history ("dibayar via Stars" /
 "paid via Stars"). `grantPremium` (free grant) is unchanged.
 
@@ -1908,6 +1952,11 @@ now the normal path).
   `activatePremiumOrder` helper; new exported webhook helpers
   `validateStarsPreCheckout` + `applyStarsPayment`;
   `getGameState` premiumOrders status enum gains `"paid"`.
+  (2026-11-20) new player action `cancelStarsOrder` (DELETEs
+  a still-pending order — owner-only, pending-only, no
+  migration) + `logPremiumCancel` server string;
+  `errPremiumOrderPending` reworded to point at the cancel
+  button.
 - `api/_lib/i18n.ts` — 4 new server strings (id + en).
 - `client/src/api.ts` — `createStarsInvoice` +
   `setupStarsWebhook` (replaces `createPremiumOrder`).
@@ -1918,6 +1967,9 @@ now the normal path).
   GrantPremiumCard gains the webhook setup button + `"paid"`
   history branch.
 - `client/src/i18n.ts` — keys above (id + en).
+  (2026-11-20) `cancelOrderBtn`, `cancelOrderAria`,
+  `premiumOrderCancelled`; `pendingOrderDesc` reworded (cancel
+  button instead of owner fallback).
 - `deploy/neon/migration-0006-stars-charge.sql` (NEW),
   `deploy/neon/init.sql`, `deploy/neon/schema.pg.ts`.
 - `vercel.json` — `api/telegram-webhook.ts` maxDuration 30.
@@ -1941,6 +1993,21 @@ tests + the 9 referral tests — the local Postgres test DB was
 restored for this run: the existing 16/main cluster was started,
 the missing `astra_test` role/database were recreated, and
 `init.sql` + migrations 0001–0006 were applied; PostgreSQL
-itself was NOT reinstalled). NOT pushed to GitHub; NOT verified
-live. Live test note: there is NO sandbox for Stars — a live
-end-to-end test costs real Stars (150 for Standard).
+itself was NOT reinstalled). PUSHED 2026-11-20 (commit 7d2d24bc)
+after migration-0006 ran in Neon; the owner confirmed the webhook
+connects and the live payment works. Live test note: there is NO
+sandbox for Stars — a live end-to-end test costs real Stars (150
+for Standard).
+
+(2026-11-20, cancel fix — NOT yet pushed) `cancelStarsOrder` +
+auto-release on cancelled/failed + "Batalkan pesanan" button:
+`bun run typecheck` 0 errors (strict AND Vercel-style),
+`bun run build:client` OK (bundle `main-5BJWQ5TX.js`). Full
+suite: **92/92 tests pass, 2,656 expects, 2 consecutive runs**
+(86 before + 6 new cancel tests in `stars.test.ts`, now 14 Stars
+tests total). The local Postgres test DB had to be restored again
+for this run (another VM restart: /tmp wiped, cluster down,
+`astra_test` role/database missing — cluster started with
+`pg_ctlcluster 16 main start`, role/database recreated,
+`init.sql` + migrations 0001–0006 applied; PostgreSQL itself was
+NOT reinstalled). No Neon migration needed for the cancel fix.
