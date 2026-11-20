@@ -75,6 +75,11 @@ const result = await build({
   loader: { ".webp": "file", ".png": "file", ".jpg": "file" },
   jsx: "automatic",
   define: { "process.env.NODE_ENV": '"production"' },
+  // Buffer polyfill DI ATAS bundle (lihat client/src/buffer-polyfill.ts):
+  // @ton/core memakai Buffer di top-level modulnya — tanpa inject ini
+  // browser melempar "Buffer is not defined" saat bundle dievaluasi
+  // dan halaman jadi hitam total (2026-11-20).
+  inject: [path.join(root, "client", "src", "buffer-polyfill.ts")],
   plugins: [cssEmptyPlugin],
   metafile: true,
   logLevel: "info",

@@ -2189,3 +2189,39 @@ renamed to `cancelPremiumOrder`). Mirrored to
 migration-0007 in Neon. Live test note: there is NO sandbox —
 a live end-to-end test costs real GRAM (4 for Standard) and
 needs a real TON wallet with funds.
+
+## Layar hitam #2 — Buffer is not defined (2026-11-20, commit menyusul)
+
+Setelah push GRAM (3a0ac1aa), game kembali blank hitam — di Telegram
+MAUPUN di browser web biasa (fresh, tanpa cache). Server sehat
+(getGameState live mengembalikan state lengkap, migrasi 0007 sudah
+jalan), bundle baru main-LNIO3NNE.js ter-serve (200), manifest OK.
+
+PENYEBAB (ditemukan dengan menjalankan bundle di Node dengan global
+`Buffer` dihapus — meniru browser asli): `ReferenceError: Buffer is
+not defined` saat bundle dievaluasi. @ton/core membuat
+`BitString.EMPTY = new BitString(Buffer.alloc(0), ...)` di TOP-LEVEL
+modulnya; modul itu dievaluasi SEBELUM body main.tsx berjalan,
+sedangkan polyfill `globalThis.Buffer = Buffer` dipasang di main.tsx
+saja — terlambat. Seluruh bundle gagal dievaluasi → tidak ada React,
+tidak ada layar error, hanya hitam. Node menyembunyikan bug ini
+karena Node PUNYA global Buffer bawaan (itu sebabnya tes lokal dan
+harness awal tidak pernah menangkapnya).
+
+PERBAIKAN: esbuild `inject` di client/build.mjs dengan file baru
+client/src/buffer-polyfill.ts (`import { Buffer } from "buffer";
+export { Buffer };`). esbuild menulis ulang semua referensi `Buffer`
+bebas (mis. `A.Buffer.alloc`) ke binding inject itu, yang dievaluasi
+paling atas bundle — sebelum modul mana pun. Penugasan
+globalThis.Buffer di main.tsx tetap ada sebagai lapis kedua untuk
+kode yang membaca Buffer lewat global saat runtime.
+
+VERIFIKASI: harness Node dengan global Buffer dihapus (meniru
+browser) — bundle baru main-MWMFDHQT.js dievaluasi bersih dan
+me-render UI lengkap dengan data live asli (bahasa id). Typecheck 0
+(strict + Vercel-style), build OK, full suite 107/107 (2.804 expects).
+
+PELAJARAN: setiap dependensi baru yang memakai Node globals (Buffer,
+process, dsb.) di top-level HARUS diuji dengan harness tanpa global
+Node — tes `bun test` tidak akan menangkapnya karena Node
+menyediakan global itu.
