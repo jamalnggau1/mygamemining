@@ -1775,8 +1775,14 @@ Replaces the manual Stars flow. Before: the player created a
 pending `premium_orders` row (`createPremiumOrder`), paid Stars to
 the owner somehow in Telegram, and the owner confirmed it from
 Kendali. Now the payment is a real Telegram Stars invoice, and
-Premium activates automatically via a webhook. Prices UNCHANGED:
-Standard 150 Stars / 7 days, Pro 500 Stars / 30 days (dual drill).
+Premium activates automatically via a webhook. Prices RAISED
+2026-11-20: Standard 300 Stars / 7 days, Pro 1000 Stars / 30 days
+(dual drill) — was 150/500. Reason: at 150/500 the owner LOST
+money on fully-upgraded (lvl 5) players (a Pro buyer could
+withdraw ~12.4 USDT extra in 30 days vs $6.50 of Stars); at
+300/1000 the owner profits on every profile (worst case Pro +
+$0.60, Standard +$1.01). Stars withdraw rate $0.013/Star via
+Fragment (1,000-Star minimum, 21-day hold).
 
 ### Architecture (invoice → openInvoice → webhook → activation)
 

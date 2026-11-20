@@ -32,9 +32,9 @@
 //   The game launches on Telegram, so the Premium Pass is priced in
 //   Telegram Stars — NOT KT (buying premium with the withdrawable coin
 //   made premium a money printer, not a sink). Two tiers:
-//     - Standard (150 Stars / 7 hari): energy regen twice as fast,
+//     - Standard (300 Stars / 7 hari): energy regen twice as fast,
 //       scan & mining 25% faster, sell prices +15%, map travel free.
-//     - Pro (500 Stars / 30 hari): everything in Standard PLUS the
+//     - Pro (1000 Stars / 30 hari): everything in Standard PLUS the
 //       dual drill — two drill arms work the vein at once, halving
 //       mining time.
 //   Purchase flow mirrors the manual WD model: the player creates an
@@ -416,11 +416,16 @@ export function wdMinKtForPaidCount(paidCount: number): number {
 // kecepatan akumulasi KT (lihat rebalance #7 di PORT_NOTES.md).
 export const WD_MAX_KT = 5000;
 
-// Premium Pass plans — priced in Telegram Stars (paid to the owner in
-// Telegram; the owner confirms the order in the Kendali tab).
+// Premium Pass plans — priced in Telegram Stars (paid via a real
+// Stars invoice; Premium activates automatically on the webhook —
+// the Kendali confirm button is only a fallback for missed
+// payments). Prices raised 2026-11-20 (Standard 150→300, Pro
+// 500→1000) so the owner profits on every player profile: at the
+// old prices a fully-upgraded (lvl 5) player cost the owner more
+// in extra USDT withdrawals than the Stars were worth.
 const PREMIUM_PLANS = {
-  standard: { days: 7, stars: 150, tier: "standard" as const, label: "Standard · 7 hari", labelEn: "Standard · 7 days" },
-  pro: { days: 30, stars: 500, tier: "pro" as const, label: "Pro · 30 hari", labelEn: "Pro · 30 days" },
+  standard: { days: 7, stars: 300, tier: "standard" as const, label: "Standard · 7 hari", labelEn: "Standard · 7 days" },
+  pro: { days: 30, stars: 1000, tier: "pro" as const, label: "Pro · 30 hari", labelEn: "Pro · 30 days" },
 } as const;
 type PremiumPlanId = keyof typeof PREMIUM_PLANS;
 type PremiumTier = "standard" | "pro";
@@ -2462,7 +2467,7 @@ export const gameActions = {
 
   createStarsInvoice: defineGameAction({
     description:
-      "Creates a REAL Telegram Stars (XTR) payment for a Premium Pass plan (Standard 150 Stars / 7 days, Pro 500 Stars / 30 days with the dual drill). Creates the pending premium_orders row (one pending order per player), then asks the Bot API for an invoice link (currency XTR, empty provider_token) that the client opens with Telegram.WebApp.openInvoice. The pass activates automatically when Telegram posts the successful payment to /api/telegram-webhook. If the player is not inside Telegram (web/legacy), the invoice cannot be opened — the action fails with a note to open the game via the Mini App.",
+      "Creates a REAL Telegram Stars (XTR) payment for a Premium Pass plan (Standard 300 Stars / 7 days, Pro 1000 Stars / 30 days with the dual drill). Creates the pending premium_orders row (one pending order per player), then asks the Bot API for an invoice link (currency XTR, empty provider_token) that the client opens with Telegram.WebApp.openInvoice. The pass activates automatically when Telegram posts the successful payment to /api/telegram-webhook. If the player is not inside Telegram (web/legacy), the invoice cannot be opened — the action fails with a note to open the game via the Mini App.",
     request: z.object({ plan: z.enum(["standard", "pro"]) }),
     response: resultShape.extend({
       orderId: z.number().nullable(),
