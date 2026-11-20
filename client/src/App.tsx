@@ -816,24 +816,24 @@ export function App() {
       {burst && <ConfettiLayer burst={burst} />}
       {/* HERO REALISTIS */}
       <div className="relative overflow-hidden">
-        <img src={heroImg} alt={t("heroImgAlt")} className="animate-hero-zoom h-[300px] w-full object-cover sm:h-[380px]" />
+        <img src={heroImg} alt={t("heroImgAlt")} className="animate-hero-zoom h-[180px] w-full object-cover sm:h-[240px]" />
         <div className="absolute inset-0 bg-gradient-to-t from-[#050810] via-[#050810]/35 to-transparent" />
-        <div className="absolute inset-x-0 bottom-0 mx-auto max-w-3xl px-4 pb-4">
+        <div className="absolute inset-x-0 bottom-0 mx-auto max-w-3xl px-4 pb-3">
           <p className="text-[11px] font-bold uppercase tracking-[0.3em] text-cyan-300">{t("heroEyebrow")}</p>
           <div className="mt-1 flex flex-wrap items-center gap-2"><p className="text-[11px] text-[var(--dim)]">{sessionLabel}</p><LanguagePicker /></div>
-          <h1 className="font-display title-shine mt-1 text-3xl font-black leading-none sm:text-5xl">ASTRA MINING</h1>
-          <p className="mt-2 max-w-xl text-[15px] leading-snug text-slate-200">{trich("heroDesc")}</p>
+          <h1 className="font-display title-shine mt-1 text-2xl font-black leading-none sm:text-3xl">ASTRA MINING</h1>
+          <p className="mt-1 line-clamp-2 max-w-xl text-xs leading-snug text-slate-200">{trich("heroDesc")}</p>
         </div>
       </div>
 
-      <main className="mx-auto max-w-3xl px-4 pb-12">
-        <section className="-mt-1 rounded-2xl border border-[var(--border)] bg-[var(--surface)]/95 p-4 shadow-2xl backdrop-blur">
+      <main className="mx-auto max-w-3xl px-3 pb-8">
+        <section className="-mt-1 rounded-2xl border border-[var(--border)] bg-[var(--surface)]/95 p-3 shadow-2xl backdrop-blur">
           <div className="flex flex-wrap items-end justify-between gap-4">
             <div>
               <p className="text-[11px] font-bold uppercase tracking-[0.25em] text-[var(--dim)]">{t("balTitle")}</p>
               <div className="mt-1 flex items-center gap-3">
-                <img src={ktLogoImg} alt={t("ktLogoAlt")} className="h-14 w-14 shrink-0 rounded-2xl object-cover shadow-lg shadow-amber-500/20 ring-2 ring-amber-400/50" />
-                <p className="font-display text-4xl leading-tight text-cyan-300"><span className={balanceGlow ? "balance-glow" : undefined}>{fmt(p.ktBalance)}</span> <span className="text-xl">KT</span></p>
+                <img src={ktLogoImg} alt={t("ktLogoAlt")} className="h-10 w-10 shrink-0 rounded-2xl object-cover shadow-lg shadow-amber-500/20 ring-2 ring-amber-400/50" />
+                <p className="font-display text-3xl leading-tight text-cyan-300"><span className={balanceGlow ? "balance-glow" : undefined}>{fmt(p.ktBalance)}</span> <span className="text-xl">KT</span></p>
               </div>
               <p className="text-sm text-[var(--dim)]">{ktToNextUsdt > 0 ? t("balNeed", { usdt: fmt(p.usdtEquivalent), kt: fmt(ktToNextUsdt) }) : (<span className="inline-flex items-center gap-1 font-bold text-emerald-300"><CheckIcon size={14} /> {t("balReady")}</span>)}</p>
               {p.premium.active ? (
@@ -848,12 +848,12 @@ export function App() {
               <p className="text-sm text-[var(--dim)]">{t("kmFromEarth", { km: fmt(p.depthMeters) })}</p>
             </div>
           </div>
-          <div className="mt-4">
+          <div className="mt-3">
             <div className="flex justify-between text-xs font-bold"><span className="inline-flex items-center gap-1"><ZapIcon size={13} /> {t("shipPower", { e: p.energy, m: p.maxEnergy })}</span><span className="text-[var(--dim)]">{t("regenOne", { dur: fmtDur(p.regenSeconds) })}{p.energy < p.maxEnergy ? t("fullIn", { dur: fmtDur(p.regenSeconds * (p.maxEnergy - p.energy)) }) : ""}</span></div>
             <div className="energy-shimmer mt-1 h-3 overflow-hidden rounded-full bg-[var(--surface2)]" role="progressbar" aria-valuenow={p.energy} aria-valuemin={0} aria-valuemax={p.maxEnergy} aria-label={t("energyAria")}><div className="h-full rounded-full bg-gradient-to-r from-cyan-400 to-sky-600 transition-all" style={{ width: `${p.maxEnergy ? (p.energy / p.maxEnergy) * 100 : 0}%` }} /></div>
           </div>
-          {p.canClaimDailyBonus && (<button type="button" onClick={() => claimBonus.mutate()} disabled={claimBonus.isPending} className="btn-press mt-3 inline-flex w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-cyan-400 bg-cyan-400/10 px-4 py-2 font-bold text-cyan-200"><GiftIcon size={17} /> {t("claimDaily", { kt: fmt(p.dailyBonusKt) })}</button>)}
-          <div className="mt-3">
+          {p.canClaimDailyBonus && (<button type="button" onClick={() => claimBonus.mutate()} disabled={claimBonus.isPending} className="btn-press mt-2 inline-flex w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-cyan-400 bg-cyan-400/10 px-4 py-2 font-bold text-cyan-200"><GiftIcon size={17} /> {t("claimDaily", { kt: fmt(p.dailyBonusKt) })}</button>)}
+          <div className="mt-2">
             <button type="button" onClick={handleWatchAd} disabled={watchAd.isPending || adPlaying || !p.ads.canWatch} aria-label={t("adAriaFull", { reward: fmt(p.ads.rewardKt), remaining: p.ads.remainingToday, cap: p.ads.dailyCap })} className="btn-press inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-amber-400 to-yellow-500 px-4 py-2.5 font-display text-sm text-black shadow-lg shadow-amber-500/20 disabled:opacity-40">
               <PlayIcon size={18} />
               {adPlaying
@@ -870,18 +870,18 @@ export function App() {
           </div>
         </section>
 
-        <nav aria-label={t("navLabel")} className="sticky top-0 z-20 mt-4 grid grid-cols-3 gap-2 bg-[var(--bg)]/95 py-2 backdrop-blur">
-          {tabs.map((t) => (<button key={t.id} type="button" onClick={() => setTab(t.id)} aria-pressed={tab === t.id} className={`btn-press relative inline-flex min-h-11 w-full min-w-0 items-center justify-center gap-1.5 rounded-2xl px-2 py-2 text-center text-[13px] font-bold leading-tight ${tab === t.id ? "bg-cyan-400 text-black" : "bg-[var(--surface)] text-[var(--text)] border border-[var(--border)]"}`}><span className="shrink-0">{t.icon}</span><span className="min-w-0">{t.label}</span>{t.badge != null && (<span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-[11px] font-bold text-white">{t.badge}</span>)}</button>))}
+        <nav aria-label={t("navLabel")} className="sticky top-0 z-20 mt-3 grid grid-cols-3 gap-1.5 bg-[var(--bg)]/95 py-1.5 backdrop-blur">
+          {tabs.map((t) => (<button key={t.id} type="button" onClick={() => setTab(t.id)} aria-pressed={tab === t.id} className={`btn-press relative inline-flex min-h-9 w-full min-w-0 items-center justify-center gap-1.5 rounded-2xl px-2 py-1.5 text-center text-xs font-bold leading-tight ${tab === t.id ? "bg-cyan-400 text-black" : "bg-[var(--surface)] text-[var(--text)] border border-[var(--border)]"}`}><span className="shrink-0">{t.icon}</span><span className="min-w-0">{t.label}</span>{t.badge != null && (<span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-[11px] font-bold text-white">{t.badge}</span>)}</button>))}
         </nav>
 
-        {banner && (<div key={bannerId} role="status" className={`banner-in mt-3 rounded-xl border px-4 py-3 text-sm font-semibold ${banner.kind === "good" ? "border-emerald-500/40 bg-emerald-500/15" : banner.kind === "bad" ? "border-red-500/40 bg-red-500/15" : "border-[var(--border)] bg-[var(--surface)]"}`}>{banner.text}</div>)}
+        {banner && (<div key={bannerId} role="status" className={`banner-in mt-3 rounded-xl border px-3 py-2.5 text-sm font-semibold ${banner.kind === "good" ? "border-emerald-500/40 bg-emerald-500/15" : banner.kind === "bad" ? "border-red-500/40 bg-red-500/15" : "border-[var(--border)] bg-[var(--surface)]"}`}>{banner.text}</div>)}
 
         <div key={tab} className="tab-content">
 
         {tab === "tambang" && (
-          <section className="mt-4 space-y-4">
+          <section className="mt-3 space-y-3">
             <div className="overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface)]">
-              <div className="relative h-44 overflow-hidden">
+              <div className="relative h-32 overflow-hidden">
                 <img src={MAP_IMAGES[data.maps[exp.zoneIndex]?.image ?? "asteroid"] ?? asteroidImg} alt={t("mapImgAlt", { zone: exp.zoneName })} className="animate-drift h-full w-full object-cover" />
                 <div className="absolute inset-0 bg-gradient-to-t from-[var(--surface)] to-transparent" />
                 <div className="absolute bottom-2 left-4 right-4">
@@ -894,8 +894,8 @@ export function App() {
                   </div>
                 </div>
               </div>
-              <div className="p-4">
-                <p className="text-sm text-[var(--dim)]">{p.zoneDesc}</p>
+              <div className="p-3">
+                <p className="line-clamp-2 text-sm text-[var(--dim)]">{p.zoneDesc}</p>
                 {(() => { const cm = data.maps[exp.zoneIndex]; if (!cm) return null; const chips: ReactNode[] = [];
                   if (cm.jamChancePct > 0) chips.push(<span key="jam" className="inline-flex items-center gap-1 rounded-full border border-red-400/40 bg-red-400/10 px-2 py-0.5 text-[11px] font-bold text-red-300"><AlertIcon size={12} /> {t("chipJam", { pct: cm.jamChancePct })}</span>);
                   if (cm.damageChancePct > 0) chips.push(<span key="dmg" className="inline-flex items-center gap-1 rounded-full border border-orange-400/40 bg-orange-400/10 px-2 py-0.5 text-[11px] font-bold text-orange-300"><ShieldIcon size={12} /> {t("chipDamage", { pct: cm.damageChancePct, fee: fmt(cm.damageFeeKt) })}</span>);
@@ -908,24 +908,24 @@ export function App() {
                 {job ? (
                   <JobPanel job={job} dualDrill={p.premium.dualDrill} onCollect={() => collect.mutate()} collecting={collect.isPending} onCancel={() => cancelJob.mutate()} cancelling={cancelJob.isPending} onRefresh={refresh} />
                 ) : !exp.scanned ? (
-                  <div className="mt-4 rounded-xl border border-cyan-500/30 bg-[var(--surface2)] p-4">
+                  <div className="mt-3 rounded-xl border border-cyan-500/30 bg-[var(--surface2)] p-3">
                     <h3 className="font-display inline-flex items-center gap-2 text-sm"><span className="text-cyan-300"><TelescopeIcon size={17} /></span> {t("notScannedTitle")}</h3>
-                    <p className="mt-1 text-sm text-[var(--dim)]">{trich("notScannedDesc", { count: exp.veinCount })}</p>
-                    <button type="button" onClick={() => startScan.mutate()} disabled={startScan.isPending || p.energy < exp.scanEnergyCost} className="btn-press mt-3 w-full rounded-xl bg-cyan-400 px-4 py-3 font-display text-sm text-black disabled:opacity-40">
+                    <p className="mt-1 line-clamp-2 text-sm text-[var(--dim)]">{trich("notScannedDesc", { count: exp.veinCount })}</p>
+                    <button type="button" onClick={() => startScan.mutate()} disabled={startScan.isPending || p.energy < exp.scanEnergyCost} className="btn-press mt-3 w-full rounded-xl bg-cyan-400 px-4 py-2.5 font-display text-sm text-black disabled:opacity-40">
                       {p.energy < exp.scanEnergyCost ? t("scanNoEnergy", { cost: exp.scanEnergyCost }) : t("startScanBtn", { cost: exp.scanEnergyCost, dur: fmtDur(exp.scanDurationSec) })}
                     </button>
-                    <p className="mt-2 text-xs text-[var(--dim)]">{trich("scanNote")}</p>
+                    <p className="mt-2 line-clamp-2 text-xs text-[var(--dim)]">{trich("scanNote")}</p>
                   </div>
                 ) : (
-                  <div className="mt-4 space-y-3">
+                  <div className="mt-3 space-y-2.5">
                     {exp.anomalyText && (<p className="flex items-start gap-2 rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm font-semibold text-amber-200"><span className="mt-0.5 shrink-0"><AlertIcon size={15} /></span> {t("anomalyDetected", { text: exp.anomalyText })}</p>)}
-                    <ul className="space-y-3">
+                    <ul className="space-y-2.5">
                       {exp.veins.map((v) => {
                         const rare = RARE_ORE_IDS.has(v.oreId);
                         return (
-                          <li key={v.index} className={`vein-tile rounded-xl border p-3 ${v.mined ? "border-[var(--border)] bg-black/30 opacity-70" : "border-cyan-500/25 bg-[var(--surface2)]"}`}>
+                          <li key={v.index} className={`vein-tile rounded-xl border p-2.5 ${v.mined ? "border-[var(--border)] bg-black/30 opacity-70" : "border-cyan-500/25 bg-[var(--surface2)]"}`}>
                             <div className="flex items-start gap-3">
-                              <span aria-hidden="true" className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-white/20 ${v.mined ? "" : "ore-glow"} ${rare && !v.mined ? "crystal-shine" : ""}`} style={{ backgroundColor: v.color + "33" }}><OreIcon id={v.icon} color={v.color} size={26} /></span>
+                              <span aria-hidden="true" className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-white/20 ${v.mined ? "" : "ore-glow"} ${rare && !v.mined ? "crystal-shine" : ""}`} style={{ backgroundColor: v.color + "33" }}><OreIcon id={v.icon} color={v.color} size={24} /></span>
                               <div className="min-w-0 flex-1">
                                 <p className="font-bold leading-tight">{v.name} <span className="text-sm font-semibold text-[var(--dim)]">{t("veinQty", { qty: v.qty, s: v.qty === 1 ? "" : "s" })}</span></p>
                                 <p className="mt-0.5 text-xs text-[var(--dim)]">
@@ -936,7 +936,7 @@ export function App() {
                               {v.mined && (<span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-emerald-500/20 border border-emerald-500/40 px-2 py-0.5 text-[11px] font-bold text-emerald-300"><CheckIcon size={12} /> {t("veinMined")}</span>)}
                             </div>
                             {!v.mined && (
-                              <button type="button" onClick={() => startMine.mutate(v.index)} disabled={startMine.isPending || p.energy < v.energyCost} aria-label={t("mineAria", { name: v.name, cost: v.energyCost, dur: fmtDur(v.durationSec) })} className="btn-press mt-3 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-cyan-400 px-4 py-2.5 font-bold text-black disabled:opacity-40">
+                              <button type="button" onClick={() => startMine.mutate(v.index)} disabled={startMine.isPending || p.energy < v.energyCost} aria-label={t("mineAria", { name: v.name, cost: v.energyCost, dur: fmtDur(v.durationSec) })} className="btn-press mt-2.5 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-cyan-400 px-4 py-2 font-bold text-black disabled:opacity-40">
                                 <DrillIcon size={16} /> {p.energy < v.energyCost ? t("mineNoEnergy", { cost: v.energyCost }) : t("mineBtn", { cost: v.energyCost, dur: fmtDur(v.durationSec) })}
                               </button>
                             )}
@@ -945,7 +945,7 @@ export function App() {
                       })}
                     </ul>
                     {exp.allMined ? (
-                      <button type="button" onClick={() => complete.mutate()} disabled={complete.isPending} className="btn-press inline-flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-400 px-4 py-3 font-display text-sm text-black disabled:opacity-40"><RocketIcon size={16} /> {t("completeBtn", { bonus: fmt(exp.completionBonusKt) })}</button>
+                      <button type="button" onClick={() => complete.mutate()} disabled={complete.isPending} className="btn-press inline-flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-400 px-4 py-2.5 font-display text-sm text-black disabled:opacity-40"><RocketIcon size={16} /> {t("completeBtn", { bonus: fmt(exp.completionBonusKt) })}</button>
                     ) : (
                       <p className="text-xs text-[var(--dim)]">{t("completeHint", { bonus: fmt(exp.completionBonusKt) })}</p>
                     )}
@@ -957,17 +957,17 @@ export function App() {
                     <SatelliteIcon size={15} /> {t("abandonBtn", { cost: exp.abandonEnergyCost })}
                   </button>
                 )}
-                {p.energy < 5 && !job && (<p className="mt-3 text-sm font-bold text-red-300">{t("lowEnergy", { dur: fmtDur(p.regenSeconds) })}</p>)}
+                {p.energy < 5 && !job && (<p className="mt-2.5 text-sm font-bold text-red-300">{t("lowEnergy", { dur: fmtDur(p.regenSeconds) })}</p>)}
               </div>
             </div>
 
             <div className="grid grid-cols-3 gap-2 text-center">
-              {[{ label: t("statDigs"), value: fmt(p.totalDigs) }, { label: t("statAsteroids"), value: fmt(p.asteroidsDone) }, { label: t("statUsdtPaid"), value: fmt(p.totalWdPaidUsdt) }].map((s, i) => (<div key={s.label} className="animate-float-slow rounded-xl bg-[var(--surface)] border border-[var(--border)] px-2 py-3" style={{ animationDelay: `${i * 0.9}s` }}><p className="font-display text-lg">{s.value}</p><p className="text-[11px] font-semibold text-[var(--dim)]">{s.label}</p></div>))}
+              {[{ label: t("statDigs"), value: fmt(p.totalDigs) }, { label: t("statAsteroids"), value: fmt(p.asteroidsDone) }, { label: t("statUsdtPaid"), value: fmt(p.totalWdPaidUsdt) }].map((s, i) => (<div key={s.label} className="animate-float-slow rounded-xl bg-[var(--surface)] border border-[var(--border)] px-2 py-2" style={{ animationDelay: `${i * 0.9}s` }}><p className="font-display text-lg">{s.value}</p><p className="text-[11px] font-semibold text-[var(--dim)]">{s.label}</p></div>))}
             </div>
 
-            <details className="rounded-2xl bg-[var(--surface)] border border-[var(--border)] p-4">
+            <details className="rounded-2xl bg-[var(--surface)] border border-[var(--border)] p-3">
               <summary className="font-display inline-flex cursor-pointer items-center gap-2 text-sm"><BookIcon size={15} /> {t("rulesTitle")}</summary>
-              <ol className="mt-3 list-decimal space-y-2 pl-5 text-sm leading-relaxed">
+              <ol className="mt-2 list-decimal space-y-1.5 pl-5 text-sm leading-relaxed">
                 <li>{trich("rule1")}</li>
                 <li>{trich("rule2")}</li>
                 <li>{trich("rule3", { scanDur: fmtDur(exp.scanDurationSec) })}</li>
@@ -995,13 +995,13 @@ export function App() {
                 ? (<p className="mt-2 text-sm text-[var(--dim)]">{t("logEmpty")}</p>)
                 : (<ul className="mt-2 space-y-2">{items.map((a) => (<li key={a.id} className="flex items-baseline justify-between gap-3 text-sm"><span>{a.message}{a.amountKt != null && (<span className={`ml-1.5 whitespace-nowrap font-bold ${a.amountKt >= 0 ? "text-emerald-300" : "text-red-300"}`}>{a.amountKt >= 0 ? "+" : ""}{fmt(a.amountKt)} KT</span>)}</span><span className="shrink-0 text-xs text-[var(--dim)]">{fmtDateTime(a.createdAt)}</span></li>))}</ul>);
               return (
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div className="rounded-2xl bg-[var(--surface)] border border-[var(--border)] p-4">
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="rounded-2xl bg-[var(--surface)] border border-[var(--border)] p-3">
                     <h3 className="font-display inline-flex items-center gap-2 text-sm"><span className="text-cyan-300"><RocketIcon size={15} /></span>{t("logMission")}</h3>
                     <p className="mt-0.5 text-xs text-[var(--dim)]">{t("logMissionDesc")}</p>
                     {renderLog(missionLog)}
                   </div>
-                  <div className="rounded-2xl bg-[var(--surface)] border border-[var(--border)] p-4">
+                  <div className="rounded-2xl bg-[var(--surface)] border border-[var(--border)] p-3">
                     <h3 className="font-display inline-flex items-center gap-2 text-sm"><span className="text-emerald-300"><GemIcon size={15} /></span>{t("logEconomy")}</h3>
                     <p className="mt-0.5 text-xs text-[var(--dim)]">{t("logEconomyDesc")}</p>
                     {renderLog(economyLog)}
@@ -1017,22 +1017,22 @@ export function App() {
         )}
 
         {tab === "pasar" && (
-          <section className="mt-4 overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface)]">
-            <img src={oresImg} alt={t("oresImgAlt")} className="h-44 w-full object-cover" />
-            <div className="p-4">
+          <section className="mt-3 overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface)]">
+            <img src={oresImg} alt={t("oresImgAlt")} className="h-32 w-full object-cover" />
+            <div className="p-3">
               <div className="flex items-center justify-between gap-3"><h2 className="font-display text-base">{t("marketTitle")}</h2><button type="button" onClick={() => sellAll.mutate()} disabled={sellAll.isPending || totalOreQty === 0} className="btn-press rounded-xl bg-cyan-400 px-4 py-2 font-bold text-black disabled:opacity-40">{t("sellAll")}</button></div>
-              <p className="mt-1 text-sm text-[var(--dim)]">{t("marketNote", { premium: p.premium.active ? t("marketNotePremium") : "" })}</p>
-              <ul className="mt-3 divide-y divide-[var(--border)]">{data.ores.map((o) => { const rare = RARE_ORE_IDS.has(o.id); return (<li key={o.id} className="flex items-center gap-3 py-3"><span aria-hidden="true" className={`ore-glow flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-white/20 ${rare ? "crystal-shine" : ""}`} style={{ backgroundColor: o.color + "33" }}><OreIcon id={o.icon} color={o.color} size={24} /></span><div className="min-w-0 flex-1"><p className="font-bold leading-tight">{o.name}</p><p className="text-xs text-[var(--dim)]">{fmt(o.sellPrice)} {t("perUnitCargo", { qty: fmt(o.qty) })}</p></div><p className="font-display text-sm">{fmt(o.sellPrice * o.qty)} KT</p><button type="button" onClick={() => sellOne.mutate({ oreId: o.id, qty: o.qty })} disabled={sellOne.isPending || o.qty === 0} aria-label={t("sellAllAria", { name: o.name })} className="btn-press rounded-lg bg-[var(--surface2)] px-3 py-2 text-sm font-bold disabled:opacity-40">{t("sell")}</button></li>); })}</ul>
-              {totalOreQty === 0 && (<p className="py-4 text-center text-sm text-[var(--dim)]">{t("cargoEmpty", { tab: t("tabMine") })}</p>)}
+              <p className="mt-1 line-clamp-2 text-sm text-[var(--dim)]">{t("marketNote", { premium: p.premium.active ? t("marketNotePremium") : "" })}</p>
+              <ul className="mt-2 divide-y divide-[var(--border)]">{data.ores.map((o) => { const rare = RARE_ORE_IDS.has(o.id); return (<li key={o.id} className="flex items-center gap-3 py-2"><span aria-hidden="true" className={`ore-glow flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-white/20 ${rare ? "crystal-shine" : ""}`} style={{ backgroundColor: o.color + "33" }}><OreIcon id={o.icon} color={o.color} size={24} /></span><div className="min-w-0 flex-1"><p className="font-bold leading-tight">{o.name}</p><p className="text-xs text-[var(--dim)]">{fmt(o.sellPrice)} {t("perUnitCargo", { qty: fmt(o.qty) })}</p></div><p className="font-display text-sm">{fmt(o.sellPrice * o.qty)} KT</p><button type="button" onClick={() => sellOne.mutate({ oreId: o.id, qty: o.qty })} disabled={sellOne.isPending || o.qty === 0} aria-label={t("sellAllAria", { name: o.name })} className="btn-press rounded-lg bg-[var(--surface2)] px-3 py-2 text-sm font-bold disabled:opacity-40">{t("sell")}</button></li>); })}</ul>
+              {totalOreQty === 0 && (<p className="py-3 text-center text-sm text-[var(--dim)]">{t("cargoEmpty", { tab: t("tabMine") })}</p>)}
             </div>
           </section>
         )}
 
         {tab === "upgrade" && (
-          <section className="mt-4 space-y-3">
+          <section className="mt-3 space-y-2.5">
             <PremiumCard data={data} onBuy={(plan) => buyPremium.mutate(plan)} buying={buyPremium.isPending} onBuyGram={(plan) => buyPremiumGram.mutate(plan)} buyingGram={buyPremiumGram.isPending} gramPhase={gramPhase} inTelegram={sessionInfo.inTelegram} onCancelOrder={(id) => cancelPremiumOrder.mutate(id)} cancelling={cancelPremiumOrder.isPending} />
-            <div className="relative overflow-hidden rounded-2xl border border-[var(--border)]"><img src={stationImg} alt={t("stationImgAlt")} className="h-40 w-full object-cover" /><div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent flex items-end p-4"><p className="text-sm font-semibold text-white">{t("hanggarCaption")}</p></div></div>
-            {data.upgrades.map((u) => (<div key={u.id} className="vein-tile rounded-2xl bg-[var(--surface)] border border-[var(--border)] p-4"><div className="flex items-start justify-between gap-3"><div className="flex items-start gap-3"><span aria-hidden="true" className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-[var(--border)] bg-[var(--surface2)]"><UpgradeIcon id={u.id} size={22} /></span><div><h3 className="font-display text-sm">{u.name}</h3><p className="mt-1 text-sm text-[var(--dim)]">{u.desc}</p><div className="mt-2 flex gap-1" aria-label={t("levelAria", { l: u.level, m: u.maxLevel })}>{Array.from({ length: u.maxLevel }, (_, i) => (<span key={i} className={`h-2 w-4 rounded-full ${i < u.level ? "bg-cyan-400" : "bg-[var(--surface2)]"}`} />))}</div></div></div><div className="shrink-0 text-right"><p className="text-xs font-semibold text-[var(--dim)]">{t("levelLabel")}</p><p className="font-display text-xl">{u.level}<span className="text-sm text-[var(--dim)]">/{u.maxLevel}</span></p></div></div>{u.nextCost != null ? (<button type="button" onClick={() => buy.mutate(u.id)} disabled={buy.isPending || p.ktBalance < u.nextCost} aria-label={t("buyAria", { name: u.name, l: u.level + 1, cost: fmt(u.nextCost) })} className="btn-press mt-3 w-full rounded-xl bg-cyan-400 px-4 py-2 font-bold text-black disabled:opacity-40">{p.ktBalance < u.nextCost ? t("needKt", { cost: fmt(u.nextCost) }) : t("installUpgrade", { cost: fmt(u.nextCost) })}</button>) : (<p className="mt-3 rounded-xl bg-[var(--surface2)] px-4 py-2 text-center font-bold">{t("maxLevel")}</p>)}</div>))}
+            <div className="relative overflow-hidden rounded-2xl border border-[var(--border)]"><img src={stationImg} alt={t("stationImgAlt")} className="h-28 w-full object-cover" /><div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent flex items-end p-3"><p className="line-clamp-2 text-sm font-semibold text-white">{t("hanggarCaption")}</p></div></div>
+            {data.upgrades.map((u) => (<div key={u.id} className="vein-tile rounded-2xl bg-[var(--surface)] border border-[var(--border)] p-3"><div className="flex items-start justify-between gap-3"><div className="flex items-start gap-2.5"><span aria-hidden="true" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-[var(--border)] bg-[var(--surface2)]"><UpgradeIcon id={u.id} size={20} /></span><div><h3 className="font-display text-sm">{u.name}</h3><p className="mt-0.5 line-clamp-2 text-sm text-[var(--dim)]">{u.desc}</p><div className="mt-1.5 flex gap-1" aria-label={t("levelAria", { l: u.level, m: u.maxLevel })}>{Array.from({ length: u.maxLevel }, (_, i) => (<span key={i} className={`h-1.5 w-4 rounded-full ${i < u.level ? "bg-cyan-400" : "bg-[var(--surface2)]"}`} />))}</div></div></div><div className="shrink-0 text-right"><p className="text-xs font-semibold text-[var(--dim)]">{t("levelLabel")}</p><p className="font-display text-xl">{u.level}<span className="text-sm text-[var(--dim)]">/{u.maxLevel}</span></p></div></div>{u.nextCost != null ? (<button type="button" onClick={() => buy.mutate(u.id)} disabled={buy.isPending || p.ktBalance < u.nextCost} aria-label={t("buyAria", { name: u.name, l: u.level + 1, cost: fmt(u.nextCost) })} className="btn-press mt-2.5 w-full rounded-xl bg-cyan-400 px-4 py-1.5 font-bold text-black disabled:opacity-40">{p.ktBalance < u.nextCost ? t("needKt", { cost: fmt(u.nextCost) }) : t("installUpgrade", { cost: fmt(u.nextCost) })}</button>) : (<p className="mt-2.5 rounded-xl bg-[var(--surface2)] px-4 py-1.5 text-center font-bold">{t("maxLevel")}</p>)}</div>))}
           </section>
         )}
 
@@ -1050,42 +1050,42 @@ function PremiumCard({ data, onBuy, buying, onBuyGram, buyingGram, gramPhase, in
   const pendingOrder = data.premiumOrders.find((o) => o.status === "pending");
   const benefits = [t("ben1"), t("ben2"), t("ben3"), t("ben4")];
   return (
-    <div className="overflow-hidden rounded-2xl border-2 border-amber-400/60 bg-gradient-to-b from-amber-400/15 to-[var(--surface)] p-4">
+    <div className="overflow-hidden rounded-2xl border-2 border-amber-400/60 bg-gradient-to-b from-amber-400/15 to-[var(--surface)] p-3">
       <div className="flex items-start justify-between gap-3">
         <div>
           <h3 className="font-display inline-flex items-center gap-2 text-base text-amber-300"><CrownIcon size={19} /> {t("premiumTitle")}</h3>
-          <p className="mt-1 text-sm text-[var(--dim)]">{trich("premiumDesc")}</p>
+          <p className="mt-0.5 line-clamp-2 text-sm text-[var(--dim)]">{trich("premiumDesc")}</p>
         </div>
         {p.premium.active && (<span className="shrink-0 rounded-full border border-amber-400/60 bg-amber-400/20 px-2.5 py-1 text-[11px] font-bold text-amber-200">{t("premiumBadge", { tier: p.premium.tier === "pro" ? "PRO" : "STANDARD" })}{p.premium.until ? t("premiumBadgeUntil", { date: fmtDate(p.premium.until) }) : ""}</span>)}
       </div>
-      <ul className="mt-3 space-y-1.5">
+      <ul className="mt-2 space-y-1.5">
         {benefits.map((b) => (<li key={b} className="flex items-start gap-2 text-sm"><span className="mt-0.5 shrink-0 text-amber-300"><CheckIcon size={14} /></span>{b}</li>))}
         <li className="flex items-start gap-2 text-sm"><span className="mt-0.5 shrink-0 text-amber-300"><DrillIcon size={14} /></span><span>{trich("proDual")}</span></li>
       </ul>
       {pendingOrder ? (
-        <div className="mt-4 rounded-xl border border-amber-400/50 bg-amber-400/10 px-4 py-3">
+        <div className="mt-3 rounded-xl border border-amber-400/50 bg-amber-400/10 px-3 py-2.5">
           <p className="font-display text-sm text-amber-200">{pendingOrder.method === "gram" ? t("pendingOrderTitleGram", { id: pendingOrder.id, tier: pendingOrder.tier === "pro" ? "Pro" : "Standard", gram: fmt(pendingOrder.gramAmount ?? 0) }) : t("pendingOrderTitle", { id: pendingOrder.id, tier: pendingOrder.tier === "pro" ? "Pro" : "Standard", stars: fmt(pendingOrder.stars) })}</p>
-          <p className="mt-1 text-sm text-[var(--dim)]">{t(pendingOrder.method === "gram" ? "pendingOrderDescGram" : "pendingOrderDesc")}</p>
-          <button type="button" onClick={() => onCancelOrder(pendingOrder.id)} disabled={cancelling} aria-label={t("cancelOrderAria", { id: pendingOrder.id })} className="btn-press mt-3 w-full rounded-xl border border-amber-400/60 bg-transparent px-4 py-2 font-bold text-amber-200 disabled:opacity-40">{t("cancelOrderBtn")}</button>
+          <p className="mt-0.5 line-clamp-2 text-sm text-[var(--dim)]">{t(pendingOrder.method === "gram" ? "pendingOrderDescGram" : "pendingOrderDesc")}</p>
+          <button type="button" onClick={() => onCancelOrder(pendingOrder.id)} disabled={cancelling} aria-label={t("cancelOrderAria", { id: pendingOrder.id })} className="btn-press mt-2.5 w-full rounded-xl border border-amber-400/60 bg-transparent px-4 py-2 font-bold text-amber-200 disabled:opacity-40">{t("cancelOrderBtn")}</button>
         </div>
       ) : !inTelegram ? (
-        <p className="mt-4 rounded-xl border border-[var(--border)] bg-[var(--surface2)] px-4 py-3 text-sm text-[var(--dim)]">{t("premiumStarsNeedTelegram")} {t("premiumGramNeedTelegram")}</p>
+        <p className="mt-3 rounded-xl border border-[var(--border)] bg-[var(--surface2)] px-3 py-2.5 text-sm text-[var(--dim)]">{t("premiumStarsNeedTelegram")} {t("premiumGramNeedTelegram")}</p>
       ) : (
-        <div className="mt-4">
+        <div className="mt-3">
           <p className="text-sm font-bold">{t("premiumBuyTitle")}</p>
           <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
             {p.premium.plans.map((plan) => (
-              <button key={plan.id} type="button" onClick={() => onBuy(plan.id as "standard" | "pro")} disabled={buying || buyingGram} aria-label={t("orderPlanAria", { label: plan.label, stars: fmt(plan.stars) })} className={`btn-press rounded-xl px-3 py-3 text-black disabled:opacity-40 ${plan.tier === "pro" ? "bg-gradient-to-b from-amber-300 to-amber-500 ring-2 ring-amber-200/60" : "bg-amber-400"}`}>
+              <button key={plan.id} type="button" onClick={() => onBuy(plan.id as "standard" | "pro")} disabled={buying || buyingGram} aria-label={t("orderPlanAria", { label: plan.label, stars: fmt(plan.stars) })} className={`btn-press rounded-xl px-3 py-2.5 text-black disabled:opacity-40 ${plan.tier === "pro" ? "bg-gradient-to-b from-amber-300 to-amber-500 ring-2 ring-amber-200/60" : "bg-amber-400"}`}>
                 <span className="block font-display text-sm">{t("planLine", { tier: plan.tier === "pro" ? "PRO" : "STANDARD", days: plan.days })}</span>
                 <span className="mt-0.5 flex items-center justify-center gap-1 text-sm font-bold"><SparkleIcon size={14} /> {t("planStars", { stars: fmt(plan.stars) })}</span>
                 <span className="block text-xs font-semibold">{plan.tier === "pro" ? t("planProTag") : t("planStdTag")}</span>
               </button>
             ))}
           </div>
-          <p className="mt-4 text-sm font-bold">{t("premiumBuyTitleGram")}</p>
+          <p className="mt-3 text-sm font-bold">{t("premiumBuyTitleGram")}</p>
           <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
             {p.premium.plans.map((plan) => (
-              <button key={`gram-${plan.id}`} type="button" onClick={() => onBuyGram(plan.id as "standard" | "pro")} disabled={buying || buyingGram} aria-label={t("orderPlanAriaGram", { label: plan.label, gram: fmt(plan.gram) })} className={`btn-press rounded-xl px-3 py-3 text-black disabled:opacity-40 ${plan.tier === "pro" ? "bg-gradient-to-b from-teal-300 to-teal-500 ring-2 ring-teal-200/60" : "bg-teal-400"}`}>
+              <button key={`gram-${plan.id}`} type="button" onClick={() => onBuyGram(plan.id as "standard" | "pro")} disabled={buying || buyingGram} aria-label={t("orderPlanAriaGram", { label: plan.label, gram: fmt(plan.gram) })} className={`btn-press rounded-xl px-3 py-2.5 text-black disabled:opacity-40 ${plan.tier === "pro" ? "bg-gradient-to-b from-teal-300 to-teal-500 ring-2 ring-teal-200/60" : "bg-teal-400"}`}>
                 <span className="block font-display text-sm">{t("planLine", { tier: plan.tier === "pro" ? "PRO" : "STANDARD", days: plan.days })}</span>
                 <span className="mt-0.5 flex items-center justify-center gap-1 text-sm font-bold">{gramPhase !== "idle" && buyingGram ? t(gramPhase === "paying" ? "premiumGramPaying" : "premiumGramVerifying") : t("planGram", { gram: fmt(plan.gram) })}</span>
                 <span className="block text-xs font-semibold">{plan.tier === "pro" ? t("planProTag") : t("planStdTag")}</span>
@@ -1103,17 +1103,17 @@ function PremiumCard({ data, onBuy, buying, onBuyGram, buyingGram, gramPhase, in
 function PetaTab({ data, onTravel, travelling, jobActive, onGoPremium }: { data: GameState; onTravel: (index: number) => void; travelling: boolean; jobActive: boolean; onGoPremium: () => void }) {
   const p = data.player;
   return (
-    <section className="mt-4 space-y-4">
-      <div className="rounded-2xl bg-[var(--surface)] border border-[var(--border)] p-4">
+    <section className="mt-3 space-y-3">
+      <div className="rounded-2xl bg-[var(--surface)] border border-[var(--border)] p-3">
         <h2 className="font-display text-base">{t("mapsTitle")}</h2>
-        <p className="mt-1 text-sm text-[var(--dim)]">{trich("mapsIntro", { layer: p.layer })}</p>
+        <p className="mt-0.5 line-clamp-2 text-sm text-[var(--dim)]">{trich("mapsIntro", { layer: p.layer })}</p>
         {jobActive && (<p className="mt-2 flex items-start gap-2 rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm font-semibold text-amber-200"><span className="mt-0.5 shrink-0"><AlertIcon size={15} /></span> {t("mapsJobActive")}</p>)}
       </div>
       {data.maps.map((m) => {
         const img = MAP_IMAGES[m.image] ?? asteroidImg;
         return (
           <article key={m.index} className={`vein-tile overflow-hidden rounded-2xl border bg-[var(--surface)] ${m.isCurrent ? "border-cyan-400/70" : "border-[var(--border)]"}`}>
-            <div className="relative h-36 overflow-hidden">
+            <div className="relative h-24 overflow-hidden">
               <img src={img} alt={t("mapCardImgAlt", { name: m.name })} className={`h-full w-full object-cover ${m.unlocked ? "" : "opacity-50 saturate-50"}`} loading="lazy" />
               <div className="absolute inset-0 bg-gradient-to-t from-[var(--surface)] via-transparent to-transparent" />
               <div className="absolute bottom-2 left-4 right-4 flex items-end justify-between gap-2">
@@ -1128,10 +1128,10 @@ function PetaTab({ data, onTravel, travelling, jobActive, onGoPremium }: { data:
                 ) : null}
               </div>
             </div>
-            <div className="p-4">
-              <p className="text-sm text-[var(--dim)]">{m.desc}</p>
+            <div className="p-3">
+              <p className="line-clamp-2 text-sm text-[var(--dim)]">{m.desc}</p>
               <p className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-sky-400/40 bg-sky-400/10 px-2.5 py-1 text-[11px] font-bold text-sky-200"><SatelliteIcon size={12} /> {t("mapScanPill", { dist: m.distanceLabel, dur: fmtDur(m.scanSeconds) })}</p>
-              <h4 className="mt-3 text-xs font-bold uppercase tracking-[0.18em] text-[var(--dim)]">{t("mapMineralsTitle")}</h4>
+              <h4 className="mt-2 text-xs font-bold uppercase tracking-[0.18em] text-[var(--dim)]">{t("mapMineralsTitle")}</h4>
               <ul className="mt-2 flex flex-wrap gap-1.5">
                 {m.gems.map((g) => (
                   <li key={g.id} className="inline-flex items-center gap-1.5 rounded-full border border-[var(--border)] bg-[var(--surface2)] py-1 pl-1.5 pr-2.5 text-xs font-semibold">
@@ -1139,8 +1139,8 @@ function PetaTab({ data, onTravel, travelling, jobActive, onGoPremium }: { data:
                   </li>
                 ))}
               </ul>
-              <h4 className="mt-3 text-xs font-bold uppercase tracking-[0.18em] text-[var(--dim)]">{t("mapChallengesTitle")}</h4>
-              <ul className="mt-2 space-y-1 text-sm">
+              <h4 className="mt-2 text-xs font-bold uppercase tracking-[0.18em] text-[var(--dim)]">{t("mapChallengesTitle")}</h4>
+              <ul className="mt-1.5 space-y-1 text-sm">
                 {m.jamChancePct === 0 && m.damageChancePct === 0 && m.radiation === 0 && m.timeFactor <= 1 ? (
                   <li className="flex items-center gap-2 text-emerald-300"><ShieldIcon size={14} /> {t("mapSafe", { dur: fmtDur(m.scanSeconds) })}</li>
                 ) : (
@@ -1154,11 +1154,11 @@ function PetaTab({ data, onTravel, travelling, jobActive, onGoPremium }: { data:
               </ul>
               {!m.isCurrent && (
                 m.unlocked ? (
-                  <button type="button" onClick={() => onTravel(m.index)} disabled={travelling || jobActive || p.energy < m.travelCost} aria-label={t("travelAria", { name: m.name })} className="btn-press mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-cyan-400 px-4 py-2.5 font-bold text-black disabled:opacity-40">
+                  <button type="button" onClick={() => onTravel(m.index)} disabled={travelling || jobActive || p.energy < m.travelCost} aria-label={t("travelAria", { name: m.name })} className="btn-press mt-3 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-cyan-400 px-4 py-2 font-bold text-black disabled:opacity-40">
                     <RocketIcon size={16} /> {jobActive ? t("travelBusy") : p.energy < m.travelCost ? t("travelNeedPower", { cost: fmt(m.travelCost) }) : m.travelCost === 0 ? t("travelFree") : t("travelGo", { cost: fmt(m.travelCost) })}
                   </button>
                 ) : (
-                  <p className="mt-4 rounded-xl bg-[var(--surface2)] px-4 py-2.5 text-center text-sm font-bold text-[var(--dim)]">{t("mapLockedText", { sector: m.minLayer })}</p>
+                  <p className="mt-3 rounded-xl bg-[var(--surface2)] px-4 py-2 text-center text-sm font-bold text-[var(--dim)]">{t("mapLockedText", { sector: m.minLayer })}</p>
                 )
               )}
             </div>
@@ -1166,7 +1166,7 @@ function PetaTab({ data, onTravel, travelling, jobActive, onGoPremium }: { data:
         );
       })}
       {!p.premium.active && (
-        <button type="button" onClick={onGoPremium} className="btn-press flex w-full items-center gap-3 rounded-2xl border-2 border-amber-400/50 bg-amber-400/10 p-4 text-left">
+        <button type="button" onClick={onGoPremium} className="btn-press flex w-full items-center gap-3 rounded-2xl border-2 border-amber-400/50 bg-amber-400/10 p-3 text-left">
           <span className="text-amber-300"><CrownIcon size={26} /></span>
           <span><span className="block font-display text-sm text-amber-200">{t("mapsPromoTitle")}</span><span className="block text-sm text-[var(--dim)]">{t("mapsPromoDesc")}</span></span>
         </button>
@@ -1195,10 +1195,10 @@ function JobPanel({ job, dualDrill, onCollect, collecting, onCancel, cancelling,
     { left: "24%", top: "78%", sx: "-20px", sy: "8px", delay: "0.55s" },
   ];
   return (
-    <div className="mt-4 rounded-xl border border-cyan-500/30 bg-[var(--surface2)] p-4" role="status" aria-label={t("jobAria")}>
-      <div className="flex items-center gap-4">
+    <div className="mt-3 rounded-xl border border-cyan-500/30 bg-[var(--surface2)] p-3" role="status" aria-label={t("jobAria")}>
+      <div className="flex items-center gap-3">
         {!ready && isScan && (
-          <div className="relative h-24 w-24 shrink-0 overflow-hidden rounded-full border border-cyan-400/50 bg-[#04121f]" aria-hidden="true">
+          <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-full border border-cyan-400/50 bg-[#04121f]" aria-hidden="true">
             <div className="radar-sweep absolute inset-0 rounded-full" />
             <div className="absolute inset-[16%] rounded-full border border-cyan-400/25" />
             <div className="absolute inset-[33%] rounded-full border border-cyan-400/25" />
@@ -1212,14 +1212,14 @@ function JobPanel({ job, dualDrill, onCollect, collecting, onCancel, cancelling,
           </div>
         )}
         {!ready && !isScan && (
-          <div className="relative flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-full border border-amber-400/40 bg-[#170f04]" aria-hidden="true">
+          <div className="relative flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-full border border-amber-400/40 bg-[#170f04]" aria-hidden="true">
             {dualDrill ? (
               <>
-                <span className="drill-working absolute left-[16%] top-[24%] text-amber-300"><DrillIcon size={34} /></span>
-                <span className="drill-working absolute bottom-[16%] right-[14%] text-amber-200" style={{ animationDelay: "0.11s" }}><DrillIcon size={34} /></span>
+                <span className="drill-working absolute left-[16%] top-[24%] text-amber-300"><DrillIcon size={26} /></span>
+                <span className="drill-working absolute bottom-[16%] right-[14%] text-amber-200" style={{ animationDelay: "0.11s" }}><DrillIcon size={26} /></span>
               </>
             ) : (
-              <span className="drill-working text-amber-300"><DrillIcon size={44} /></span>
+              <span className="drill-working text-amber-300"><DrillIcon size={32} /></span>
             )}
             {sparks.map((s, i) => (
               <span key={i} className="spark" style={{ left: s.left, top: s.top, animationDelay: s.delay, "--sx": s.sx, "--sy": s.sy } as CSSProperties} />
@@ -1240,13 +1240,13 @@ function JobPanel({ job, dualDrill, onCollect, collecting, onCancel, cancelling,
             : t("jobRunning")}</p>
         </div>
       </div>
-      <div className="mt-3 h-3 overflow-hidden rounded-full bg-black/40" role="progressbar" aria-valuenow={Math.round(progress)} aria-valuemin={0} aria-valuemax={100} aria-label={t("jobProgress")}>
+      <div className="mt-2.5 h-3 overflow-hidden rounded-full bg-black/40" role="progressbar" aria-valuenow={Math.round(progress)} aria-valuemin={0} aria-valuemax={100} aria-label={t("jobProgress")}>
         <div className={`h-full rounded-full transition-all ${ready ? "bg-emerald-400" : "job-working"}`} style={{ width: `${ready ? 100 : progress}%` }} />
       </div>
       {ready ? (
-        <button type="button" onClick={onCollect} disabled={collecting} className="btn-press collect-pop mt-3 w-full rounded-xl bg-emerald-400 px-4 py-3 font-display text-sm text-black disabled:opacity-40">{isScan ? t("jobCollectScan") : t("jobCollectMine")}</button>
+        <button type="button" onClick={onCollect} disabled={collecting} className="btn-press collect-pop mt-2.5 w-full rounded-xl bg-emerald-400 px-4 py-2.5 font-display text-sm text-black disabled:opacity-40">{isScan ? t("jobCollectScan") : t("jobCollectMine")}</button>
       ) : (
-        <button type="button" onClick={onCancel} disabled={cancelling} className="btn-press mt-3 rounded-xl border border-red-400 px-4 py-2 text-sm font-bold text-red-300 disabled:opacity-40">{t("jobCancel")}</button>
+        <button type="button" onClick={onCancel} disabled={cancelling} className="btn-press mt-2.5 rounded-xl border border-red-400 px-4 py-2 text-sm font-bold text-red-300 disabled:opacity-40">{t("jobCancel")}</button>
       )}
     </div>
   );
@@ -1259,25 +1259,25 @@ function WdTab({ data, onCancel, cancelling, onDone }: { data: GameState; onCanc
   const aboveMax = ktCost > p.wdMaxKt;
   const request = useMutation({ mutationFn: () => api.requestWithdrawal({ walletAddress: wallet.trim(), amountKt: ktCost }), onSuccess: (r) => { if (r.ok) setWallet(""); onDone(r.ok, r.error, t("wdRequestSent", { id: r.wdId ?? "", kt: fmt(ktCost) })); } });
   return (
-    <section className="mt-4 space-y-4">
-      <div className="overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface)]"><img src={stationImg} alt={t("wdStationImgAlt")} className="h-36 w-full object-cover" /><div className="p-4">
+    <section className="mt-3 space-y-3">
+      <div className="overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface)]"><img src={stationImg} alt={t("wdStationImgAlt")} className="h-24 w-full object-cover" /><div className="p-3">
         <div className="flex items-center gap-3">
-          <img src={ktLogoImg} alt={t("ktLogoAltShort")} className="h-12 w-12 shrink-0 rounded-xl object-cover ring-2 ring-amber-400/50" />
+          <img src={ktLogoImg} alt={t("ktLogoAltShort")} className="h-10 w-10 shrink-0 rounded-xl object-cover ring-2 ring-amber-400/50" />
           <div>
             <h2 className="font-display text-base leading-tight">{t("wdTitle")}</h2>
             <p className="text-xs text-[var(--dim)]">{t("wdTokenNote")}</p>
           </div>
         </div>
         <ol className="mt-2 list-decimal space-y-1 pl-5 text-sm leading-relaxed"><li>{trich("wdRule1")}</li><li>{trich("wdRule2a", { min: fmt(p.wdMinUsdt), minkt: fmt(p.wdMinKt) })}{p.wdPaidCount > 0 ? trich("wdRule2b", { count: p.wdPaidCount }) : trich("wdRule2c")}{t("wdRule2d")}</li><li>{trich("wdRule3")}</li><li>{t("wdRule4")}</li><li>{trich("wdRule5")}</li><li>{t("wdRule6")}</li></ol>
-        <div className="mt-4"><div className="flex justify-between text-xs font-bold"><span>{t("wdProgress", { min: fmt(p.wdMinUsdt) })}</span><span className="text-[var(--dim)]">{t("wdProgressLine", { have: fmt(Math.min(p.ktBalance, p.wdMinKt)), need: fmt(p.wdMinKt) })}</span></div><div className="mt-1 h-3 overflow-hidden rounded-full bg-[var(--surface2)]"><div className="h-full rounded-full bg-cyan-400 transition-all" style={{ width: `${Math.min(100, (p.ktBalance / p.wdMinKt) * 100)}%` }} /></div></div>
-        <form className="mt-4 space-y-3" onSubmit={(e) => { e.preventDefault(); request.mutate(); }}>
+        <div className="mt-3"><div className="flex justify-between text-xs font-bold"><span>{t("wdProgress", { min: fmt(p.wdMinUsdt) })}</span><span className="text-[var(--dim)]">{t("wdProgressLine", { have: fmt(Math.min(p.ktBalance, p.wdMinKt)), need: fmt(p.wdMinKt) })}</span></div><div className="mt-1 h-3 overflow-hidden rounded-full bg-[var(--surface2)]"><div className="h-full rounded-full bg-cyan-400 transition-all" style={{ width: `${Math.min(100, (p.ktBalance / p.wdMinKt) * 100)}%` }} /></div></div>
+        <form className="mt-3 space-y-2.5" onSubmit={(e) => { e.preventDefault(); request.mutate(); }}>
           <div><label htmlFor="wallet" className="text-sm font-bold">{t("wdWalletLabel")}</label><input id="wallet" value={wallet} onChange={(e) => setWallet(e.target.value)} placeholder={t("wdWalletPlaceholder")} autoComplete="off" className="mt-1 w-full rounded-xl border border-[var(--border)] bg-[var(--bg)] px-3 py-2 font-mono text-sm" /></div>
           <div><label htmlFor="usdt" className="text-sm font-bold">{t("wdUsdtLabel")}</label><input id="usdt" type="number" min={p.wdMinUsdt} max={p.wdMaxUsdt} step={0.1} value={usdt} onChange={(e) => setUsdt(Math.max(0, Number(e.target.value) || 0))} className="mt-1 w-full rounded-xl border border-[var(--border)] bg-[var(--bg)] px-3 py-2" /><p className="mt-1 text-xs text-[var(--dim)]">{t("wdCostLine", { kt: fmt(ktCost), bal: fmt(p.ktBalance), min: fmt(p.wdMinUsdt), max: fmt(p.wdMaxUsdt) })}</p>{belowMin && (<p className="mt-1 text-xs font-bold text-red-300">{t("wdBelowMin", { min: fmt(p.wdMinUsdt), minkt: fmt(p.wdMinKt) })}</p>)}{!belowMin && offStep && (<p className="mt-1 text-xs font-bold text-red-300">{t("wdOffStep")}</p>)}{!belowMin && !offStep && aboveMax && (<p className="mt-1 text-xs font-bold text-red-300">{t("wdAboveMax", { max: fmt(p.wdMaxUsdt), maxkt: fmt(p.wdMaxKt) })}</p>)}</div>
-          <button type="submit" disabled={request.isPending || wallet.trim().length < 10 || !enough || belowMin || offStep || aboveMax} className="btn-press w-full rounded-xl bg-cyan-400 px-4 py-3 font-display text-sm text-black disabled:opacity-40">{belowMin || offStep || aboveMax ? t("wdSubmitCheck") : !enough ? t("wdNeedKt", { kt: fmt(ktCost - p.ktBalance) }) : t("wdSubmitGo", { usdt: fmt(usdt) })}</button>
+          <button type="submit" disabled={request.isPending || wallet.trim().length < 10 || !enough || belowMin || offStep || aboveMax} className="btn-press w-full rounded-xl bg-cyan-400 px-4 py-2.5 font-display text-sm text-black disabled:opacity-40">{belowMin || offStep || aboveMax ? t("wdSubmitCheck") : !enough ? t("wdNeedKt", { kt: fmt(ktCost - p.ktBalance) }) : t("wdSubmitGo", { usdt: fmt(usdt) })}</button>
           {wallet.trim().length > 0 && wallet.trim().length < 10 && (<p className="text-xs font-bold text-red-300">{t("wdWalletShort")}</p>)}
         </form>
       </div></div>
-      <div className="rounded-2xl bg-[var(--surface)] border border-[var(--border)] p-4"><h3 className="font-display text-sm">{t("wdHistory")}</h3>{data.withdrawals.length === 0 ? (<p className="mt-2 text-sm text-[var(--dim)]">{t("wdHistoryEmpty", { min: fmt(p.wdMinKt), usdt: fmt(p.wdMinUsdt) })}</p>) : (<ul className="mt-3 space-y-3">{data.withdrawals.map((w) => (<li key={w.id} className="rounded-xl bg-[var(--surface2)] p-3"><div className="flex items-center justify-between gap-2"><p className="font-display text-sm">#{w.id} · {fmt(w.amountUsdt)} USDT</p><span className={`rounded-full border px-2 py-0.5 text-[11px] font-bold ${statusClass(w.status)}`}>{statusLabel(w.status)}</span></div><p className="mt-1 break-all font-mono text-xs text-[var(--dim)]">{w.walletAddress}</p><p className="mt-1 text-xs text-[var(--dim)]">{t("wdHistoryLine", { kt: fmt(w.amountKt), created: fmtDateTime(w.createdAt), processed: w.processedAt ? t("wdProcessedAt", { date: fmtDateTime(w.processedAt) }) : "" })}</p>{w.adminNote && <p className="mt-1 text-xs">{t("wdOwnerNote", { note: w.adminNote })}</p>}{w.txRef && <p className="mt-1 break-all font-mono text-xs">{t("wdTxRefLabel", { ref: w.txRef })}</p>}{w.status === "pending" && (<button type="button" onClick={() => onCancel(w.id)} disabled={cancelling} aria-label={t("wdCancelAria", { id: w.id })} className="btn-press mt-2 rounded-lg border border-red-400 px-3 py-1.5 text-sm font-bold text-red-300">{t("wdCancelBtn")}</button>)}</li>))}</ul>)}</div>
+      <div className="rounded-2xl bg-[var(--surface)] border border-[var(--border)] p-3"><h3 className="font-display text-sm">{t("wdHistory")}</h3>{data.withdrawals.length === 0 ? (<p className="mt-2 text-sm text-[var(--dim)]">{t("wdHistoryEmpty", { min: fmt(p.wdMinKt), usdt: fmt(p.wdMinUsdt) })}</p>) : (<ul className="mt-2 space-y-2">{data.withdrawals.map((w) => (<li key={w.id} className="rounded-xl bg-[var(--surface2)] p-3"><div className="flex items-center justify-between gap-2"><p className="font-display text-sm">#{w.id} · {fmt(w.amountUsdt)} USDT</p><span className={`rounded-full border px-2 py-0.5 text-[11px] font-bold ${statusClass(w.status)}`}>{statusLabel(w.status)}</span></div><p className="mt-1 break-all font-mono text-xs text-[var(--dim)]">{w.walletAddress}</p><p className="mt-1 text-xs text-[var(--dim)]">{t("wdHistoryLine", { kt: fmt(w.amountKt), created: fmtDateTime(w.createdAt), processed: w.processedAt ? t("wdProcessedAt", { date: fmtDateTime(w.processedAt) }) : "" })}</p>{w.adminNote && <p className="mt-1 text-xs">{t("wdOwnerNote", { note: w.adminNote })}</p>}{w.txRef && <p className="mt-1 break-all font-mono text-xs">{t("wdTxRefLabel", { ref: w.txRef })}</p>}{w.status === "pending" && (<button type="button" onClick={() => onCancel(w.id)} disabled={cancelling} aria-label={t("wdCancelAria", { id: w.id })} className="btn-press mt-2 rounded-lg border border-red-400 px-3 py-1.5 text-sm font-bold text-red-300">{t("wdCancelBtn")}</button>)}</li>))}</ul>)}</div>
     </section>
   );
 }
@@ -1307,12 +1307,12 @@ function GrantPremiumCard({ data, onDone }: { data: GameState; onDone: (ok: bool
   const pendingOrders = data.premiumOrders.filter((o) => o.status === "pending");
   const pastOrders = data.premiumOrders.filter((o) => o.status !== "pending").slice(0, 5);
   return (
-    <div className="rounded-2xl border-2 border-amber-400/50 bg-[var(--surface)] p-4">
+    <div className="rounded-2xl border-2 border-amber-400/50 bg-[var(--surface)] p-3">
       <h3 className="font-display inline-flex items-center gap-2 text-sm text-amber-300"><CrownIcon size={16} /> {t("grantTitle")}</h3>
-      <p className="mt-1 text-sm text-[var(--dim)]">{trich("grantDesc")}</p>
+      <p className="mt-0.5 line-clamp-2 text-sm text-[var(--dim)]">{trich("grantDesc")}</p>
       <p className="mt-2 text-sm">{t("grantStatusLabel")}{p.premium.active ? (<b className="text-amber-300">{t("grantStatusActive", { tier: p.premium.tier === "pro" ? "PRO" : "STANDARD", until: p.premium.until ? t("grantStatusActiveUntil", { date: fmtDateLong(p.premium.until) }) : "" })}</b>) : (<b>{t("grantStatusFree")}</b>)}</p>
 
-      <h4 className="mt-4 text-xs font-bold uppercase tracking-[0.18em] text-[var(--dim)]">{t("grantPendingTitle")}</h4>
+      <h4 className="mt-3 text-xs font-bold uppercase tracking-[0.18em] text-[var(--dim)]">{t("grantPendingTitle")}</h4>
       {pendingOrders.length === 0 ? (
         <p className="mt-2 text-sm text-[var(--dim)]">{t("grantPendingEmpty")}</p>
       ) : (
@@ -1338,7 +1338,7 @@ function GrantPremiumCard({ data, onDone }: { data: GameState; onDone: (ok: bool
         </ul>
       )}
 
-      <h4 className="mt-4 text-xs font-bold uppercase tracking-[0.18em] text-[var(--dim)]">{t("grantManualTitle")}</h4>
+      <h4 className="mt-3 text-xs font-bold uppercase tracking-[0.18em] text-[var(--dim)]">{t("grantManualTitle")}</h4>
       <form className="mt-2 flex flex-wrap items-end gap-2" onSubmit={(e) => { e.preventDefault(); grant.mutate(); }}>
         <div>
           <label htmlFor="grant-tier" className="text-xs font-bold">{t("grantTierLabel")}</label>
@@ -1355,8 +1355,8 @@ function GrantPremiumCard({ data, onDone }: { data: GameState; onDone: (ok: bool
       </form>
       <p className="mt-2 text-xs text-[var(--dim)]">{t("grantNote")}</p>
 
-      <h4 className="mt-4 text-xs font-bold uppercase tracking-[0.18em] text-[var(--dim)]">{t("starsWebhookTitle")}</h4>
-      <p className="mt-1 text-sm text-[var(--dim)]">{t("starsWebhookDesc")}</p>
+      <h4 className="mt-3 text-xs font-bold uppercase tracking-[0.18em] text-[var(--dim)]">{t("starsWebhookTitle")}</h4>
+      <p className="mt-0.5 line-clamp-2 text-sm text-[var(--dim)]">{t("starsWebhookDesc")}</p>
       <button type="button" onClick={() => setupWebhook.mutate()} disabled={setupWebhook.isPending} className="btn-press mt-2 rounded-xl bg-amber-400 px-4 py-2 font-bold text-black disabled:opacity-40">{t("starsWebhookBtn")}</button>
     </div>
   );
@@ -1367,19 +1367,19 @@ function AdminTab({ data, onDone }: { data: GameState; onDone: (ok: boolean, err
   const queue = [...data.withdrawals].sort((a, b) => order[a.status] - order[b.status] || b.id - a.id);
   const lockedKt = data.withdrawals.filter((w) => w.status === "pending" || w.status === "approved").reduce((a, w) => a + w.amountKt, 0);
   const owedUsdt = data.withdrawals.filter((w) => w.status === "approved").reduce((a, w) => a + w.amountUsdt, 0);
-  return (<section className="mt-4 space-y-4"><GrantPremiumCard data={data} onDone={onDone} /><FlaggedPlayersCard data={data} onDone={onDone} /><div className="rounded-2xl bg-[var(--surface)] border border-[var(--border)] p-4"><h2 className="font-display text-base">{t("adminTitle")}</h2><p className="mt-1 text-sm text-[var(--dim)]">{t("adminFlow")}</p><div className="mt-3 grid grid-cols-3 gap-2 text-center"><div className="rounded-xl bg-[var(--surface2)] px-2 py-3"><p className="font-display text-base">{fmt(lockedKt)} KT</p><p className="text-[11px] font-semibold text-[var(--dim)]">{t("adminLocked")}</p></div><div className="rounded-xl bg-[var(--surface2)] px-2 py-3"><p className="font-display text-base">{fmt(owedUsdt)} USDT</p><p className="text-[11px] font-semibold text-[var(--dim)]">{t("adminReady")}</p></div><div className="rounded-xl bg-[var(--surface2)] px-2 py-3"><p className="font-display text-base">{fmt(data.adminStats?.totalWdPaidUsdt ?? data.player.totalWdPaidUsdt)} USDT</p><p className="text-[11px] font-semibold text-[var(--dim)]">{t("adminPaid")}</p></div></div></div>{queue.length === 0 ? (<p className="rounded-2xl bg-[var(--surface)] border border-[var(--border)] p-4 text-sm text-[var(--dim)]">{t("adminEmpty")}</p>) : (queue.map((w) => <AdminWdCard key={w.id} wd={w} onDone={onDone} />))}</section>);
+  return (<section className="mt-3 space-y-3"><GrantPremiumCard data={data} onDone={onDone} /><FlaggedPlayersCard data={data} onDone={onDone} /><div className="rounded-2xl bg-[var(--surface)] border border-[var(--border)] p-3"><h2 className="font-display text-base">{t("adminTitle")}</h2><p className="mt-0.5 line-clamp-2 text-sm text-[var(--dim)]">{t("adminFlow")}</p><div className="mt-2.5 grid grid-cols-3 gap-2 text-center"><div className="rounded-xl bg-[var(--surface2)] px-2 py-2"><p className="font-display text-base">{fmt(lockedKt)} KT</p><p className="text-[11px] font-semibold text-[var(--dim)]">{t("adminLocked")}</p></div><div className="rounded-xl bg-[var(--surface2)] px-2 py-2"><p className="font-display text-base">{fmt(owedUsdt)} USDT</p><p className="text-[11px] font-semibold text-[var(--dim)]">{t("adminReady")}</p></div><div className="rounded-xl bg-[var(--surface2)] px-2 py-2"><p className="font-display text-base">{fmt(data.adminStats?.totalWdPaidUsdt ?? data.player.totalWdPaidUsdt)} USDT</p><p className="text-[11px] font-semibold text-[var(--dim)]">{t("adminPaid")}</p></div></div></div>{queue.length === 0 ? (<p className="rounded-2xl bg-[var(--surface)] border border-[var(--border)] p-3 text-sm text-[var(--dim)]">{t("adminEmpty")}</p>) : (queue.map((w) => <AdminWdCard key={w.id} wd={w} onDone={onDone} />))}</section>);
 }
 
 function FlaggedPlayersCard({ data, onDone }: { data: GameState; onDone: (ok: boolean, error: string | null, good: string) => void }) {
   const flagged = data.flaggedPlayers ?? [];
   const clear = useMutation({ mutationFn: (playerId: number) => api.clearPlayerFlag({ playerId }), onSuccess: (r, playerId) => { onDone(r.ok, r.error, t("flaggedCleared", { id: playerId })); } });
-  return (<div className="rounded-2xl bg-[var(--surface)] border border-[var(--border)] p-4"><h2 className="font-display text-base">{t("flaggedTitle")}</h2><p className="mt-1 text-sm text-[var(--dim)]">{t("flaggedDesc")}</p>{flagged.length === 0 ? (<p className="mt-3 text-sm text-[var(--dim)]">{t("flaggedEmpty")}</p>) : (<ul className="mt-3 space-y-3">{flagged.map((f) => (<li key={f.playerId} className="rounded-xl bg-[var(--surface2)] p-3"><div className="flex items-center justify-between gap-2"><p className="font-display text-sm">{f.username ? `@${f.username}` : t("flaggedNoUser")} · ID {f.telegramId ?? f.playerId}</p><span className="shrink-0 rounded-full border border-amber-400/60 bg-amber-400/10 px-2 py-0.5 text-[11px] font-bold text-amber-200">{t("flaggedScore", { score: f.riskScore })}</span></div><p className="mt-1 text-xs text-[var(--dim)]">{f.flagReason ?? t("flaggedNoReason")}</p><p className="mt-1 text-xs text-[var(--dim)]">{t("flaggedLine", { kt: fmt(f.ktBalance), count: f.paidWdCount, at: f.flaggedAt ? t("flaggedAt", { date: fmtDateTime(f.flaggedAt) }) : "" })}</p><button type="button" onClick={() => clear.mutate(f.playerId)} disabled={clear.isPending} aria-label={t("flaggedClearAria", { id: f.telegramId ?? f.playerId })} className="btn-press mt-2 rounded-lg border border-emerald-400 px-3 py-1.5 text-sm font-bold text-emerald-300">{t("flaggedClear")}</button></li>))}</ul>)}</div>);
+  return (<div className="rounded-2xl bg-[var(--surface)] border border-[var(--border)] p-3"><h2 className="font-display text-base">{t("flaggedTitle")}</h2><p className="mt-0.5 line-clamp-2 text-sm text-[var(--dim)]">{t("flaggedDesc")}</p>{flagged.length === 0 ? (<p className="mt-2 text-sm text-[var(--dim)]">{t("flaggedEmpty")}</p>) : (<ul className="mt-2 space-y-2">{flagged.map((f) => (<li key={f.playerId} className="rounded-xl bg-[var(--surface2)] p-3"><div className="flex items-center justify-between gap-2"><p className="font-display text-sm">{f.username ? `@${f.username}` : t("flaggedNoUser")} · ID {f.telegramId ?? f.playerId}</p><span className="shrink-0 rounded-full border border-amber-400/60 bg-amber-400/10 px-2 py-0.5 text-[11px] font-bold text-amber-200">{t("flaggedScore", { score: f.riskScore })}</span></div><p className="mt-1 text-xs text-[var(--dim)]">{f.flagReason ?? t("flaggedNoReason")}</p><p className="mt-1 text-xs text-[var(--dim)]">{t("flaggedLine", { kt: fmt(f.ktBalance), count: f.paidWdCount, at: f.flaggedAt ? t("flaggedAt", { date: fmtDateTime(f.flaggedAt) }) : "" })}</p><button type="button" onClick={() => clear.mutate(f.playerId)} disabled={clear.isPending} aria-label={t("flaggedClearAria", { id: f.telegramId ?? f.playerId })} className="btn-press mt-2 rounded-lg border border-emerald-400 px-3 py-1.5 text-sm font-bold text-emerald-300">{t("flaggedClear")}</button></li>))}</ul>)}</div>);
 }
 
 function AdminWdCard({ wd, onDone }: { wd: Wd; onDone: (ok: boolean, error: string | null, good: string) => void }) {
   const [note, setNote] = useState(""); const [txRef, setTxRef] = useState("");
   const act = useMutation({ mutationFn: async (action: "approve" | "reject" | "pay") => await api.updateWithdrawal({ wdId: wd.id, action, adminNote: note.trim() ? note.trim() : undefined, txRef: txRef.trim() ? txRef.trim() : undefined }), onSuccess: (r, action) => { const good = action === "approve" ? t("wdApproveDone", { id: wd.id, usdt: fmt(wd.amountUsdt) }) : action === "pay" ? t("wdPayDone", { id: wd.id }) : t("wdRejectDone", { id: wd.id }); onDone(r.ok, r.error, good); } });
-  return (<div className="rounded-2xl bg-[var(--surface)] border border-[var(--border)] p-4"><div className="flex items-center justify-between gap-2"><p className="font-display text-base">#{wd.id} · {fmt(wd.amountUsdt)} USDT</p><span className={`rounded-full border px-2 py-0.5 text-[11px] font-bold ${statusClass(wd.status)}`}>{statusLabel(wd.status)}</span></div>{wd.needsReview && (<p className="mt-2 rounded-lg border border-amber-400/50 bg-amber-400/10 px-3 py-2 text-xs font-bold text-amber-200">{t("wdNeedsReview")}</p>)}<p className="mt-1 text-sm text-[var(--dim)]">{t("wdLockedLine", { kt: fmt(wd.amountKt), date: fmtDateTime(wd.createdAt) })}</p><p className="mt-2 break-all rounded-lg bg-[var(--surface2)] px-3 py-2 font-mono text-xs">{wd.walletAddress}</p>{wd.adminNote && <p className="mt-2 text-sm">{t("wdAdminNote", { note: wd.adminNote })}</p>}{wd.txRef && <p className="mt-1 break-all font-mono text-xs text-[var(--dim)]">{t("wdTxRefLabel", { ref: wd.txRef })}</p>}{(wd.status === "pending" || wd.status === "approved") && (<div className="mt-3 space-y-2"><div><label htmlFor={`note-${wd.id}`} className="text-xs font-bold">{t("wdNoteLabel")}</label><input id={`note-${wd.id}`} value={note} onChange={(e) => setNote(e.target.value)} placeholder={t("wdNotePlaceholder")} className="mt-1 w-full rounded-xl border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-sm" /></div>{wd.status === "approved" && (<div><label htmlFor={`tx-${wd.id}`} className="text-xs font-bold">{t("wdTxRefLabel2")}</label><input id={`tx-${wd.id}`} value={txRef} onChange={(e) => setTxRef(e.target.value)} placeholder={t("wdTxRefPlaceholder")} className="mt-1 w-full rounded-xl border border-[var(--border)] bg-[var(--bg)] px-3 py-2 font-mono text-sm" /></div>)}<div className="flex flex-wrap gap-2">{wd.status === "pending" && (<button type="button" onClick={() => act.mutate("approve")} disabled={act.isPending} aria-label={t("wdApproveAria", { id: wd.id })} className="btn-press rounded-xl bg-sky-600 px-4 py-2 font-bold text-white disabled:opacity-40">{t("wdApprove")}</button>)}{wd.status === "approved" && (<button type="button" onClick={() => act.mutate("pay")} disabled={act.isPending} aria-label={t("wdPayAria", { id: wd.id })} className="btn-press rounded-xl bg-emerald-600 px-4 py-2 font-bold text-white disabled:opacity-40">{t("wdMarkPaid")}</button>)}<button type="button" onClick={() => act.mutate("reject")} disabled={act.isPending} aria-label={t("wdRejectAria", { id: wd.id })} className="btn-press rounded-xl border border-red-400 px-4 py-2 font-bold text-red-300 disabled:opacity-40">{t("wdRejectRefund")}</button></div></div>)}</div>);
+  return (<div className="rounded-2xl bg-[var(--surface)] border border-[var(--border)] p-3"><div className="flex items-center justify-between gap-2"><p className="font-display text-base">#{wd.id} · {fmt(wd.amountUsdt)} USDT</p><span className={`rounded-full border px-2 py-0.5 text-[11px] font-bold ${statusClass(wd.status)}`}>{statusLabel(wd.status)}</span></div>{wd.needsReview && (<p className="mt-2 rounded-lg border border-amber-400/50 bg-amber-400/10 px-3 py-2 text-xs font-bold text-amber-200">{t("wdNeedsReview")}</p>)}<p className="mt-1 text-sm text-[var(--dim)]">{t("wdLockedLine", { kt: fmt(wd.amountKt), date: fmtDateTime(wd.createdAt) })}</p><p className="mt-2 break-all rounded-lg bg-[var(--surface2)] px-3 py-2 font-mono text-xs">{wd.walletAddress}</p>{wd.adminNote && <p className="mt-2 text-sm">{t("wdAdminNote", { note: wd.adminNote })}</p>}{wd.txRef && <p className="mt-1 break-all font-mono text-xs text-[var(--dim)]">{t("wdTxRefLabel", { ref: wd.txRef })}</p>}{(wd.status === "pending" || wd.status === "approved") && (<div className="mt-2.5 space-y-2"><div><label htmlFor={`note-${wd.id}`} className="text-xs font-bold">{t("wdNoteLabel")}</label><input id={`note-${wd.id}`} value={note} onChange={(e) => setNote(e.target.value)} placeholder={t("wdNotePlaceholder")} className="mt-1 w-full rounded-xl border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-sm" /></div>{wd.status === "approved" && (<div><label htmlFor={`tx-${wd.id}`} className="text-xs font-bold">{t("wdTxRefLabel2")}</label><input id={`tx-${wd.id}`} value={txRef} onChange={(e) => setTxRef(e.target.value)} placeholder={t("wdTxRefPlaceholder")} className="mt-1 w-full rounded-xl border border-[var(--border)] bg-[var(--bg)] px-3 py-2 font-mono text-sm" /></div>)}<div className="flex flex-wrap gap-2">{wd.status === "pending" && (<button type="button" onClick={() => act.mutate("approve")} disabled={act.isPending} aria-label={t("wdApproveAria", { id: wd.id })} className="btn-press rounded-xl bg-sky-600 px-4 py-2 font-bold text-white disabled:opacity-40">{t("wdApprove")}</button>)}{wd.status === "approved" && (<button type="button" onClick={() => act.mutate("pay")} disabled={act.isPending} aria-label={t("wdPayAria", { id: wd.id })} className="btn-press rounded-xl bg-emerald-600 px-4 py-2 font-bold text-white disabled:opacity-40">{t("wdMarkPaid")}</button>)}<button type="button" onClick={() => act.mutate("reject")} disabled={act.isPending} aria-label={t("wdRejectAria", { id: wd.id })} className="btn-press rounded-xl border border-red-400 px-4 py-2 font-bold text-red-300 disabled:opacity-40">{t("wdRejectRefund")}</button></div></div>)}</div>);
 }
 
 // --- Tab Komunitas (2026-11-20) ---------------------------------------
@@ -1451,37 +1451,37 @@ function KomunitasTab({ userId, referrals }: { userId: number | null; referrals:
     }
   };
   return (
-    <section className="mt-4 space-y-3">
-      <div className="rounded-2xl bg-[var(--surface)] border border-[var(--border)] p-4">
+    <section className="mt-3 space-y-2.5">
+      <div className="rounded-2xl bg-[var(--surface)] border border-[var(--border)] p-3">
         <div className="flex items-start gap-3">
-          <span aria-hidden="true" className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-[var(--border)] bg-[var(--surface2)]"><SatelliteIcon size={22} /></span>
+          <span aria-hidden="true" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-[var(--border)] bg-[var(--surface2)]"><SatelliteIcon size={20} /></span>
           <div>
             <h3 className="font-display text-sm">{t("commChannelTitle")}</h3>
-            <p className="mt-1 text-sm text-[var(--dim)]">{t("commChannelDesc")}</p>
+            <p className="mt-0.5 line-clamp-2 text-sm text-[var(--dim)]">{t("commChannelDesc")}</p>
           </div>
         </div>
-        <button type="button" onClick={() => openExternalLink(CHANNEL_URL)} aria-label={t("commChannelAria")} className="btn-press mt-3 w-full rounded-xl bg-cyan-400 px-4 py-2.5 font-bold text-black">{t("commChannelBtn")}</button>
+        <button type="button" onClick={() => openExternalLink(CHANNEL_URL)} aria-label={t("commChannelAria")} className="btn-press mt-2.5 w-full rounded-xl bg-cyan-400 px-4 py-2 font-bold text-black">{t("commChannelBtn")}</button>
       </div>
-      <div className="rounded-2xl bg-[var(--surface)] border border-[var(--border)] p-4">
+      <div className="rounded-2xl bg-[var(--surface)] border border-[var(--border)] p-3">
         <div className="flex items-start gap-3">
-          <span aria-hidden="true" className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-[var(--border)] bg-[var(--surface2)]"><UsersIcon size={22} /></span>
+          <span aria-hidden="true" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-[var(--border)] bg-[var(--surface2)]"><UsersIcon size={20} /></span>
           <div>
             <h3 className="font-display text-sm">{t("commGroupTitle")}</h3>
-            <p className="mt-1 text-sm text-[var(--dim)]">{t("commGroupDesc")}</p>
+            <p className="mt-0.5 line-clamp-2 text-sm text-[var(--dim)]">{t("commGroupDesc")}</p>
           </div>
         </div>
-        <button type="button" disabled aria-label={t("commGroupAria")} className="mt-3 w-full rounded-xl border border-[var(--border)] bg-[var(--surface2)] px-4 py-2.5 font-bold text-[var(--dim)] disabled:opacity-60">{t("commGroupSoon")}</button>
+        <button type="button" disabled aria-label={t("commGroupAria")} className="mt-2.5 w-full rounded-xl border border-[var(--border)] bg-[var(--surface2)] px-4 py-2 font-bold text-[var(--dim)] disabled:opacity-60">{t("commGroupSoon")}</button>
       </div>
-      <div className="rounded-2xl bg-[var(--surface)] border border-[var(--border)] p-4">
+      <div className="rounded-2xl bg-[var(--surface)] border border-[var(--border)] p-3">
         <div className="flex items-start gap-3">
-          <span aria-hidden="true" className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-[var(--border)] bg-[var(--surface2)]"><GiftIcon size={22} /></span>
+          <span aria-hidden="true" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-[var(--border)] bg-[var(--surface2)]"><GiftIcon size={20} /></span>
           <div>
             <h3 className="font-display text-sm">{t("commRefTitle")}</h3>
-            <p className="mt-1 text-sm text-[var(--dim)]">{t("commRefDesc", { kt: fmt(REFERRAL_REWARD_KT) })}</p>
+            <p className="mt-0.5 line-clamp-2 text-sm text-[var(--dim)]">{t("commRefDesc", { kt: fmt(REFERRAL_REWARD_KT) })}</p>
           </div>
         </div>
         {refLink ? (
-          <div className="mt-3">
+          <div className="mt-2.5">
             <label htmlFor="ref-link" className="text-xs font-bold">{t("commRefLinkLabel")}</label>
             <div className="mt-1 flex gap-2">
               <p id="ref-link" className="min-w-0 flex-1 break-all rounded-xl bg-[var(--surface2)] px-3 py-2 font-mono text-xs">{refLink}</p>
