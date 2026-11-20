@@ -264,9 +264,9 @@ const id: ServerStrings = {
   errAlreadyScanned:
     "Asteroid ini sudah dipindai — komposisi uratnya sudah terbuka.",
   errEnergyScan: (cost, energy) =>
-    `Daya tidak cukup — scan butuh ${cost} daya, kamu punya ${energy}. Tunggu daya pulih, atau naikkan Reaktor (isi ulang lebih cepat) / Tangki O₂ (kapasitas lebih besar).`,
+    `Daya tidak cukup — scan butuh ${cost} daya, kamu punya ${energy}. Tunggu daya pulih (isi ulang memang lambat), naikkan Reaktor Fusi Mini agar isi ulang lebih cepat, atau Tangki O₂ & Baterai Surya agar kapasitas daya lebih besar.`,
   errEnergyMine: (cost, energy) =>
-    `Daya tidak cukup — pengeboran urat ini butuh ${cost} daya, kamu punya ${energy}. Tunggu daya pulih, atau naikkan Reaktor (isi ulang lebih cepat) / Tangki O₂ (kapasitas lebih besar).`,
+    `Daya tidak cukup — pengeboran urat ini butuh ${cost} daya, kamu punya ${energy}. Tunggu daya pulih (isi ulang memang lambat), naikkan Reaktor Fusi Mini agar isi ulang lebih cepat, atau Tangki O₂ & Baterai Surya agar kapasitas daya lebih besar.`,
   errScanFirst:
     "Pindai asteroid ini dulu — tanpa scan, urat mineralnya tidak terlihat.",
   errVeinNotFound: "Urat mineral itu tidak ada di asteroid ini.",
@@ -430,9 +430,9 @@ const en: ServerStrings = {
   errAlreadyScanned:
     "This asteroid has already been scanned — its vein composition is revealed.",
   errEnergyScan: (cost, energy) =>
-    `Not enough energy — scanning needs ${cost} energy, you have ${energy}. Wait for energy to recover, or upgrade the Reactor (faster recharge) / O₂ Tank (bigger capacity).`,
+    `Not enough energy — scanning needs ${cost} energy, you have ${energy}. Wait for energy to recover (recharging is deliberately slow), upgrade the Mini Fusion Reactor for faster recharge, or the O₂ Tank & Solar Battery for a larger energy capacity.`,
   errEnergyMine: (cost, energy) =>
-    `Not enough energy — drilling this vein needs ${cost} energy, you have ${energy}. Wait for energy to recover, or upgrade the Reactor (faster recharge) / O₂ Tank (bigger capacity).`,
+    `Not enough energy — drilling this vein needs ${cost} energy, you have ${energy}. Wait for energy to recover (recharging is deliberately slow), upgrade the Mini Fusion Reactor for faster recharge, or the O₂ Tank & Solar Battery for a larger energy capacity.`,
   errScanFirst:
     "Scan this asteroid first — without a scan, its mineral veins are hidden.",
   errVeinNotFound: "That mineral vein doesn't exist on this asteroid.",

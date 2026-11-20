@@ -2225,3 +2225,48 @@ PELAJARAN: setiap dependensi baru yang memakai Node globals (Buffer,
 process, dsb.) di top-level HARUS diuji dengan harness tanpa global
 Node — tes `bun test` tidak akan menangkapnya karena Node
 menyediakan global itu.
+
+## Tap-to-expand deskripsi (2026-11-20, belum di-push)
+
+Ide pemilik (lebih baik daripada memendekkan permanen): setiap
+penjelasan panjang tampil sebagai PREVIEW 2 baris, pemain MENGETUK
+untuk membaca penjelasan lengkapnya; ketuk lagi untuk menutup.
+
+- Teks lengkap DIKEMBALIKAN dari commit 6d058ca7 (sebelum compact
+  4ca4a5c9): diff 6d058ca7→4ca4a5c9 dibalikkan untuk
+  client/src/i18n.ts, api/_lib/game.ts, api/_lib/i18n.ts — KECUALI
+  heroDesc yang sengaja tetap pendek ("Scan asteroid, bor uratnya,
+  jual jadi KT, tarik jadi USDT."). Bukti: deskripsi Tangki O₂
+  kembali 418/389 karakter (dari 147/146), Reaktor 264/250,
+  deskripsi peta 187–364 karakter, aturan rule1–17 lengkap.
+  Diverifikasi end-to-end: getGameState lokal mengembalikan
+  deskripsi penuh (Tangki 418, Bulan distanceLabel 74 karakter).
+- Komponen baru client/src/ExpandableText.tsx: props children
+  (ReactNode — bekerja dengan trich() **tebal**/*miring*) + lines
+  (default 2). Tertutup: teks di-clamp + tombol kecil
+  "Lihat selengkapnya ▾" (cyan, chevron SVG berputar 180° saat
+  terbuka). Terbuka: teks penuh + "Tutup ▴". Ketuk teks ATAU tombol
+  untuk toggle (per-instance useState). Bila teks muat dalam
+  preview, tombol disembunyikan (diukur scrollHeight vs
+  clientHeight, dicek ulang setelah font dimuat + saat resize).
+  Inline saja — tanpa modal. Kunci i18n baru expandMore/expandLess
+  (id + en). Catatan: class line-clamp tidak boleh dirangkai
+  dinamis (`line-clamp-${n}` tidak terdeteksi Tailwind) — hanya 2
+  dan 3 yang didukung via map statis.
+- Dipakai di: kartu upgrade Hanggar (termasuk Tangki O₂), kartu peta
+  Peta Tambang + deskripsi zona di Explore, tiap aturan rule1–17
+  (baris expandable sendiri), aturan WD 1–6, premiumDesc,
+  pendingOrderDesc(Gram), mapsIntro, hanggarCaption, grantDesc,
+  starsWebhookDesc, adminFlow, flaggedDesc, deskripsi 3 kartu
+  Komunitas, notScannedDesc, scanNote. TIDAK dipakai di teks pendek:
+  heroDesc, marketNote, premiumGramNote, grantNote, teks status
+  JobPanel, dan banner job/collect (teks-teks itu tampil penuh apa
+  adanya; versi lengkapnya sudah dikembalikan).
+- Layout padat dari compact pass TETAP: preview 2 baris yang menjaga
+  layar tetap ringkas; teks lengkap hanya muncul saat diketuk.
+  Tidak ada perubahan logika game, harga, reward, atau waktu.
+
+VERIFIKASI: typecheck 0 (strict + Vercel-style), build OK
+(main-2OJNK2EH.js), full suite 107/107 (2.814 expects), harness
+Node tanpa global Buffer + data getGameState live: bundle
+dievaluasi bersih, UI lengkap me-render (hero, 6 tab).
