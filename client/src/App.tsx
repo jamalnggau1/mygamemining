@@ -738,7 +738,7 @@ export function App() {
                     : t("watchAdBtn", { kt: fmt(p.ads.rewardKt) })}
             </button>
             <p className="mt-1.5 text-center text-xs text-[var(--dim)]">
-              {t("adNote", { reward: fmt(p.ads.rewardKt), cap: p.ads.dailyCap, watched: p.ads.watchedToday, cooldown: fmtDur(p.ads.cooldownSeconds) })}
+              {t("adNote", { watched: p.ads.watchedToday, cap: p.ads.dailyCap })}
             </p>
           </div>
         </section>
