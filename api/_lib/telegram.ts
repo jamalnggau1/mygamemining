@@ -38,6 +38,12 @@ export type TelegramIdentity = {
   id: number;
   username: string | null;
   firstName: string | null;
+  /** Payload `?start=` dari link referral (mis. `ref_123`) — Telegram
+   *  menaruhnya di initData sebagai `start_param`. Sudah termasuk
+   *  dalam data_check_string yang ditandatangani, jadi nilainya
+   *  terotentikasi seperti `user`: tidak bisa dipalsukan tanpa
+   *  BOT_TOKEN. Null bila pemain membuka Mini App tanpa payload. */
+  startParam: string | null;
 };
 
 /** Sesi pemain yang sudah diputuskan server untuk satu request.
@@ -62,6 +68,12 @@ export type Session = {
    *  Default "id" bila klien tidak mengirim / mengirim yang tidak
    *  didukung. */
   lang: Lang;
+  /** Payload `?start=` dari link referral (mis. `ref_123`), persis
+   *  seperti di initData tervalidasi; null untuk pemain web lama
+   *  dan untuk pemain Telegram yang membuka Mini App tanpa payload.
+   *  Dipakai atribusi referral di game.ts — hanya saat pemain
+   *  pertama kali dibuat. */
+  startParam: string | null;
 };
 
 export type SessionResolution =
@@ -92,6 +104,7 @@ export function resolveSession(
         username: null,
         isAdmin: false,
         lang: sessionLang,
+        startParam: null,
       },
     };
   }
@@ -111,6 +124,7 @@ export function resolveSession(
       isAdmin:
         Number.isFinite(adminId) && adminId === validated.identity.id,
       lang: sessionLang,
+      startParam: validated.identity.startParam,
     },
   };
 }
@@ -228,12 +242,20 @@ export function validateTelegramInitData(
     return { ok: false, error: S.tgInvalid };
   }
   const u = user as { id: number; username?: unknown; first_name?: unknown };
+  // Payload referral dari `?start=` — ikut ditandatangani (masuk
+  // data_check_string di atas), jadi nilainya tepercaya. Bisa kosong
+  // bila pemain membuka Mini App langsung, bukan lewat link referral.
+  const rawStartParam = params.get("start_param");
   return {
     ok: true,
     identity: {
       id: u.id,
       username: typeof u.username === "string" ? u.username : null,
       firstName: typeof u.first_name === "string" ? u.first_name : null,
+      startParam:
+        typeof rawStartParam === "string" && rawStartParam.length > 0
+          ? rawStartParam
+          : null,
     },
   };
 }

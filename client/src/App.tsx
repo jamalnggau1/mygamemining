@@ -910,7 +910,7 @@ export function App() {
         )}
 
         {tab === "wd" && (<WdTab data={data} onCancel={(id) => cancelWd.mutate(id)} cancelling={cancelWd.isPending} onDone={(ok, err, good) => { showResult(ok, err, good); refresh(); }} />)}
-        {tab === "komunitas" && (<KomunitasTab userId={sessionInfo.userId} />)}
+        {tab === "komunitas" && (<KomunitasTab userId={sessionInfo.userId} referrals={data.player.referrals} />)}
         {tab === "admin" && p.isAdmin && (<AdminTab data={data} onDone={(ok, err, good) => { showResult(ok, err, good); refresh(); }} />)}
         </div>
       </main>
@@ -1231,11 +1231,12 @@ function AdminWdCard({ wd, onDone }: { wd: Wd; onDone: (ok: boolean, error: stri
 // --- Tab Komunitas (2026-11-20) ---------------------------------------
 // Untuk SEMUA pemain (Kendali tetap admin-only). Isinya: gabung channel
 // resmi, gabung grup diskusi (segera hadir — belum ada link grup), dan
-// referral. Referral di fase ini HANYA menampilkan link + hadiah:
-// pelacakan/atribusi/pemberian KT otomatis adalah fase berikutnya
-// (saat pemain membuka Mini App lewat link referral, Telegram
-// menaruh payload di initDataUnsafe.start_param — fase berikutnya
-// membacanya di server untuk atribusi).
+// referral. Referral SUDAH dilacak server: saat pemain membuka Mini
+// App pertama kali lewat link ?start=ref_<telegramId>, server
+// mencatatnya di tabel referrals; saat pemain yang diundang
+// menyelesaikan ekspedisi pertamanya, pengundang otomatis mendapat
+// 10 KT (lihat api/_lib/game.ts — recordReferralAttribution /
+// payReferralRewardIfPending). Statistiknya tampil di kartu referral.
 
 /** Channel Telegram resmi ASTRA MINING. */
 const CHANNEL_URL = "https://t.me/astra_mining_gram";
@@ -1257,7 +1258,7 @@ function openExternalLink(url: string) {
   window.open(url, "_blank", "noopener");
 }
 
-function KomunitasTab({ userId }: { userId: number | null }) {
+function KomunitasTab({ userId, referrals }: { userId: number | null; referrals: { invited: number; rewarded: number; earnedKt: number } }) {
   const [copied, setCopied] = useState(false);
   // Link referral: bot + start payload ref_<telegramId>. Tanpa
   // userId (pemain web/legacy) tidak ada link — minta buka lewat
@@ -1330,7 +1331,7 @@ function KomunitasTab({ userId }: { userId: number | null }) {
         ) : (
           <p className="mt-3 text-sm text-[var(--dim)]">{t("commRefNoTelegram")}</p>
         )}
-        <p className="mt-2 text-xs text-[var(--dim)]">{t("commRefSoon")}</p>
+        <p className="mt-2 text-xs text-[var(--dim)]">{t("commRefStats", { invited: fmt(referrals.invited), earned: fmt(referrals.earnedKt) })}</p>
       </div>
     </section>
   );

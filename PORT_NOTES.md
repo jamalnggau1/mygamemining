@@ -349,6 +349,18 @@ ADMIN_TELEGRAM_ID in Vercel.
     redeploy. Until then the live deployment still pays integer
     KT at the old rates. See `deploy/README.md` → "Langkah
     deploy" and the rebalance #5 section below.
+11. **Referral tracking + automatic reward (2026-11-20, code
+    ready in this dir, NOT yet deployed):** push this directory,
+    then in Neon run `deploy/neon/migration-0005-referrals.sql`
+    once (idempotent — safe to re-run; run AFTER migration-0004),
+    and redeploy. **Run the migration BEFORE redeploying** — the
+    new code reads/writes the `referrals` table on every
+    getGameState / completeExpedition (failures degrade to
+    "no referral" rather than crashing the game, but no referral
+    is tracked or paid until the table exists). Until then the
+    live deployment shows "0 teman / 0 KT" in the Komunitas tab
+    and pays no referral reward. See the "Logika referral"
+    section below.
 
 ## Economy rebalance #3 — conversion + WD ladder (2026-11-19, implemented, NOT yet deployed)
 
@@ -1567,7 +1579,7 @@ build:client` OK (`main-YIHXJ2X3.js`), full suite 69/69 pass.
 NOT verified live (needs the owner to update BOT_TOKEN + redeploy,
 then open the Mini App from the new bot).
 
-## Tab Komunitas — channel, grup, referral (2026-11-20, implemented, NOT yet pushed)
+## Tab Komunitas — channel, grup, referral (2026-11-20, implemented, PUSHED 2026-11-20 commit 15fbef8e)
 
 New tab for ALL players (Kendali stays admin-only). Pure client UI +
 i18n — no server changes, no new actions, no DB migration, no
@@ -1631,3 +1643,117 @@ installed yet — the parent agent is restoring it separately). The
 DB-independent i18n dictionary tests pass 3/3 (key symmetry,
 non-empty values, placeholder matching), covering the 15 new keys.
 NOT pushed to GitHub; NOT verified live.
+
+## Logika referral — pelacakan + hadiah otomatis (2026-11-20, implemented, push pending)
+
+The Komunitas tab already showed a referral link + the note
+"Pelacakan referral dan pemberian hadiah otomatis segera hadir".
+That note is now gone — the logic is built. The user asked
+"jadi referral ini belum terdeteksi?" — correct, it was not
+tracked at all before this change; now it is.
+
+### Link format (unchanged)
+`https://t.me/astra_mining_bot?start=ref_<telegramId>`, built
+client-side from `getTelegramSessionInfo().userId`. Copy button
+unchanged.
+
+### Attribution — start_param, first-join-only
+- Telegram puts the `?start=` payload into initData as
+  `start_param`. It is part of the signed data_check_string, so
+  it is authenticated like `user` — it cannot be forged without
+  BOT_TOKEN. `api/_lib/telegram.ts` exposes it as
+  `identity.startParam` → `session.startParam` (null for the web
+  player and for Telegram players who open the Mini App without a
+  payload).
+- On the FIRST `getGameState` that creates a brand-new player row
+  ONLY, `recordReferralAttribution` (api/_lib/game.ts) parses
+  `ref_<telegramId>`: the referrer must ALREADY be a player row,
+  it must NOT be the new player's own telegramId (no
+  self-referral), and the new player must not already have a
+  referrer. One referral per referred player, ever — later
+  sessions with a start_param never re-attribute (and the
+  `UNIQUE` on `referrals.referred_player_id` makes a second
+  attribution impossible even under a race). Attribution failures
+  (including a missing `referrals` table) are swallowed — they
+  never break login or getGameState.
+
+### Storage — migration-0005
+- New table `referrals` (id, referrer_player_id, referred_player_id
+  UNIQUE, status pending/rewarded, created_at, rewarded_at) +
+  index on referrer_player_id. `deploy/neon/migration-0005-referrals.sql`
+  (idempotent, run once in Neon BEFORE redeploy — see step 11 in
+  "Vercel steps" above) migrates existing databases;
+  `deploy/neon/init.sql` + `deploy/neon/schema.pg.ts` carry the
+  same table for fresh installs.
+
+### Reward trigger — first expedition, referrer only
+- When the referred player completes their FIRST expedition
+  (`completeExpedition`), `payReferralRewardIfPending` credits
+  **10 KT** (`REFERRAL_REWARD_KT`, fixed — owner-delegated) to the
+  REFERRER's balance + totalKtEarned, flips the referral
+  pending → rewarded, and writes an Economy Log entry
+  (`referral_reward`, 10 KT) for the referrer. Only the first
+  expedition pays; later expeditions find no pending row. The
+  claim is atomic (UPDATE … WHERE status='pending' + affected-row
+  check), so two simultaneous completions cannot double-pay. No
+  referee bonus in this phase (inviter only).
+- Reward failures are swallowed — they never break expedition
+  completion.
+
+### Anti-farming
+- The first-expedition requirement is the main brake: every fake
+  account must spend real time + energy (scan + drill every vein)
+  before its referrer sees 1 KT. Plus: one referral per referred
+  player, no self-referral, referrer must already exist, reward
+  paid exactly once. The existing >3-accounts/IP anti-cheat rule
+  already flags multi-account farming. No daily cap or other new
+  limit — kept simple on purpose.
+
+### getGameState — `referrals` field
+- `player.referrals`: `{ invited, rewarded, earnedKt }` — how many
+  friends joined through the player's link, how many already paid
+  a reward, and total KT earned from referrals. Every existing
+  field unchanged.
+
+### Client
+- KomunitasTab referral card: the "segera hadir" note is replaced
+  with live stats from `data.player.referrals` — "Teman bergabung:
+  X · Hadiah diterima: Y KT" / "Friends joined: X · Rewards
+  earned: Y KT" (`commRefStats`, id + en, symmetric). Link + copy
+  button unchanged. `KomunitasTab` now takes a `referrals` prop.
+- Server log message `logReferralReward` in `api/_lib/i18n.ts`
+  (id + en).
+
+### Limitations (documented, by design)
+1. **No retroactive attribution.** Players who joined through a
+   referral link BEFORE this logic existed cannot be attributed —
+   their start_param is gone (Telegram only sends it on the first
+   open through the link).
+2. **Reward log language.** The reward log entry is written in
+   the REFERRED player's current language, since the referrer's
+   language preference is not stored per player (same convention
+   as admin-initiated log entries — see the i18n note in
+   PORT_NOTES).
+
+### Verified locally (2026-11-20)
+`bun run typecheck` 0 errors (strict AND Vercel-style
+`--strictNullChecks false`), `bun run build:client` OK
+(bundle `main-C54B5RFY.js`). Full test suite attempted once:
+17 pass / 61 fail — ALL 61 failures are the one DB error
+(local Postgres test DB unavailable after the overnight VM
+restart; PostgreSQL not installed yet — the parent agent is
+restoring it separately). The 9 new referral tests
+(`/tmp/smoke-test/referral.test.ts` — attribution on first join
+with a valid ref, self-referral ignored, unknown referrer
+ignored, malformed start_param ignored, second join with a
+start_param does not re-attribute, join without start_param
+records nothing, 10 KT credited to the referrer on the first
+expedition with log entry + stats update, NO reward on the
+second expedition, no-referrer player earns nothing extra)
+could NOT run — every DB-backed test fails at the first query.
+The DB-independent i18n dictionary tests pass 3/3 (key
+symmetry, non-empty values, placeholder matching), covering the
+new `commRefStats` key. Run the full suite once Postgres is back
+(the test DB also needs migration-0005 applied — or a fresh
+init.sql — before the referral tests can run). NOT pushed to
+GitHub; NOT verified live.

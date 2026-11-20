@@ -209,6 +209,9 @@ export interface ServerStrings {
   logWdApprove: (id: number, usdt: number) => string;
   logWdPaid: (id: number, usdt: number) => string;
   logWdReject: (id: number, kt: number) => string;
+  // Referral: hadiah 10 KT yang dibayar ke pengundang saat teman
+  // yang diundangnya menyelesaikan ekspedisi pertama.
+  logReferralReward: (amount: number) => string;
   // Anti-cheat
   tamperScan: string;
   tamperMine: string;
@@ -347,6 +350,8 @@ const id: ServerStrings = {
     `WD #${id} selesai — ${usdt} USDT telah dikirim manual ke dompet pemain.`,
   logWdReject: (id, kt) =>
     `WD #${id} ditolak — ${fmtNum(kt, "id")} KT dikembalikan ke saldo pemain.`,
+  logReferralReward: (amount) =>
+    `Teman yang kamu undang menyelesaikan ekspedisi pertamanya — hadiah referral ${fmtNum(amount, "id")} KT masuk ke saldo.`,
   tamperScan: "memulai scan saat operasi masih berjalan",
   tamperMine: "memulai pengeboran saat operasi masih berjalan",
   tamperCollect: "ambil hasil sebelum operasi selesai",
@@ -488,6 +493,8 @@ const en: ServerStrings = {
     `WD #${id} complete — ${usdt} USDT has been sent manually to the player's wallet.`,
   logWdReject: (id, kt) =>
     `WD #${id} rejected — ${fmtNum(kt, "en")} KT refunded to the player's balance.`,
+  logReferralReward: (amount) =>
+    `A friend you invited completed their first expedition — referral reward of ${fmtNum(amount, "en")} KT added to your balance.`,
   tamperScan: "starting a scan while an operation was running",
   tamperMine: "starting a mining job while an operation was running",
   tamperCollect: "collecting before the operation finished",

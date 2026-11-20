@@ -252,3 +252,39 @@ export const playerIp = pgTable(
     index("player_ip_ip_idx").on(t.ip, t.lastSeenAt),
   ],
 );
+
+// Referral (2026-11-20): satu baris per pemain yang diundang —
+// siapa pengundangnya, siapa yang diundang, dan apakah hadiah 10 KT
+// sudah dibayarkan. Atribusi dicatat sekali saat pemain baru dibuat
+// lewat link referral (lihat recordReferralAttribution di
+// api/_lib/game.ts); hadiah dibayar saat pemain yang diundang
+// menyelesaikan ekspedisi PERTAMANYA (lihat
+// payReferralRewardIfPending). UNIQUE di referred_player_id:
+// satu pemain yang diundang hanya bisa punya satu pengundang,
+// selamanya — atribusi ulang tidak mungkin. status "pending" =
+// menunggu ekspedisi pertama; "rewarded" = 10 KT sudah masuk ke
+// saldo pengundang.
+export const referrals = pgTable(
+  "referrals",
+  {
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    referrerPlayerId: integer("referrer_player_id")
+      .notNull()
+      .references(() => player.id),
+    referredPlayerId: integer("referred_player_id")
+      .notNull()
+      .references(() => player.id)
+      .unique(),
+    status: text("status", { enum: ["pending", "rewarded"] })
+      .notNull()
+      .default("pending"),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
+      .notNull()
+      .defaultNow(),
+    rewardedAt: timestamp("rewarded_at", {
+      withTimezone: true,
+      mode: "date",
+    }),
+  },
+  (t) => [index("referrals_referrer_idx").on(t.referrerPlayerId)],
+);

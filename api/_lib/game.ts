@@ -355,6 +355,17 @@ export const DAILY_BONUS_KT = 0.625;
 export const AD_REWARD_KT = 0.375;
 export const AD_DAILY_CAP = 10;
 const AD_COOLDOWN_SECONDS = 3600; // 1 jam antar-iklan (owner 2026-11-19: cegah farming iklan)
+
+// Hadiah referral (2026-11-20): 10 KT ke PENGUNDANG saat pemain yang
+// diundangnya menyelesaikan ekspedisi PERTAMANYA. Jumlah TETAP —
+// pemilik mendelegasikan angkanya ke Muse: 10 KT ≈ 2–3 jam main
+// aktif gratis (~100 KT/hari), jadi 10 referral = satu WD pertama
+// (100 KT) — layak dibagikan, tidak layak di-farming (tiap akun
+// palsu butuh akun Telegram sendiri + main sungguhan, dan anti-cheat
+// menandai >3 akun/IP). Tidak ada bonus untuk yang diundang di fase
+// ini (hanya pengundang). Satu-satunya tempat angka ini dipakai:
+// payReferralRewardIfPending di bawah.
+export const REFERRAL_REWARD_KT = 10;
 export const BASE_MAX_ENERGY = 30;
 export const BASE_REGEN_SECONDS = 240; // 1 energy per 4 minutes — deliberately slow (see economy note above)
 const REGEN_MIN_SECONDS = 60; // hard floor for the Reaktor upgrade curve (pre-Premium)
@@ -1156,6 +1167,137 @@ async function countPaidWithdrawals(db: Db, playerId: number): Promise<number> {
   return rows.length;
 }
 
+// --- Referral (2026-11-20) --------------------------------------------
+// Atribusi: pemain baru yang membuka Mini App pertama kali lewat
+// link `?start=ref_<telegramId>` dicatat sebagai undangan pemain
+// itu. Satu pemain yang diundang = satu baris, selamanya
+// (UNIQUE di referrals.referred_player_id) — atribusi ulang tidak
+// mungkin, dan pemain yang bergabung SEBELUM logika ini ada tidak
+// bisa diatribusikan mundur (start_param mereka sudah hilang).
+// Aturan: pengundang harus SUDAH jadi pemain, tidak bisa mengundang
+// diri sendiri. Kegagalan apa pun (termasuk tabel referrals yang
+// belum ada karena migrasi 0005 belum dijalankan) ditelan —
+// atribusi tidak pernah merusak login / getGameState.
+async function recordReferralAttribution(
+  db: Db,
+  newPlayerId: number,
+  newTelegramId: number,
+  startParam: string,
+): Promise<void> {
+  try {
+    const m = /^ref_(\d+)$/.exec(startParam.trim());
+    if (!m) return;
+    const referrerTelegramId = Number(m[1]);
+    if (!Number.isSafeInteger(referrerTelegramId) || referrerTelegramId <= 0)
+      return;
+    if (referrerTelegramId === newTelegramId) return; // tidak bisa mengundang diri sendiri
+    const referrer = await db
+      .select({ id: schema.player.id })
+      .from(schema.player)
+      .where(eq(schema.player.telegramId, referrerTelegramId))
+      .limit(1);
+    if (!referrer[0]) return; // pengundang harus sudah jadi pemain
+    await db
+      .insert(schema.referrals)
+      .values({
+        referrerPlayerId: referrer[0].id,
+        referredPlayerId: newPlayerId,
+        status: "pending",
+      })
+      .onConflictDoNothing({ target: schema.referrals.referredPlayerId });
+  } catch {
+    // Atribusi gagal = referral sekadar tidak tercatat; game tetap jalan.
+  }
+}
+
+/** Statistik referral untuk satu pemain (tab Komunitas): berapa
+ *  teman yang bergabung lewat link-nya, berapa yang sudah memberi
+ *  hadiah, dan total KT yang sudah diterima dari referral. */
+async function getReferralStats(
+  db: Db,
+  playerId: number,
+): Promise<{ invited: number; rewarded: number; earnedKt: number }> {
+  try {
+    const rows = await db
+      .select({ status: schema.referrals.status })
+      .from(schema.referrals)
+      .where(eq(schema.referrals.referrerPlayerId, playerId));
+    const rewarded = rows.filter((r) => r.status === "rewarded").length;
+    return {
+      invited: rows.length,
+      rewarded,
+      earnedKt: roundKt(rewarded * REFERRAL_REWARD_KT),
+    };
+  } catch {
+    // Tabel referrals belum ada (migrasi 0005 belum dijalankan):
+    // statistik tampil 0, game tetap jalan.
+    return { invited: 0, rewarded: 0, earnedKt: 0 };
+  }
+}
+
+/** Membayar hadiah referral saat pemain yang diundang menyelesaikan
+ *  ekspedisi PERTAMANYA: 10 KT masuk ke saldo PENGUNDANG (bukan ke
+ *  yang diundang), baris referral berubah pending → rewarded, dan
+ *  entri Log Ekonomi ditulis untuk pengundang. Hanya ekspedisi
+ *  pertama yang membayar — setelah status "rewarded", ekspedisi
+ *  berikutnya tidak menemukan baris pending lagi. Klaimnya atomik
+ *  (UPDATE ... WHERE status='pending' + cek baris yang kena), jadi
+ *  dua penyelesaian bersamaan tidak bisa membayar ganda. Pesan log
+ *  ditulis dalam bahasa pemain YANG DIUNDANG saat itu (bahasa
+ *  pengundang tidak disimpan per pemain — konvensi yang sama dengan
+ *  entri log yang ditulis admin). Kegagalan apa pun ditelan —
+ *  hadiah referral tidak pernah merusak penyelesaian ekspedisi. */
+async function payReferralRewardIfPending(
+  db: Db,
+  referredPlayerId: number,
+  lang: Lang,
+): Promise<void> {
+  try {
+    const pending = await db
+      .select()
+      .from(schema.referrals)
+      .where(
+        and(
+          eq(schema.referrals.referredPlayerId, referredPlayerId),
+          eq(schema.referrals.status, "pending"),
+        ),
+      )
+      .limit(1);
+    const ref = pending[0];
+    if (!ref) return;
+    const claimed = await db
+      .update(schema.referrals)
+      .set({ status: "rewarded", rewardedAt: new Date() })
+      .where(
+        and(
+          eq(schema.referrals.id, ref.id),
+          eq(schema.referrals.status, "pending"),
+        ),
+      )
+      .returning({ id: schema.referrals.id });
+    if (!claimed[0]) return; // sudah diklaim (balapan) — jangan bayar ganda
+    const referrer = await loadPlayerRowOrNull(db, ref.referrerPlayerId);
+    if (!referrer) return; // tidak mungkin terjadi (FK), tapi jangan rusak ekspedisi
+    await db
+      .update(schema.player)
+      .set({
+        ktBalance: roundKt(referrer.ktBalance + REFERRAL_REWARD_KT),
+        totalKtEarned: roundKt(referrer.totalKtEarned + REFERRAL_REWARD_KT),
+      })
+      .where(eq(schema.player.id, referrer.id));
+    await logActivity(
+      db,
+      referrer.id,
+      "referral_reward",
+      serverStrings(lang).logReferralReward(REFERRAL_REWARD_KT),
+      REFERRAL_REWARD_KT,
+    );
+  } catch {
+    // Hadiah gagal = referral sekadar tidak terbayar kali ini;
+    // ekspedisi si yang diundang tetap selesai seperti biasa.
+  }
+}
+
 async function canClaimDailyBonus(db: Db, playerId: number): Promise<boolean> {
   const rows = await db
     .select()
@@ -1352,6 +1494,14 @@ export const gameActions = {
           cooldownSeconds: z.number(),
           cooldownRemainingSec: z.number(),
         }),
+        // Referral: statistik pengundang untuk tab Komunitas — berapa
+        // teman yang bergabung lewat link-nya, berapa yang sudah
+        // memberi hadiah, dan total KT yang sudah diterima.
+        referrals: z.object({
+          invited: z.number(),
+          rewarded: z.number(),
+          earnedKt: z.number(),
+        }),
       }),
       maps: z.array(
         z.object({
@@ -1498,7 +1648,32 @@ export const gameActions = {
       const db = getDb();
       // i18n: request language — user-facing strings only.
       const lang = session.lang;
+      // Referral: atribusi hanya saat getGameState PERTAMA yang
+      // membuat baris pemain baru — pemain lama yang membuka lagi
+      // dengan start_param tidak pernah diatribusikan ulang (dan
+      // UNIQUE di referrals membuat atribusi ganda mustahil).
+      let isNewPlayer = false;
+      if (session.telegramId !== null) {
+        const existing = await db
+          .select({ id: schema.player.id })
+          .from(schema.player)
+          .where(eq(schema.player.telegramId, session.telegramId))
+          .limit(1);
+        isNewPlayer = existing.length === 0;
+      }
       const p = await loadPlayer(db, session);
+      if (
+        isNewPlayer &&
+        session.telegramId !== null &&
+        session.startParam
+      ) {
+        await recordReferralAttribution(
+          db,
+          p.id,
+          session.telegramId,
+          session.startParam,
+        );
+      }
       const levels = await loadLevels(db, p.id);
       const premium = isPremium(p);
       const exp = parseExpedition(p.expedition) ?? generateExpedition(p.currentZone, levels);
@@ -1626,6 +1801,7 @@ export const gameActions = {
             cooldownSeconds: AD_COOLDOWN_SECONDS,
             cooldownRemainingSec: adStats.cooldownRemainingSec,
           },
+          referrals: await getReferralStats(db, p.id),
         },
         maps: MAPS.map((m, i) => ({
           index: i,
@@ -2037,6 +2213,11 @@ export const gameActions = {
         S.logExpedition(localizeExpeditionName(exp.name, lang), bonus, p.layer + 1, localizeExpeditionName(newExp.name, lang)),
         bonus,
       );
+      // Referral: ekspedisi pertama pemain yang diundang membayar
+      // hadiah 10 KT ke pengundangnya (sekali saja — baris referral
+      // berubah pending → rewarded; ekspedisi berikutnya tidak
+      // membayar lagi). Tidak pernah merusak penyelesaian ekspedisi.
+      await payReferralRewardIfPending(db, p.id, lang);
       return { ok: true, error: null, layer: p.layer + 1, bonusKt: bonus, ktBalance: newBalance };
     },
   }),

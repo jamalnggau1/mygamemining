@@ -138,6 +138,20 @@ CREATE TABLE IF NOT EXISTS player_ip (
   PRIMARY KEY (player_id, ip)
 );
 --> statement-breakpoint
+-- Referral (2026-11-20): satu baris per pemain yang diundang — siapa
+-- pengundangnya, siapa yang diundang, dan apakah hadiah 10 KT sudah
+-- dibayarkan. UNIQUE di referred_player_id: satu pemain yang
+-- diundang hanya bisa punya satu pengundang, selamanya.
+CREATE TABLE IF NOT EXISTS referrals (
+  id BIGSERIAL PRIMARY KEY,
+  referrer_player_id INTEGER NOT NULL REFERENCES player (id),
+  referred_player_id INTEGER NOT NULL REFERENCES player (id) UNIQUE,
+  status TEXT NOT NULL DEFAULT 'pending'
+    CHECK (status IN ('pending', 'rewarded')),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  rewarded_at TIMESTAMPTZ
+);
+--> statement-breakpoint
 -- Indeks untuk pola query game: antrean WD & pesanan premium difilter
 -- per status (Kendali pemilik melihat semua pemain) dan per pemain,
 -- log aktivitas dibaca terbaru-dulu per pemain.
@@ -161,3 +175,7 @@ CREATE INDEX IF NOT EXISTS activity_player_created_idx ON activity (player_id, c
 CREATE INDEX IF NOT EXISTS security_flags_player_idx ON security_flags (player_id, created_at DESC);
 --> statement-breakpoint
 CREATE INDEX IF NOT EXISTS player_ip_ip_idx ON player_ip (ip, last_seen_at DESC);
+--> statement-breakpoint
+-- Referral: statistik pengundang (berapa teman bergabung) dibaca
+-- per pengundang, bukan per pemain yang diundang.
+CREATE INDEX IF NOT EXISTS referrals_referrer_idx ON referrals (referrer_player_id);
