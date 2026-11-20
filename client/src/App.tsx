@@ -363,6 +363,16 @@ export function MapIcon({ size = 18 }: { size?: number }) {
     </IconShell>
   );
 }
+export function UsersIcon({ size = 18 }: { size?: number }) {
+  return (
+    <IconShell size={size}>
+      <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+      <circle cx="9" cy="7" r="4" />
+      <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+      <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+    </IconShell>
+  );
+}
 export function CrownIcon({ size = 18 }: { size?: number }) {
   return (
     <IconShell size={size}>
@@ -517,7 +527,7 @@ function ConfettiLayer({ burst }: { burst: Burst }) {
   );
 }
 
-type Tab = "tambang" | "peta" | "pasar" | "upgrade" | "wd" | "admin";
+type Tab = "tambang" | "peta" | "pasar" | "upgrade" | "wd" | "komunitas" | "admin";
 
 export function App() {
   // Subscribe to the language context so the whole game re-renders
@@ -664,6 +674,7 @@ export function App() {
     { id: "pasar", label: t("tabMarket"), icon: <SatelliteIcon size={16} />, badge: totalOreQty > 0 ? totalOreQty : undefined },
     { id: "upgrade", label: t("tabHangar"), icon: <WrenchIcon size={16} /> },
     { id: "wd", label: t("tabWd"), icon: <GemIcon size={16} /> },
+    { id: "komunitas", label: t("tabCommunity"), icon: <UsersIcon size={16} /> },
   ];
   // Tab Kendali hanya untuk pemilik — pemain biasa tidak pernah
   // melihatnya (server tetap yang menegakkan: aksi Kendali ditolak
@@ -899,6 +910,7 @@ export function App() {
         )}
 
         {tab === "wd" && (<WdTab data={data} onCancel={(id) => cancelWd.mutate(id)} cancelling={cancelWd.isPending} onDone={(ok, err, good) => { showResult(ok, err, good); refresh(); }} />)}
+        {tab === "komunitas" && (<KomunitasTab userId={sessionInfo.userId} />)}
         {tab === "admin" && p.isAdmin && (<AdminTab data={data} onDone={(ok, err, good) => { showResult(ok, err, good); refresh(); }} />)}
         </div>
       </main>
@@ -1214,4 +1226,112 @@ function AdminWdCard({ wd, onDone }: { wd: Wd; onDone: (ok: boolean, error: stri
   const [note, setNote] = useState(""); const [txRef, setTxRef] = useState("");
   const act = useMutation({ mutationFn: async (action: "approve" | "reject" | "pay") => await api.updateWithdrawal({ wdId: wd.id, action, adminNote: note.trim() ? note.trim() : undefined, txRef: txRef.trim() ? txRef.trim() : undefined }), onSuccess: (r, action) => { const good = action === "approve" ? t("wdApproveDone", { id: wd.id, usdt: fmt(wd.amountUsdt) }) : action === "pay" ? t("wdPayDone", { id: wd.id }) : t("wdRejectDone", { id: wd.id }); onDone(r.ok, r.error, good); } });
   return (<div className="rounded-2xl bg-[var(--surface)] border border-[var(--border)] p-4"><div className="flex items-center justify-between gap-2"><p className="font-display text-base">#{wd.id} · {fmt(wd.amountUsdt)} USDT</p><span className={`rounded-full border px-2 py-0.5 text-[11px] font-bold ${statusClass(wd.status)}`}>{statusLabel(wd.status)}</span></div>{wd.needsReview && (<p className="mt-2 rounded-lg border border-amber-400/50 bg-amber-400/10 px-3 py-2 text-xs font-bold text-amber-200">{t("wdNeedsReview")}</p>)}<p className="mt-1 text-sm text-[var(--dim)]">{t("wdLockedLine", { kt: fmt(wd.amountKt), date: fmtDateTime(wd.createdAt) })}</p><p className="mt-2 break-all rounded-lg bg-[var(--surface2)] px-3 py-2 font-mono text-xs">{wd.walletAddress}</p>{wd.adminNote && <p className="mt-2 text-sm">{t("wdAdminNote", { note: wd.adminNote })}</p>}{wd.txRef && <p className="mt-1 break-all font-mono text-xs text-[var(--dim)]">{t("wdTxRefLabel", { ref: wd.txRef })}</p>}{(wd.status === "pending" || wd.status === "approved") && (<div className="mt-3 space-y-2"><div><label htmlFor={`note-${wd.id}`} className="text-xs font-bold">{t("wdNoteLabel")}</label><input id={`note-${wd.id}`} value={note} onChange={(e) => setNote(e.target.value)} placeholder={t("wdNotePlaceholder")} className="mt-1 w-full rounded-xl border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-sm" /></div>{wd.status === "approved" && (<div><label htmlFor={`tx-${wd.id}`} className="text-xs font-bold">{t("wdTxRefLabel2")}</label><input id={`tx-${wd.id}`} value={txRef} onChange={(e) => setTxRef(e.target.value)} placeholder={t("wdTxRefPlaceholder")} className="mt-1 w-full rounded-xl border border-[var(--border)] bg-[var(--bg)] px-3 py-2 font-mono text-sm" /></div>)}<div className="flex flex-wrap gap-2">{wd.status === "pending" && (<button type="button" onClick={() => act.mutate("approve")} disabled={act.isPending} aria-label={t("wdApproveAria", { id: wd.id })} className="btn-press rounded-xl bg-sky-600 px-4 py-2 font-bold text-white disabled:opacity-40">{t("wdApprove")}</button>)}{wd.status === "approved" && (<button type="button" onClick={() => act.mutate("pay")} disabled={act.isPending} aria-label={t("wdPayAria", { id: wd.id })} className="btn-press rounded-xl bg-emerald-600 px-4 py-2 font-bold text-white disabled:opacity-40">{t("wdMarkPaid")}</button>)}<button type="button" onClick={() => act.mutate("reject")} disabled={act.isPending} aria-label={t("wdRejectAria", { id: wd.id })} className="btn-press rounded-xl border border-red-400 px-4 py-2 font-bold text-red-300 disabled:opacity-40">{t("wdRejectRefund")}</button></div></div>)}</div>);
+}
+
+// --- Tab Komunitas (2026-11-20) ---------------------------------------
+// Untuk SEMUA pemain (Kendali tetap admin-only). Isinya: gabung channel
+// resmi, gabung grup diskusi (segera hadir — belum ada link grup), dan
+// referral. Referral di fase ini HANYA menampilkan link + hadiah:
+// pelacakan/atribusi/pemberian KT otomatis adalah fase berikutnya
+// (saat pemain membuka Mini App lewat link referral, Telegram
+// menaruh payload di initDataUnsafe.start_param — fase berikutnya
+// membacanya di server untuk atribusi).
+
+/** Channel Telegram resmi ASTRA MINING. */
+const CHANNEL_URL = "https://t.me/astra_mining_gram";
+/** Hadiah referral per teman yang mulai bermain. */
+const REFERRAL_REWARD_KT = 10;
+
+/** Buka link t.me di dalam Telegram bila tersedia, kalau tidak di tab
+ *  baru. openTelegramLink menjaga pemain tetap di dalam Telegram. */
+function openExternalLink(url: string) {
+  try {
+    const wa = window.Telegram?.WebApp;
+    if (wa && typeof wa.openTelegramLink === "function") {
+      wa.openTelegramLink(url);
+      return;
+    }
+  } catch {
+    // Jatuh ke window.open di bawah.
+  }
+  window.open(url, "_blank", "noopener");
+}
+
+function KomunitasTab({ userId }: { userId: number | null }) {
+  const [copied, setCopied] = useState(false);
+  // Link referral: bot + start payload ref_<telegramId>. Tanpa
+  // userId (pemain web/legacy) tidak ada link — minta buka lewat
+  // Telegram.
+  const refLink = userId != null ? `https://t.me/astra_mining_bot?start=ref_${userId}` : null;
+  const copyLink = async () => {
+    if (!refLink) return;
+    let ok = false;
+    try {
+      await navigator.clipboard.writeText(refLink);
+      ok = true;
+    } catch {
+      // Fallback untuk browser lama / WebView tanpa izin clipboard.
+      try {
+        const ta = document.createElement("textarea");
+        ta.value = refLink;
+        ta.style.position = "fixed";
+        ta.style.opacity = "0";
+        document.body.appendChild(ta);
+        ta.select();
+        ok = document.execCommand("copy");
+        document.body.removeChild(ta);
+      } catch {
+        ok = false;
+      }
+    }
+    if (ok) {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  };
+  return (
+    <section className="mt-4 space-y-3">
+      <div className="rounded-2xl bg-[var(--surface)] border border-[var(--border)] p-4">
+        <div className="flex items-start gap-3">
+          <span aria-hidden="true" className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-[var(--border)] bg-[var(--surface2)]"><SatelliteIcon size={22} /></span>
+          <div>
+            <h3 className="font-display text-sm">{t("commChannelTitle")}</h3>
+            <p className="mt-1 text-sm text-[var(--dim)]">{t("commChannelDesc")}</p>
+          </div>
+        </div>
+        <button type="button" onClick={() => openExternalLink(CHANNEL_URL)} aria-label={t("commChannelAria")} className="btn-press mt-3 w-full rounded-xl bg-cyan-400 px-4 py-2.5 font-bold text-black">{t("commChannelBtn")}</button>
+      </div>
+      <div className="rounded-2xl bg-[var(--surface)] border border-[var(--border)] p-4">
+        <div className="flex items-start gap-3">
+          <span aria-hidden="true" className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-[var(--border)] bg-[var(--surface2)]"><UsersIcon size={22} /></span>
+          <div>
+            <h3 className="font-display text-sm">{t("commGroupTitle")}</h3>
+            <p className="mt-1 text-sm text-[var(--dim)]">{t("commGroupDesc")}</p>
+          </div>
+        </div>
+        <button type="button" disabled aria-label={t("commGroupAria")} className="mt-3 w-full rounded-xl border border-[var(--border)] bg-[var(--surface2)] px-4 py-2.5 font-bold text-[var(--dim)] disabled:opacity-60">{t("commGroupSoon")}</button>
+      </div>
+      <div className="rounded-2xl bg-[var(--surface)] border border-[var(--border)] p-4">
+        <div className="flex items-start gap-3">
+          <span aria-hidden="true" className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-[var(--border)] bg-[var(--surface2)]"><GiftIcon size={22} /></span>
+          <div>
+            <h3 className="font-display text-sm">{t("commRefTitle")}</h3>
+            <p className="mt-1 text-sm text-[var(--dim)]">{t("commRefDesc", { kt: fmt(REFERRAL_REWARD_KT) })}</p>
+          </div>
+        </div>
+        {refLink ? (
+          <div className="mt-3">
+            <label htmlFor="ref-link" className="text-xs font-bold">{t("commRefLinkLabel")}</label>
+            <div className="mt-1 flex gap-2">
+              <p id="ref-link" className="min-w-0 flex-1 break-all rounded-xl bg-[var(--surface2)] px-3 py-2 font-mono text-xs">{refLink}</p>
+              <button type="button" onClick={copyLink} aria-label={t("commRefCopyAria")} className="btn-press shrink-0 rounded-xl bg-cyan-400 px-4 py-2 font-bold text-black">{copied ? t("commRefCopied") : t("commRefCopy")}</button>
+            </div>
+          </div>
+        ) : (
+          <p className="mt-3 text-sm text-[var(--dim)]">{t("commRefNoTelegram")}</p>
+        )}
+        <p className="mt-2 text-xs text-[var(--dim)]">{t("commRefSoon")}</p>
+      </div>
+    </section>
+  );
 }

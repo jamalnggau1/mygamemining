@@ -1521,3 +1521,113 @@ each) with matching `{var}` placeholders (one documented
 exception: `veinQty` — English pluralises "unit{s}", Indonesian
 has no plural suffix). NOT verified live.
 NOT pushed to GitHub.
+
+## Blank hitam: getGameState {ok:false} + token bot baru (2026-11-19, fixed + pushed 92910e66)
+
+### What the user saw
+Mini App opened from the NEW bot (astra_mining_bot) showed a blank
+black screen. DevTools Network showed the `/api/game` POST returning
+HTTP 200 with a ~55-byte body — a business error
+(`{ok:false, error:"..."}`), not game state.
+
+### Root cause (two parts)
+1. **BOT_TOKEN is still the OLD bot's token.** The new bot signs
+   initData with its own token; the server validates with the token
+   in Vercel env, so every login from the new bot is rejected
+   ("Data login Telegram tidak valid."). The owner must update
+   BOT_TOKEN in Vercel env to the new bot's token (BotFather →
+   /mybots → API Token) and redeploy. ADMIN_TELEGRAM_ID does not
+   change (it is the owner's Telegram user id, not the bot's).
+   The Web App URL in BotFather must also be exactly
+   `https://mygamemining.vercel.app` (production) — the user had set
+   a preview deployment URL (`mygamemining-1z7cr4rbj-...`), which
+   changes on every deploy. Preview deployments otherwise serve the
+   same code and their API was verified healthy (health ok,
+   getGameState ok without initData, initData validation runs).
+2. **Client bug: an {ok:false} game-state response blanked the app.**
+   `callAction` only throws on a non-2xx HTTP status, but business
+   failures arrive as HTTP 200 `{ok:false, error}` by design. The
+   initial `getGameState` query received that object as if it were
+   game state, App rendered `data.player` (undefined) and the render
+   threw → React unmounted → blank black screen, instead of the
+   connection-lost screen. Mutations were unaffected (their onSuccess
+   handlers already check `r.ok` and show the error in a banner).
+
+### Fix (client/src/api.ts)
+`api.getGameState` now throws when the response has `ok === false`
+(checked via a cast — the handler's type is the success shape only),
+so React Query routes it to `state.error` and the connection-lost
+screen with a retry button is shown. The 5s refetchInterval keeps
+retrying, so the game recovers automatically once the server accepts
+the login again. Mutations unchanged.
+
+### Verified locally (2026-11-19)
+`bun run typecheck` 0 errors (strict AND Vercel-style), `bun run
+build:client` OK (`main-YIHXJ2X3.js`), full suite 69/69 pass.
+NOT verified live (needs the owner to update BOT_TOKEN + redeploy,
+then open the Mini App from the new bot).
+
+## Tab Komunitas — channel, grup, referral (2026-11-20, implemented, NOT yet pushed)
+
+New tab for ALL players (Kendali stays admin-only). Pure client UI +
+i18n — no server changes, no new actions, no DB migration, no
+economy changes.
+
+### Placement
+- `type Tab` gains `"komunitas"`; tab entry after WD, before the
+  admin-only Kendali push: Tambang → Peta → Pasar → Hanggar → WD →
+  **Komunitas** → Kendali (admin only). Bottom nav stays a 3-column
+  grid: 6 tabs = clean 3×2 for non-admin; admin gets 7 (wraps).
+- Label `tabCommunity`: "Komunitas" / "Community". Icon: new
+  `UsersIcon` SVG (Feather "users" paths) matching the existing
+  `IconShell` style.
+
+### Cards (KomunitasTab, client/src/App.tsx)
+1. **Channel Resmi / Official Channel** — SatelliteIcon. Button
+   "Gabung Channel" / "Join Channel" opens
+   `https://t.me/astra_mining_gram` (live). Opening uses
+   `window.Telegram.WebApp.openTelegramLink(url)` inside Telegram
+   (added to the minimal typing in `client/src/globals.d.ts`),
+   else `window.open(url, "_blank", "noopener")`.
+2. **Grup Diskusi / Discussion Group** — UsersIcon. No group link
+   yet (owner will provide it later): the card shows a DISABLED
+   "Segera hadir" / "Coming soon" button, no dead link.
+3. **Referral** — GiftIcon. "Undang Teman, Dapat KT" / "Invite
+   Friends, Earn KT": reward **10 KT per invited friend who starts
+   playing** (set by Muse, owner delegated the amount: 10 KT ≈
+   2–3 hours of active free play at ~100 KT/day, so 10 referrals =
+   one 100 KT first WD — worth sharing, not farmable; each fake
+   account needs its own Telegram account + real play, and
+   anti-cheat flags >3 accounts/IP). Shows the player's referral
+   link with a Copy button (`navigator.clipboard.writeText` with a
+   textarea + `execCommand("copy")` fallback, "Disalin!" /
+   "Copied!" feedback for 2s), plus the honest note that referral
+   tracking and automatic rewards are coming soon. With no Telegram
+   userId (web/legacy player) the card shows "Buka lewat Telegram
+   untuk mendapatkan link referralmu" instead of a link.
+
+### Referral link format + later phase
+- Link: `https://t.me/astra_mining_bot?start=ref_<telegramId>`,
+  built from `getTelegramSessionInfo().userId`. When a player opens
+  the Mini App through such a link, Telegram puts the payload in
+  `initDataUnsafe.start_param` — the LATER logic phase reads it
+  server-side for attribution, then tracks referred players and
+  credits the 10 KT automatically. This task deliberately builds
+  NO attribution, tracking, or crediting.
+
+### i18n
+15 new keys (`tabCommunity`, `commChannel*`, `commGroup*`,
+`commRef*`) in `client/src/i18n.ts`, id + en, symmetric with
+matching `{kt}` placeholders. No hardcoded UI strings in the
+component.
+
+### Verified locally (2026-11-20)
+`bun run typecheck` 0 errors (strict AND Vercel-style
+`--strictNullChecks false`), `bun run build:client` OK
+(`main-NEHA2J7M.js`). Full test suite attempted once: 17 pass /
+52 fail — ALL 52 failures are the one DB error (local Postgres
+test DB unavailable after the overnight VM restart; PostgreSQL not
+installed yet — the parent agent is restoring it separately). The
+DB-independent i18n dictionary tests pass 3/3 (key symmetry,
+non-empty values, placeholder matching), covering the 15 new keys.
+NOT pushed to GitHub; NOT verified live.
