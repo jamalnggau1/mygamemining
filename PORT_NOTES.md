@@ -2017,3 +2017,175 @@ for this run (another VM restart: /tmp wiped, cluster down,
 `pg_ctlcluster 16 main start`, role/database recreated,
 `init.sql` + migrations 0001–0006 applied; PostgreSQL itself was
 NOT reinstalled). No Neon migration needed for the cancel fix.
+
+## GRAM (TON Connect) Premium — pembayaran kedua (2026-11-20, implemented, NOT yet pushed)
+
+Owner asked for a second Premium payment method via TON (he
+corrected himself: TON is now called GRAM) and explicitly rejected
+pay-by-address + paste-tx-hash as too fiddly — the player must
+never copy a hash. So: **TON Connect (wallet connect)** — the
+player taps "Beli dengan GRAM", the wallet opens, they approve
+ONCE, and Premium activates automatically; the wallet returns the
+proof itself.
+
+### Prices (FIXED amounts, not USD-pegged)
+
+- Standard: **4 GRAM / 7 days** (4.000.000.000 nanoTON)
+- Pro: **13 GRAM / 30 days** (13.000.000.000 nanoTON, dual drill)
+- At ~$1,02/GRAM ≈ $4,08 / $13,26 — slightly above the Stars USD
+  value; the owner keeps 100% instantly (no Fragment 21-day hold,
+  no 1.000 minimum). The player pays a tiny TON network fee on top
+  (~0,01 GRAM). **GRAM's USD price moves, so these fixed amounts
+  need a periodic check** — there is no live rate API for the
+  Stars→USD rate either (it is a fixed Telegram config value);
+  only the GRAM price moves.
+- Stars prices UNCHANGED: Standard 300, Pro 1000.
+
+### Player flow (no hash copying)
+
+1. Hanggar → Premium Pass → per plan TWO buttons: "Beli dengan
+   Stars" (amber, existing flow) and "Beli dengan GRAM" (teal).
+2. "Beli dengan GRAM" → server `createGramOrder({plan})` creates
+   ONE pending `premium_orders` row (method "gram", gram_amount)
+   and returns `{ orderId, receiverAddress, amountNanoTon }`.
+3. Wallet not connected → TON Connect connect UI opens (wallet
+   list / QR in the Mini App). Once connected, `sendTransaction`
+   sends ONE payment to the owner's wallet (destination +
+   amount only, no extra payload) — the player approves once.
+4. The wallet returns a BOC → the client hashes its root cell
+   (`@ton/core` `Cell.fromBoc`, msg_hash) and calls
+   `confirmGramPayment({ orderId, msgHash, senderAddress })`.
+5. The server verifies on-chain (below) and activates Premium
+   automatically (same extension rule as Stars: extends from the
+   current `premium_until` if still active). On "tx not indexed
+   yet" the server returns `retryable: true` and the client
+   retries every 2s, up to 5×.
+6. Player cancels/rejects in the wallet → the client calls
+   `cancelPremiumOrder` for the just-created order (same
+   auto-release behaviour as Stars); the buy buttons return at
+   once. The pending-order card also has a "Batalkan pesanan"
+   button for players whose payment callback never fired.
+7. Outside Telegram (plain browser) the GRAM buttons are hidden
+   behind the "buka lewat Telegram" note — TON Connect needs the
+   Mini App + a TON wallet (Tonkeeper, etc.).
+
+### On-chain verification (server, api/_lib/ton.ts)
+
+- API: **tonapi.io, no API key** (1 RPS unauthenticated — Premium
+  purchase volume is far below that). Endpoint:
+  `GET /v2/blockchain/messages/{msg_hash}/transaction`.
+- Checks, in order: the transaction EXISTS (404 → "not_found",
+  retried internally up to 4× with 2s sleeps, ±8s total — under
+  the 30s `maxDuration` of `api/game.ts`); destination (raw
+  address) == owner's wallet; sender (raw address) == the
+  connected wallet; amount >= plan price (overpaying is fine —
+  the player pays the network fee on top); the returned tx hash
+  was never used before (DB check + partial UNIQUE index on
+  `tx_hash` + atomic pending→paid claim — a replayed confirm
+  finds the order already paid and does nothing).
+- Failures return clean translated errors (no raw API bodies):
+  not-found → retryable, network/bad-response → retryable,
+  wrong recipient/amount/sender/reused → permanent.
+- Test seam: `setTonFetchForTests` (same pattern as stars.ts
+  `setBotFetchForTests`).
+
+### Receiver address (PUBLIC — safe in code)
+
+`UQCFBLKDhmTiHhbJu1YWN0I4FRgCwk3teZjy0ByeHOhOD0tf`
+(raw `0:8504b2838664e21e16c9bb5616374238151802c24ded7998f2d01c9e1ce84e0f`,
+verified live 2026-11-20: active wallet_v4r2, ~1,85 GRAM).
+Constant `GRAM_RECEIVER_ADDRESS` in `api/_lib/ton.ts` — change it
+there if the owner moves wallet. NEVER a seed phrase / private
+key — neither is ever asked for or stored. The address is also
+exposed to the client via `getGameState.player.premium.gramReceiverAddress`
+so the client never hardcodes it; `getGameState` also carries
+`gram` + `gramNanoTon` per plan (same as Stars prices).
+
+### TON Connect wiring
+
+- `client/public/tonconnect-manifest.json` — name "ASTRA MINING",
+  url `https://mygamemining.vercel.app`,
+  iconUrl `https://mygamemining.vercel.app/icon.webp` (STABLE —
+  not a hashed build asset). Served at the site root:
+  `https://mygamemining.vercel.app/tonconnect-manifest.json`.
+- `client/build.mjs` now copies `client/public/tonconnect-manifest.json`
+  and the repo-root `icon.webp` into `client/dist/` verbatim
+  (step 4, after index.html) — verified in dist after build.
+- `client/src/tonconnect.ts` — `TonConnectUI` with that
+  manifestUrl + `actionsConfiguration.twaReturnUrl =
+  https://t.me/astra_mining_bot/astra_mining` (returns the player
+  to the Mini App after approving in the wallet; TWA-to-TWA
+  needs the explicit link). Helpers: `isTonConnectAvailable`
+  (Telegram WebApp present), `connectWallet`,
+  `sendGramPayment` (validUntil +5 min, returns msgHash +
+  senderAddress), `disconnectWallet`.
+- `@tonconnect/ui` 5.0.3 + `@ton/core` 0.63.1 (bun add) and the
+  `buffer` 6.0.3 polyfill: `@ton/core` uses the global `Buffer`
+  in several paths and browsers don't provide it — `client/src/main.tsx`
+  sets `globalThis.Buffer` once at startup (without this,
+  `Cell.fromBoc()` throws "Buffer is not defined" in the browser).
+  Note: @tonconnect/ui v5 moved `twaReturnUrl` under
+  `actionsConfiguration` — `uiOptions` is a setter, not a
+  constructor option (first build failed typecheck on this).
+
+### Actions + rename
+
+- NEW `createGramOrder` / `confirmGramPayment` in
+  `api/_lib/game.ts` (Telegram sessions only — same web-player
+  refusal as `createStarsInvoice`; one-pending-order rule shared
+  across BOTH methods: a pending Stars order blocks a GRAM order
+  and vice versa).
+- RENAMED `cancelStarsOrder` → **`cancelPremiumOrder`** (old name
+  removed; client + `stars.test.ts` updated). Same rules: only
+  the order's own player, only while pending, deletes the row.
+  Race-safe against BOTH payment paths (webhook atomic
+  pending→paid claim AND `confirmGramPayment` atomic claim).
+- `activatePremiumOrder` / `confirmPremiumOrder` / `rejectPremiumOrder`
+  log lines are now method-aware (GRAM orders log GRAM amounts,
+  Stars orders log Stars). Kendali pending/past order cards show
+  the method amount (GRAM or Stars) + a GRAM-specific admin note
+  ("cek hash transaksi di blockchain sebelum konfirmasi").
+- i18n: all new strings in `client/src/i18n.ts` AND
+  `api/_lib/i18n.ts`, id + en symmetric (new keys:
+  `errGram*` ×10, `logPremium*Gram` ×4 server-side;
+  `planGram`, `orderPlanAriaGram`, `premiumBuyTitleGram`,
+  `premiumGram*` ×9, `pendingOrderTitleGram/DescGram`,
+  `grantOrderNoteGram` client-side; `premiumHint` now mentions
+  both methods).
+
+### Migration — ⚠️ RUN BEFORE PUSHING
+
+- NEW `deploy/neon/migration-0007-gram-orders.sql` (+ `init.sql` +
+  `schema.pg.ts`): `premium_orders.method TEXT NOT NULL DEFAULT
+  'stars'`, `gram_amount REAL` (nullable), `tx_hash TEXT`
+  (nullable) + partial UNIQUE index
+  `premium_orders_tx_hash_unique ON premium_orders (tx_hash)
+  WHERE tx_hash IS NOT NULL`. Idempotent (IF NOT EXISTS).
+- **migration-0007 MUST run in Neon BEFORE this code is pushed.**
+  Drizzle selects the new columns on every `getGameState`, so
+  without them the live game breaks (column does not exist) —
+  same sequencing as migration-0006. The owner pastes migrations
+  himself; do NOT push until he confirms 0007 ran.
+- The webhook/Stars code works unchanged with the new columns
+  present (old rows get `method='stars'`, null gram/tx).
+
+### Verified locally (2026-11-20)
+
+`bun run typecheck` 0 errors (strict AND Vercel-style
+`--strictNullChecks false`), `bun run build:client` OK
+(bundle `main-LNIO3NNE.js`, `tonconnect-manifest.json` +
+`icon.webp` confirmed in `client/dist/`). Full suite: **107/107
+tests pass, 2.804 expects** (92 before + 15 new GRAM tests in
+`/tmp/smoke-test/gram.test.ts`: order creation amounts +
+receiver address per plan, getGameState plans/receiver, web
+refusal, valid-tx activation + tx_hash storage, overpay OK,
+wrong amount/recipient/sender rejected, reused tx hash
+rejected, tx-not-found retryable, cancel frees GRAM+Stars,
+Stars↔GRAM mutual exclusion, confirmGramPayment on a Stars
+order rejected, double-confirm rejected, manifest JSON valid
+with the right url/name/iconUrl; `stars.test.ts` cancel tests
+renamed to `cancelPremiumOrder`). Mirrored to
+`~/workspace/smoke-test/`. NOT yet pushed — waiting on
+migration-0007 in Neon. Live test note: there is NO sandbox —
+a live end-to-end test costs real GRAM (4 for Standard) and
+needs a real TON wallet with funds.

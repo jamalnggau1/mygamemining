@@ -150,6 +150,15 @@ export interface ServerStrings {
   errStarsInvoiceFail: string;
   errStarsWebhookFail: string;
   starsPrecheckoutInvalid: string;
+  errGramNeedTelegram: string;
+  errGramOrderFail: string;
+  errGramOrderInvalid: string;
+  errGramTxNotFound: string;
+  errGramTxWrongRecipient: string;
+  errGramTxWrongAmount: string;
+  errGramTxWrongSender: string;
+  errGramTxReused: string;
+  errGramVerifyFail: string;
   errPremiumOrderNotFound: string;
   errOrderAlreadyProcessed: string;
   errOrderOwnerNotFound: string;
@@ -203,6 +212,15 @@ export interface ServerStrings {
   ) => string;
   logPremiumReject: (orderId: number, stars: number) => string;
   logPremiumCancel: (orderId: number, stars: number) => string;
+  logPremiumOrderGram: (label: string, gram: number) => string;
+  logPremiumConfirmGram: (
+    gram: number,
+    tierLabel: string,
+    days: number,
+    until: string,
+  ) => string;
+  logPremiumRejectGram: (orderId: number, gram: number) => string;
+  logPremiumCancelGram: (orderId: number, gram: number) => string;
   logPremiumGrant: (tierLabel: string, days: number, until: string) => string;
   logDailyBonus: (amount: number) => string;
   logAd: (amount: number) => string;
@@ -282,6 +300,15 @@ const id: ServerStrings = {
   errStarsInvoiceFail: "Gagal membuat pembayaran Stars, coba lagi.",
   errStarsWebhookFail: "Gagal menghubungkan webhook Stars, coba lagi.",
   starsPrecheckoutInvalid: "Pesanan Premium tidak valid.",
+  errGramNeedTelegram: "Premium GRAM hanya bisa dibeli dari dalam Telegram — buka game lewat Mini App Telegram.",
+  errGramOrderFail: "Gagal membuat pesanan GRAM, coba lagi.",
+  errGramOrderInvalid: "Pesanan ini bukan pesanan GRAM.",
+  errGramTxNotFound: "Transaksi GRAM belum ditemukan di blockchain — masih diproses, coba lagi sebentar.",
+  errGramTxWrongRecipient: "Transaksi ini tidak dikirim ke dompet pemilik — pembayaran tidak cocok dengan pesanan.",
+  errGramTxWrongAmount: "Jumlah GRAM yang dikirim kurang dari harga paket.",
+  errGramTxWrongSender: "Transaksi ini tidak berasal dari dompet yang terhubung.",
+  errGramTxReused: "Transaksi GRAM ini sudah dipakai untuk pesanan lain.",
+  errGramVerifyFail: "Gagal memeriksa transaksi GRAM, coba lagi.",
   errPremiumOrderNotFound: "Pesanan Premium tidak ditemukan.",
   errOrderAlreadyProcessed: "Pesanan ini sudah diproses.",
   errOrderOwnerNotFound: "Pemain pemilik pesanan tidak ditemukan.",
@@ -340,6 +367,14 @@ const id: ServerStrings = {
     `Pesanan Premium #${orderId} (${stars} Stars) ditolak pemilik — pembayaran tidak terkonfirmasi.`,
   logPremiumCancel: (orderId, stars) =>
     `Pesanan Premium #${orderId} (${stars} Stars) dibatalkan pemain — tidak ada pembayaran, pesanan dihapus.`,
+  logPremiumOrderGram: (label, gram) =>
+    `Pesanan Premium ${label} dibuat (${gram} GRAM) — menunggu pembayaran & verifikasi blockchain.`,
+  logPremiumConfirmGram: (gram, tierLabel, days, until) =>
+    `Pembayaran ${gram} GRAM terkonfirmasi di blockchain — Premium ${tierLabel} ${days} hari aktif sampai ${until}.`,
+  logPremiumRejectGram: (orderId, gram) =>
+    `Pesanan Premium #${orderId} (${gram} GRAM) ditolak pemilik — pembayaran tidak terkonfirmasi.`,
+  logPremiumCancelGram: (orderId, gram) =>
+    `Pesanan Premium #${orderId} (${gram} GRAM) dibatalkan pemain — tidak ada pembayaran, pesanan dihapus.`,
   logPremiumGrant: (tierLabel, days, until) =>
     `Pemilik mengaktifkan Premium ${tierLabel} ${days} hari (pembayaran di luar game) — aktif sampai ${until}.`,
   logDailyBonus: (amount) =>
@@ -431,6 +466,15 @@ const en: ServerStrings = {
   errStarsInvoiceFail: "Could not start the Stars payment, please try again.",
   errStarsWebhookFail: "Could not connect the Stars webhook, please try again.",
   starsPrecheckoutInvalid: "Invalid Premium order.",
+  errGramNeedTelegram: "GRAM Premium can only be bought inside Telegram — open the game via the Telegram Mini App.",
+  errGramOrderFail: "Failed to create the GRAM order, please try again.",
+  errGramOrderInvalid: "This is not a GRAM order.",
+  errGramTxNotFound: "The GRAM transaction was not found on the blockchain yet — still processing, please try again shortly.",
+  errGramTxWrongRecipient: "This transaction was not sent to the owner's wallet — the payment does not match the order.",
+  errGramTxWrongAmount: "The GRAM amount sent is less than the plan price.",
+  errGramTxWrongSender: "This transaction did not come from the connected wallet.",
+  errGramTxReused: "This GRAM transaction was already used for another order.",
+  errGramVerifyFail: "Failed to check the GRAM transaction, please try again.",
   errPremiumOrderNotFound: "Premium order not found.",
   errOrderAlreadyProcessed: "This order has already been processed.",
   errOrderOwnerNotFound: "The player who owns this order was not found.",
@@ -489,6 +533,14 @@ const en: ServerStrings = {
     `Premium order #${orderId} (${stars} Stars) rejected by the owner — payment not confirmed.`,
   logPremiumCancel: (orderId, stars) =>
     `Premium order #${orderId} (${stars} Stars) cancelled by the player — no payment was made, order deleted.`,
+  logPremiumOrderGram: (label, gram) =>
+    `Premium order ${label} created (${gram} GRAM) — awaiting payment & blockchain verification.`,
+  logPremiumConfirmGram: (gram, tierLabel, days, until) =>
+    `Payment of ${gram} GRAM confirmed on-chain — Premium ${tierLabel} active for ${days} days until ${until}.`,
+  logPremiumRejectGram: (orderId, gram) =>
+    `Premium order #${orderId} (${gram} GRAM) rejected by the owner — payment not confirmed.`,
+  logPremiumCancelGram: (orderId, gram) =>
+    `Premium order #${orderId} (${gram} GRAM) cancelled by the player — no payment was made, order deleted.`,
   logPremiumGrant: (tierLabel, days, until) =>
     `The owner activated Premium ${tierLabel} for ${days} days (payment outside the game) — active until ${until}.`,
   logDailyBonus: (amount) =>

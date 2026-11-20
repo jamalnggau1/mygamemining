@@ -352,6 +352,11 @@ import {
   setWebhook,
   STARS_WEBHOOK_URL,
 } from "./stars.js";
+import {
+  GRAM_RECEIVER_ADDRESS,
+  NANO_TON_PER_GRAM,
+  verifyGramTransaction,
+} from "./ton.js";
 
 // ---------------------------------------------------------------------------
 // Game design constants
@@ -416,16 +421,26 @@ export function wdMinKtForPaidCount(paidCount: number): number {
 // kecepatan akumulasi KT (lihat rebalance #7 di PORT_NOTES.md).
 export const WD_MAX_KT = 5000;
 
-// Premium Pass plans — priced in Telegram Stars (paid via a real
+// Premium Pass plans — priced in Telegram Stars AND in GRAM (TON),
+// two payment methods for the same pass. Stars: paid via a real
 // Stars invoice; Premium activates automatically on the webhook —
 // the Kendali confirm button is only a fallback for missed
-// payments). Prices raised 2026-11-20 (Standard 150→300, Pro
+// payments. Prices raised 2026-11-20 (Standard 150→300, Pro
 // 500→1000) so the owner profits on every player profile: at the
 // old prices a fully-upgraded (lvl 5) player cost the owner more
 // in extra USDT withdrawals than the Stars were worth.
+// GRAM: paid via TON Connect (wallet) — the player approves ONE
+// transaction sending X GRAM to the owner's public wallet; the
+// server verifies it on-chain (api/_lib/ton.ts) and activates
+// Premium automatically, no hash copying by the player. GRAM
+// prices are FIXED amounts (Standard 4 GRAM ≈ $4.08, Pro 13 GRAM
+// ≈ $13.26 at ~$1.02/GRAM) — slightly above the Stars USD value,
+// and the owner keeps 100% instantly (no Fragment 21-day hold,
+// no 1.000 minimum). GRAM's USD price MOVES, so these fixed
+// amounts need a periodic check against the GRAM price.
 const PREMIUM_PLANS = {
-  standard: { days: 7, stars: 300, tier: "standard" as const, label: "Standard · 7 hari", labelEn: "Standard · 7 days" },
-  pro: { days: 30, stars: 1000, tier: "pro" as const, label: "Pro · 30 hari", labelEn: "Pro · 30 days" },
+  standard: { days: 7, stars: 300, gram: 4, gramNanoTon: 4 * NANO_TON_PER_GRAM, tier: "standard" as const, label: "Standard · 7 hari", labelEn: "Standard · 7 days" },
+  pro: { days: 30, stars: 1000, gram: 13, gramNanoTon: 13 * NANO_TON_PER_GRAM, tier: "pro" as const, label: "Pro · 30 hari", labelEn: "Pro · 30 days" },
 } as const;
 type PremiumPlanId = keyof typeof PREMIUM_PLANS;
 type PremiumTier = "standard" | "pro";
@@ -1417,20 +1432,31 @@ async function activatePremiumOrder(
     .update(schema.player)
     .set({ premiumUntil: until, premiumTier: tier })
     .where(eq(schema.player.id, target.id));
+  // Log Ekonomi memakai mata uang pesanan yang sebenarnya: GRAM
+  // untuk pesanan TON Connect, Stars untuk pesanan XTR.
+  const tierLabel =
+    tier === "pro"
+      ? lang === "en"
+        ? "Pro (dual drill)"
+        : "Pro (bor ganda)"
+      : "Standard";
   await logActivity(
     db,
     order.playerId,
     "premium_confirm",
-    serverStrings(lang).logPremiumConfirm(
-      order.stars,
-      tier === "pro"
-        ? lang === "en"
-          ? "Pro (dual drill)"
-          : "Pro (bor ganda)"
-        : "Standard",
-      order.days,
-      fmtDateLang(until, lang),
-    ),
+    order.method === "gram"
+      ? serverStrings(lang).logPremiumConfirmGram(
+          order.gramAmount ?? 0,
+          tierLabel,
+          order.days,
+          fmtDateLang(until, lang),
+        )
+      : serverStrings(lang).logPremiumConfirm(
+          order.stars,
+          tierLabel,
+          order.days,
+          fmtDateLang(until, lang),
+        ),
     null,
   );
   return until;
@@ -1633,12 +1659,20 @@ export const gameActions = {
           tier: z.enum(["standard", "pro"]).nullable(),
           dualDrill: z.boolean(),
           until: z.string().nullable(),
+          /** Alamat dompet GRAM pemilik (publik) — tujuan
+           *  pembayaran TON Connect; klien tidak pernah
+           *  meng-hardcode alamat ini. */
+          gramReceiverAddress: z.string(),
           plans: z.array(
             z.object({
               id: z.string(),
               label: z.string(),
               days: z.number(),
               stars: z.number(),
+              /** Harga paket dalam GRAM + nanoTON (jumlah
+               *  transaksi TON Connect). */
+              gram: z.number(),
+              gramNanoTon: z.number(),
               tier: z.enum(["standard", "pro"]),
             }),
           ),
@@ -1784,6 +1818,13 @@ export const gameActions = {
           stars: z.number(),
           days: z.number(),
           tier: z.enum(["standard", "pro"]),
+          /** Cara bayar: "stars" (invoice XTR) atau "gram"
+           *  (TON Connect). gramAmount = GRAM yang dibayar
+           *  (null untuk Stars); txHash = hash transaksi TON
+           *  (null sampai pembayaran GRAM terverifikasi). */
+          method: z.enum(["stars", "gram"]),
+          gramAmount: z.number().nullable(),
+          txHash: z.string().nullable(),
           status: z.enum(["pending", "confirmed", "rejected", "paid"]),
           createdAt: z.string(),
           processedAt: z.string().nullable(),
@@ -1946,11 +1987,14 @@ export const gameActions = {
             tier: premiumTierOf(p),
             dualDrill: hasDualDrill(p),
             until: p.premiumUntil ? p.premiumUntil.toISOString() : null,
+            gramReceiverAddress: GRAM_RECEIVER_ADDRESS,
             plans: (Object.keys(PREMIUM_PLANS) as PremiumPlanId[]).map((id) => ({
               id,
               label: premiumPlanLabel(PREMIUM_PLANS[id], lang),
               days: PREMIUM_PLANS[id].days,
               stars: PREMIUM_PLANS[id].stars,
+              gram: PREMIUM_PLANS[id].gram,
+              gramNanoTon: PREMIUM_PLANS[id].gramNanoTon,
               tier: PREMIUM_PLANS[id].tier,
             })),
           },
@@ -2081,6 +2125,9 @@ export const gameActions = {
           stars: o.stars,
           days: o.days,
           tier: o.tier,
+          method: o.method,
+          gramAmount: o.gramAmount,
+          txHash: o.txHash,
           status: o.status,
           createdAt: o.createdAt.toISOString(),
           processedAt: o.processedAt ? o.processedAt.toISOString() : null,
@@ -2528,9 +2575,162 @@ export const gameActions = {
     },
   }),
 
-  cancelStarsOrder: defineGameAction({
+  createGramOrder: defineGameAction({
     description:
-      "Player action: cancels the caller's own still-pending Telegram Stars premium order and DELETES the row — no payment was made, so there is nothing to keep. A cancelled (or failed) payment, or an invoice sheet that never opened, must free the buy button at once with no admin work. Only the order's owner may cancel it, and only while it is still pending: a paid/confirmed/rejected order is already processed, and another player's order id never matches the ownership check. Race-safe against the webhook: applyStarsPayment claims pending→paid atomically, so a payment that landed first cannot be cancelled away; conversely a late successful_payment for a deleted order finds no row and is ignored.",
+      "Creates a GRAM (TON) Premium Pass order for TON Connect payment (Standard 4 GRAM / 7 days, Pro 13 GRAM / 30 days with the dual drill). Creates the pending premium_orders row (one pending order per player, method 'gram'), and returns the owner's public receiving wallet + the amount in nanoTON — the client opens the player's TON wallet (TON Connect) and sends ONE transaction to that address. The pass activates when the client reports the wallet's BOC and the server verifies the transaction on-chain (confirmGramPayment). If the player is not inside Telegram (web/legacy), the wallet cannot be opened — the action fails with a note to open the game via the Mini App.",
+    request: z.object({ plan: z.enum(["standard", "pro"]) }),
+    response: resultShape.extend({
+      orderId: z.number().nullable(),
+      receiverAddress: z.string().nullable(),
+      amountNanoTon: z.string().nullable(),
+      gram: z.number(),
+    }),
+    async handler(args, session) {
+      const db = getDb();
+      // i18n: request language — user-facing strings only.
+      const lang = session.lang;
+      const S = serverStrings(lang);
+      const plan = PREMIUM_PLANS[args.plan];
+      const fail = (error: string) => ({ ok: false, error, orderId: null as number | null, receiverAddress: null as string | null, amountNanoTon: null as string | null, gram: plan.gram });
+      // GRAM hanya bisa dibayar dari dalam Telegram (dompet TON
+      // dibuka lewat TON Connect di Mini App). Pemain web tidak
+      // punya dompet yang terhubung.
+      if (session.telegramId === null) {
+        return fail(S.errGramNeedTelegram);
+      }
+      // Creates the player row (and applies regen) if this is the
+      // first ever action.
+      const p = await loadPlayer(db, session);
+      const pending = await db
+        .select()
+        .from(schema.premiumOrders)
+        .where(
+          and(
+            eq(schema.premiumOrders.status, "pending"),
+            eq(schema.premiumOrders.playerId, p.id),
+          ),
+        )
+        .limit(1);
+      if (pending[0])
+        return fail(S.errPremiumOrderPending);
+      const inserted = await db
+        .insert(schema.premiumOrders)
+        .values({ playerId: p.id, plan: args.plan, stars: 0, days: plan.days, tier: plan.tier, status: "pending", method: "gram", gramAmount: plan.gram })
+        .returning({ id: schema.premiumOrders.id });
+      const row = inserted[0];
+      if (!row) return fail(S.errGramOrderFail);
+      await logActivity(db, p.id, "premium_order", S.logPremiumOrderGram(premiumPlanLabel(plan, lang), plan.gram), null);
+      return { ok: true, error: null, orderId: row.id, receiverAddress: GRAM_RECEIVER_ADDRESS, amountNanoTon: String(plan.gramNanoTon), gram: plan.gram };
+    },
+  }),
+
+  confirmGramPayment: defineGameAction({
+    description:
+      "Confirms a GRAM (TON) Premium payment after the player's wallet approved the transaction (TON Connect sendTransaction returned a BOC). The client sends the message hash derived from that BOC plus its connected wallet address; the server looks the transaction up on-chain via tonapi (api/_lib/ton.ts) and checks destination = owner's wallet, sender = connected wallet, amount >= plan price, and the tx hash never used before. On success the order is claimed atomically (pending→paid) and Premium activates with the same extension rule as Stars. If the tx is not indexed yet the call fails with retryable=true so the client retries for a few seconds; wrong recipient/amount/sender or a reused tx hash fail permanently (retryable=false).",
+    request: z.object({
+      orderId: z.number().int().positive(),
+      msgHash: z.string().regex(/^[0-9a-fA-F]{64}$/),
+      senderAddress: z.string().min(1),
+    }),
+    response: resultShape.extend({
+      premiumUntil: z.string().nullable(),
+      retryable: z.boolean(),
+    }),
+    async handler(args, session) {
+      const db = getDb();
+      // i18n: request language — user-facing strings only.
+      const lang = session.lang;
+      const S = serverStrings(lang);
+      const fail = (error: string, retryable: boolean) => ({ ok: false, error, premiumUntil: null as string | null, retryable });
+      const p = await loadPlayer(db, session);
+      const rows = await db
+        .select()
+        .from(schema.premiumOrders)
+        .where(
+          and(
+            eq(schema.premiumOrders.id, args.orderId),
+            eq(schema.premiumOrders.playerId, p.id),
+          ),
+        )
+        .limit(1);
+      const order = rows[0];
+      if (!order) return fail(S.errPremiumOrderNotFound, false);
+      if (order.status !== "pending")
+        return fail(S.errOrderAlreadyProcessed, false);
+      if (order.method !== "gram")
+        return fail(S.errGramOrderInvalid, false);
+      const plan = PREMIUM_PLANS[order.plan as PremiumPlanId];
+      if (!plan || plan.tier !== order.tier)
+        return fail(S.errGramOrderInvalid, false);
+      // Verifikasi on-chain (tonapi, dengan retry internal ±8 detik
+      // karena transaksi butuh satu blok untuk terindeks).
+      const checked = await verifyGramTransaction({
+        msgHash: args.msgHash,
+        senderAddress: args.senderAddress,
+        expectedNanoTon: String(plan.gramNanoTon),
+        receiverAddress: GRAM_RECEIVER_ADDRESS,
+      });
+      if (checked.ok === false) {
+        if (checked.reason === "not_found")
+          return fail(S.errGramTxNotFound, true);
+        if (checked.reason === "network" || checked.reason === "bad_response")
+          return fail(S.errGramVerifyFail, true);
+        if (checked.reason === "wrong_recipient")
+          return fail(S.errGramTxWrongRecipient, false);
+        if (checked.reason === "wrong_amount")
+          return fail(S.errGramTxWrongAmount, false);
+        return fail(S.errGramTxWrongSender, false);
+      }
+      // Hash transaksi tidak boleh dipakai dua kali — cek dulu, lalu
+      // klaim atomik; UNIQUE index tx_hash adalah penjaga terakhir
+      // (pelanggaran unique dipetakan ke errGramTxReused di bawah).
+      const reused = await db
+        .select({ id: schema.premiumOrders.id })
+        .from(schema.premiumOrders)
+        .where(
+          and(
+            eq(schema.premiumOrders.txHash, checked.txHash),
+            eq(schema.premiumOrders.status, "paid"),
+          ),
+        )
+        .limit(1);
+      if (reused[0]) return fail(S.errGramTxReused, false);
+      let claimed: { id: number }[];
+      try {
+        claimed = await db
+          .update(schema.premiumOrders)
+          .set({
+            status: "paid",
+            processedAt: new Date(),
+            txHash: checked.txHash,
+          })
+          .where(
+            and(
+              eq(schema.premiumOrders.id, order.id),
+              eq(schema.premiumOrders.status, "pending"),
+            ),
+          )
+          .returning({ id: schema.premiumOrders.id });
+      } catch (e) {
+        // UNIQUE violation (Postgres 23505) = hash sudah dipakai
+        // pesanan lain di antara cek dan klaim.
+        const code = (e as { code?: unknown })?.code;
+        const msg = e instanceof Error ? e.message : "";
+        if (code === "23505" || /duplicate key/i.test(msg))
+          return fail(S.errGramTxReused, false);
+        return fail(S.errGramVerifyFail, true);
+      }
+      if (!claimed[0]) return fail(S.errOrderAlreadyProcessed, false);
+      const target = await loadPlayerRowOrNull(db, order.playerId);
+      if (!target) return fail(S.errOrderOwnerNotFound, false);
+      const until = await activatePremiumOrder(db, order, target, lang);
+      return { ok: true, error: null, premiumUntil: until.toISOString(), retryable: false };
+    },
+  }),
+
+  cancelPremiumOrder: defineGameAction({
+    description:
+      "Player action: cancels the caller's own still-pending premium order (Telegram Stars OR GRAM) and DELETES the row — no payment was made, so there is nothing to keep. A cancelled (or failed) payment, or a payment sheet that never opened, must free the buy button at once with no admin work. Only the order's owner may cancel it, and only while it is still pending: a paid/confirmed/rejected order is already processed, and another player's order id never matches the ownership check. Race-safe against both payment paths: applyStarsPayment and confirmGramPayment claim pending→paid atomically, so a payment that landed first cannot be cancelled away; conversely a late successful_payment / GRAM confirmation for a deleted order finds no row and is ignored.",
     request: z.object({ orderId: z.number().int().positive() }),
     response: resultShape,
     async handler(args, session) {
@@ -2558,11 +2758,19 @@ export const gameActions = {
       // Dihapus, bukan diubah status: tidak ada pembayaran, jadi
       // tidak ada yang perlu disimpan. successful_payment yang
       // terlambat untuk pesanan ini tidak menemukan baris dan
-      // diabaikan oleh applyStarsPayment.
+      // diabaikan oleh applyStarsPayment (dan confirmGramPayment).
       await db
         .delete(schema.premiumOrders)
         .where(eq(schema.premiumOrders.id, order.id));
-      await logActivity(db, p.id, "premium_cancel", S.logPremiumCancel(order.id, order.stars), null);
+      await logActivity(
+        db,
+        p.id,
+        "premium_cancel",
+        order.method === "gram"
+          ? S.logPremiumCancelGram(order.id, order.gramAmount ?? 0)
+          : S.logPremiumCancel(order.id, order.stars),
+        null,
+      );
       return { ok: true, error: null };
     },
   }),
@@ -2584,7 +2792,7 @@ export const gameActions = {
 
   confirmPremiumOrder: defineGameAction({
     description:
-      "Owner action (fallback): confirms a pending Telegram Stars premium order manually — e.g. the Stars payment went through but the webhook missed it (stuck pending order). Activates (or extends) the Premium Pass with the order's tier and days, unlocking the dual drill for the Pro tier. Normally the webhook does this automatically; this stays as the manual fallback.",
+      "Owner action (fallback): confirms a pending premium order manually — e.g. the Stars payment went through but the webhook missed it, or a GRAM payment landed but on-chain verification failed (stuck pending order). Activates (or extends) the Premium Pass with the order's tier and days, unlocking the dual drill for the Pro tier. Normally payments activate automatically; this stays as the manual fallback.",
     request: z.object({ orderId: z.number().int().positive() }),
     response: resultShape.extend({
       premiumUntil: z.string().nullable(),
@@ -2638,7 +2846,15 @@ export const gameActions = {
         .update(schema.premiumOrders)
         .set({ status: "rejected", processedAt: new Date() })
         .where(eq(schema.premiumOrders.id, order.id));
-      await logActivity(db, order.playerId, "premium_reject", S.logPremiumReject(order.id, order.stars), null);
+      await logActivity(
+        db,
+        order.playerId,
+        "premium_reject",
+        order.method === "gram"
+          ? S.logPremiumRejectGram(order.id, order.gramAmount ?? 0)
+          : S.logPremiumReject(order.id, order.stars),
+        null,
+      );
       return { ok: true, error: null };
     },
   }),

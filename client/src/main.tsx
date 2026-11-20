@@ -1,3 +1,13 @@
+// @ton/core memakai Buffer global di beberapa jalur (parse BOC,
+// alamat) — browser tidak menyediakannya. Polyfill sekali di
+// sini (entry point) supaya semua pemakaian TON Connect di bawah
+// berjalan; tanpa ini Cell.fromBoc() melempar
+// "Buffer is not defined" di browser.
+import { Buffer } from "buffer";
+if (!(globalThis as { Buffer?: unknown }).Buffer) {
+  (globalThis as { Buffer?: unknown }).Buffer = Buffer;
+}
+
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";

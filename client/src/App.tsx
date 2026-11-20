@@ -2,6 +2,12 @@ import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNod
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, getTelegramSessionInfo, type ApiResponse } from "./api";
 import { isAdsConfigured, showRewardedAd } from "./ads";
+import {
+  connectWallet,
+  getConnectedWalletAddress,
+  isTonConnectAvailable,
+  sendGramPayment,
+} from "./tonconnect";
 import { fmt, fmtDate, fmtDateLong, fmtDateTime, fmtDur, LanguagePicker, t, trich, useLang } from "./i18n.js";
 import heroImg from "./assets/hero.webp";
 import asteroidImg from "./assets/asteroid.webp";
@@ -543,6 +549,10 @@ export function App() {
   // True while an AdsGram rewarded ad is playing — the "Tonton Iklan"
   // button stays disabled so a second ad cannot be opened mid-play.
   const [adPlaying, setAdPlaying] = useState(false);
+  // Fase pembayaran GRAM (TON Connect) — dipakai tombol "Beli
+  // dengan GRAM" untuk menunjukkan "menunggu persetujuan di
+  // dompet…" / "memverifikasi di blockchain…" selama alurnya.
+  const [gramPhase, setGramPhase] = useState<"idle" | "paying" | "verifying">("idle");
   const prevBalanceRef = useRef<number | null>(null);
   const state = useQuery({ queryKey: ["game-state"], queryFn: () => api.getGameState({}), refetchInterval: 5000 });
   const refresh = () => queryClient.invalidateQueries({ queryKey: ["game-state"] });
@@ -632,7 +642,7 @@ export function App() {
   // webhook Telegram (/api/telegram-webhook). refresh() memuat
   // ulang state supaya badge Premium + pesanan terbaru tampil.
   // Status "cancelled" / "failed" berarti TIDAK ada pembelian —
-  // pesanan pending langsung dibatalkan (cancelStarsOrder, baris
+  // pesanan pending langsung dibatalkan (cancelPremiumOrder, baris
   // dihapus) supaya tombol beli langsung kembali tanpa kerja
   // admin. Status "pending" dibiarkan menunggu webhook.
   const buyPremium = useMutation({
@@ -645,7 +655,7 @@ export function App() {
         showBanner("bad", t("premiumStarsNeedTelegram"));
         // Lembar bayar tidak pernah terbuka, tapi pesanan pending
         // sudah dibuat — hapus supaya tombol beli langsung kembali.
-        if (orderId != null) { api.cancelStarsOrder({ orderId }).then(() => refresh(), () => refresh()); }
+        if (orderId != null) { api.cancelPremiumOrder({ orderId }).then(() => refresh(), () => refresh()); }
         else { refresh(); }
         return;
       }
@@ -655,19 +665,95 @@ export function App() {
           showBanner("bad", t(status === "cancelled" ? "premiumStarsCancelled" : "premiumStarsFailed"));
           // Tidak ada pembelian — batalkan pesanan pending supaya
           // tombol beli langsung kembali, tanpa kerja admin.
-          if (orderId != null) { api.cancelStarsOrder({ orderId }).then(() => refresh(), () => refresh()); }
+          if (orderId != null) { api.cancelPremiumOrder({ orderId }).then(() => refresh(), () => refresh()); }
           else { refresh(); }
         }
         else { showBanner("info", t("premiumStarsPending")); refresh(); }
       });
     },
   });
+  // Bayar Premium dengan GRAM (TON Connect) — TANPA salin hash:
+  //   1. server membuat pesanan GRAM pending (createGramOrder) dan
+  //      mengembalikan alamat dompet pemilik + jumlah nanoTON;
+  //   2. dompet belum terhubung → connectWallet() membuka jendela
+  //      TON Connect (pilih dompet);
+  //   3. sendGramPayment() mengirim SATU transaksi ke dompet
+  //      pemilik — pemain menyetujui sekali di dompetnya — dan
+  //      mengembalikan BOC;
+  //   4. klien menghitung hash pesan dari BOC dan memanggil
+  //      confirmGramPayment — server memverifikasi transaksi itu
+  //      on-chain (tonapi) dan mengaktifkan Premium otomatis;
+  //      kalau transaksi masih diproses di blockchain, server
+  //      mengembalikan retryable=true — klien mencoba lagi 2 detik
+  //      kemudian, sampai 5 kali.
+  // Pemain membatalkan/menolak di dompet → pesanan pending
+  // dibatalkan (cancelPremiumOrder) supaya tombol beli langsung
+  // kembali — sama seperti pembatalan Stars.
+  const buyPremiumGram = useMutation({
+    mutationFn: async (plan: "standard" | "pro") => {
+      if (!isTonConnectAvailable()) {
+        return { ok: false as const, error: t("premiumGramNeedTelegram"), orderId: null };
+      }
+      const created = await api.createGramOrder({ plan });
+      if (!created.ok || created.orderId == null || !created.receiverAddress || !created.amountNanoTon) {
+        return { ok: false as const, error: created.error ?? t("genericFail"), orderId: null };
+      }
+      const orderId = created.orderId;
+      setGramPhase("paying");
+      let sent;
+      try {
+        // Dompet belum terhubung → buka jendela TON Connect dulu.
+        if (!getConnectedWalletAddress()) await connectWallet();
+        sent = await sendGramPayment({
+          receiverAddress: created.receiverAddress,
+          amountNanoTon: created.amountNanoTon,
+        });
+      } catch {
+        // Dibatalkan/ditolak di dompet (atau dompet tidak
+        // terhubung) — tidak ada GRAM yang terkirim, batalkan
+        // pesanan supaya tombol beli langsung kembali.
+        await api.cancelPremiumOrder({ orderId }).catch(() => undefined);
+        setGramPhase("idle");
+        showBanner("bad", t("premiumGramCancelled"));
+        refresh();
+        return { ok: false as const, error: null, orderId: null };
+      }
+      setGramPhase("verifying");
+      for (let attempt = 0; attempt < 5; attempt++) {
+        if (attempt > 0) {
+          showBanner("info", t("premiumGramPending"));
+          await new Promise((resolve) => setTimeout(resolve, 2000));
+        }
+        const confirmed = await api.confirmGramPayment({
+          orderId,
+          msgHash: sent.msgHash,
+          senderAddress: sent.senderAddress,
+        });
+        if (confirmed.ok) {
+          setGramPhase("idle");
+          showBanner("good", t("premiumGramPaid"));
+          refresh();
+          return { ok: true as const, error: null, orderId };
+        }
+        // Transaksi belum terindeks di blockchain — coba lagi.
+        if (confirmed.retryable) continue;
+        setGramPhase("idle");
+        showBanner("bad", confirmed.error ?? t("premiumGramFailed"));
+        refresh();
+        return { ok: false as const, error: confirmed.error ?? null, orderId };
+      }
+      setGramPhase("idle");
+      showBanner("info", t("premiumGramPending"));
+      refresh();
+      return { ok: true as const, error: null, orderId };
+    },
+  });
   // Batalkan pesanan Premium yang masih pending (tombol di kartu
   // Premium) — untuk pemain yang menutup aplikasi di tengah
   // pembayaran dan kembali ke pesanan yang macet. Baris pesanan
   // dihapus, tombol beli langsung kembali.
-  const cancelStarsOrder = useMutation({
-    mutationFn: (orderId: number) => api.cancelStarsOrder({ orderId }),
+  const cancelPremiumOrder = useMutation({
+    mutationFn: (orderId: number) => api.cancelPremiumOrder({ orderId }),
     onSuccess: (r) => { showResult(r.ok, r.error, r.ok ? t("premiumOrderCancelled") : null); refresh(); },
   });
   const claimBonus = useMutation({ mutationFn: () => api.claimDailyBonus({}), onSuccess: (r) => { showResult(r.ok, r.error, t("dailyBonusClaimed", { bonus: fmt(r.bonusKt) })); refresh(); } });
@@ -944,7 +1030,7 @@ export function App() {
 
         {tab === "upgrade" && (
           <section className="mt-4 space-y-3">
-            <PremiumCard data={data} onBuy={(plan) => buyPremium.mutate(plan)} buying={buyPremium.isPending} inTelegram={sessionInfo.inTelegram} onCancelOrder={(id) => cancelStarsOrder.mutate(id)} cancelling={cancelStarsOrder.isPending} />
+            <PremiumCard data={data} onBuy={(plan) => buyPremium.mutate(plan)} buying={buyPremium.isPending} onBuyGram={(plan) => buyPremiumGram.mutate(plan)} buyingGram={buyPremiumGram.isPending} gramPhase={gramPhase} inTelegram={sessionInfo.inTelegram} onCancelOrder={(id) => cancelPremiumOrder.mutate(id)} cancelling={cancelPremiumOrder.isPending} />
             <div className="relative overflow-hidden rounded-2xl border border-[var(--border)]"><img src={stationImg} alt={t("stationImgAlt")} className="h-40 w-full object-cover" /><div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent flex items-end p-4"><p className="text-sm font-semibold text-white">{t("hanggarCaption")}</p></div></div>
             {data.upgrades.map((u) => (<div key={u.id} className="vein-tile rounded-2xl bg-[var(--surface)] border border-[var(--border)] p-4"><div className="flex items-start justify-between gap-3"><div className="flex items-start gap-3"><span aria-hidden="true" className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-[var(--border)] bg-[var(--surface2)]"><UpgradeIcon id={u.id} size={22} /></span><div><h3 className="font-display text-sm">{u.name}</h3><p className="mt-1 text-sm text-[var(--dim)]">{u.desc}</p><div className="mt-2 flex gap-1" aria-label={t("levelAria", { l: u.level, m: u.maxLevel })}>{Array.from({ length: u.maxLevel }, (_, i) => (<span key={i} className={`h-2 w-4 rounded-full ${i < u.level ? "bg-cyan-400" : "bg-[var(--surface2)]"}`} />))}</div></div></div><div className="shrink-0 text-right"><p className="text-xs font-semibold text-[var(--dim)]">{t("levelLabel")}</p><p className="font-display text-xl">{u.level}<span className="text-sm text-[var(--dim)]">/{u.maxLevel}</span></p></div></div>{u.nextCost != null ? (<button type="button" onClick={() => buy.mutate(u.id)} disabled={buy.isPending || p.ktBalance < u.nextCost} aria-label={t("buyAria", { name: u.name, l: u.level + 1, cost: fmt(u.nextCost) })} className="btn-press mt-3 w-full rounded-xl bg-cyan-400 px-4 py-2 font-bold text-black disabled:opacity-40">{p.ktBalance < u.nextCost ? t("needKt", { cost: fmt(u.nextCost) }) : t("installUpgrade", { cost: fmt(u.nextCost) })}</button>) : (<p className="mt-3 rounded-xl bg-[var(--surface2)] px-4 py-2 text-center font-bold">{t("maxLevel")}</p>)}</div>))}
           </section>
@@ -959,7 +1045,7 @@ export function App() {
   );
 }
 
-function PremiumCard({ data, onBuy, buying, inTelegram, onCancelOrder, cancelling }: { data: GameState; onBuy: (plan: "standard" | "pro") => void; buying: boolean; inTelegram: boolean; onCancelOrder: (orderId: number) => void; cancelling: boolean }) {
+function PremiumCard({ data, onBuy, buying, onBuyGram, buyingGram, gramPhase, inTelegram, onCancelOrder, cancelling }: { data: GameState; onBuy: (plan: "standard" | "pro") => void; buying: boolean; onBuyGram: (plan: "standard" | "pro") => void; buyingGram: boolean; gramPhase: "idle" | "paying" | "verifying"; inTelegram: boolean; onCancelOrder: (orderId: number) => void; cancelling: boolean }) {
   const p = data.player;
   const pendingOrder = data.premiumOrders.find((o) => o.status === "pending");
   const benefits = [t("ben1"), t("ben2"), t("ben3"), t("ben4")];
@@ -978,24 +1064,35 @@ function PremiumCard({ data, onBuy, buying, inTelegram, onCancelOrder, cancellin
       </ul>
       {pendingOrder ? (
         <div className="mt-4 rounded-xl border border-amber-400/50 bg-amber-400/10 px-4 py-3">
-          <p className="font-display text-sm text-amber-200">{t("pendingOrderTitle", { id: pendingOrder.id, tier: pendingOrder.tier === "pro" ? "Pro" : "Standard", stars: fmt(pendingOrder.stars) })}</p>
-          <p className="mt-1 text-sm text-[var(--dim)]">{t("pendingOrderDesc")}</p>
+          <p className="font-display text-sm text-amber-200">{pendingOrder.method === "gram" ? t("pendingOrderTitleGram", { id: pendingOrder.id, tier: pendingOrder.tier === "pro" ? "Pro" : "Standard", gram: fmt(pendingOrder.gramAmount ?? 0) }) : t("pendingOrderTitle", { id: pendingOrder.id, tier: pendingOrder.tier === "pro" ? "Pro" : "Standard", stars: fmt(pendingOrder.stars) })}</p>
+          <p className="mt-1 text-sm text-[var(--dim)]">{t(pendingOrder.method === "gram" ? "pendingOrderDescGram" : "pendingOrderDesc")}</p>
           <button type="button" onClick={() => onCancelOrder(pendingOrder.id)} disabled={cancelling} aria-label={t("cancelOrderAria", { id: pendingOrder.id })} className="btn-press mt-3 w-full rounded-xl border border-amber-400/60 bg-transparent px-4 py-2 font-bold text-amber-200 disabled:opacity-40">{t("cancelOrderBtn")}</button>
         </div>
       ) : !inTelegram ? (
-        <p className="mt-4 rounded-xl border border-[var(--border)] bg-[var(--surface2)] px-4 py-3 text-sm text-[var(--dim)]">{t("premiumStarsNeedTelegram")}</p>
+        <p className="mt-4 rounded-xl border border-[var(--border)] bg-[var(--surface2)] px-4 py-3 text-sm text-[var(--dim)]">{t("premiumStarsNeedTelegram")} {t("premiumGramNeedTelegram")}</p>
       ) : (
         <div className="mt-4">
           <p className="text-sm font-bold">{t("premiumBuyTitle")}</p>
           <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
             {p.premium.plans.map((plan) => (
-              <button key={plan.id} type="button" onClick={() => onBuy(plan.id as "standard" | "pro")} disabled={buying} aria-label={t("orderPlanAria", { label: plan.label, stars: fmt(plan.stars) })} className={`btn-press rounded-xl px-3 py-3 text-black disabled:opacity-40 ${plan.tier === "pro" ? "bg-gradient-to-b from-amber-300 to-amber-500 ring-2 ring-amber-200/60" : "bg-amber-400"}`}>
+              <button key={plan.id} type="button" onClick={() => onBuy(plan.id as "standard" | "pro")} disabled={buying || buyingGram} aria-label={t("orderPlanAria", { label: plan.label, stars: fmt(plan.stars) })} className={`btn-press rounded-xl px-3 py-3 text-black disabled:opacity-40 ${plan.tier === "pro" ? "bg-gradient-to-b from-amber-300 to-amber-500 ring-2 ring-amber-200/60" : "bg-amber-400"}`}>
                 <span className="block font-display text-sm">{t("planLine", { tier: plan.tier === "pro" ? "PRO" : "STANDARD", days: plan.days })}</span>
                 <span className="mt-0.5 flex items-center justify-center gap-1 text-sm font-bold"><SparkleIcon size={14} /> {t("planStars", { stars: fmt(plan.stars) })}</span>
                 <span className="block text-xs font-semibold">{plan.tier === "pro" ? t("planProTag") : t("planStdTag")}</span>
               </button>
             ))}
           </div>
+          <p className="mt-4 text-sm font-bold">{t("premiumBuyTitleGram")}</p>
+          <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
+            {p.premium.plans.map((plan) => (
+              <button key={`gram-${plan.id}`} type="button" onClick={() => onBuyGram(plan.id as "standard" | "pro")} disabled={buying || buyingGram} aria-label={t("orderPlanAriaGram", { label: plan.label, gram: fmt(plan.gram) })} className={`btn-press rounded-xl px-3 py-3 text-black disabled:opacity-40 ${plan.tier === "pro" ? "bg-gradient-to-b from-teal-300 to-teal-500 ring-2 ring-teal-200/60" : "bg-teal-400"}`}>
+                <span className="block font-display text-sm">{t("planLine", { tier: plan.tier === "pro" ? "PRO" : "STANDARD", days: plan.days })}</span>
+                <span className="mt-0.5 flex items-center justify-center gap-1 text-sm font-bold">{gramPhase !== "idle" && buyingGram ? t(gramPhase === "paying" ? "premiumGramPaying" : "premiumGramVerifying") : t("planGram", { gram: fmt(plan.gram) })}</span>
+                <span className="block text-xs font-semibold">{plan.tier === "pro" ? t("planProTag") : t("planStdTag")}</span>
+              </button>
+            ))}
+          </div>
+          <p className="mt-2 text-xs text-[var(--dim)]">{t("premiumGramNote")}</p>
         </div>
       )}
       <p className="mt-3 text-xs text-[var(--dim)]">{t("premiumHint")}</p>
@@ -1224,9 +1321,9 @@ function GrantPremiumCard({ data, onDone }: { data: GameState; onDone: (ok: bool
             <li key={o.id} className="rounded-xl bg-[var(--surface2)] p-3">
               <div className="flex items-center justify-between gap-2">
                 <p className="font-display text-sm">#{o.id} · Premium {o.tier === "pro" ? "Pro" : "Standard"} · {o.days} hari</p>
-                <span className="inline-flex items-center gap-1 rounded-full border border-amber-400/50 bg-amber-400/15 px-2 py-0.5 text-[11px] font-bold text-amber-200"><SparkleIcon size={11} /> {fmt(o.stars)} Stars</span>
+                <span className="inline-flex items-center gap-1 rounded-full border border-amber-400/50 bg-amber-400/15 px-2 py-0.5 text-[11px] font-bold text-amber-200"><SparkleIcon size={11} /> {o.method === "gram" ? t("planGram", { gram: fmt(o.gramAmount ?? 0) }) : t("planStars", { stars: fmt(o.stars) })}</span>
               </div>
-              <p className="mt-1 text-xs text-[var(--dim)]">{t("grantOrderNote", { date: fmtDateTime(o.createdAt), stars: fmt(o.stars) })}</p>
+              <p className="mt-1 text-xs text-[var(--dim)]">{o.method === "gram" ? t("grantOrderNoteGram", { date: fmtDateTime(o.createdAt), gram: fmt(o.gramAmount ?? 0) }) : t("grantOrderNote", { date: fmtDateTime(o.createdAt), stars: fmt(o.stars) })}</p>
               <div className="mt-2 flex flex-wrap gap-2">
                 <button type="button" onClick={() => confirm.mutate(o.id)} disabled={confirm.isPending} aria-label={t("grantConfirmAria", { id: o.id })} className="btn-press rounded-xl bg-amber-400 px-4 py-2 font-bold text-black disabled:opacity-40">{t("grantConfirm")}</button>
                 <button type="button" onClick={() => reject.mutate(o.id)} disabled={reject.isPending} aria-label={t("grantRejectAria", { id: o.id })} className="btn-press rounded-xl border border-red-400 px-4 py-2 font-bold text-red-300 disabled:opacity-40">{t("grantReject")}</button>
@@ -1237,7 +1334,7 @@ function GrantPremiumCard({ data, onDone }: { data: GameState; onDone: (ok: bool
       )}
       {pastOrders.length > 0 && (
         <ul className="mt-3 space-y-1 text-xs text-[var(--dim)]">
-          {pastOrders.map((o) => (<li key={o.id}>#{o.id} · {o.tier === "pro" ? "Pro" : "Standard"} · {fmt(o.stars)} Stars — {o.status === "confirmed" ? t("grantPastConfirmed") : o.status === "paid" ? t("grantPastPaid") : t("grantPastRejected")}{o.processedAt ? ` · ${fmtDateTime(o.processedAt)}` : ""}</li>))}
+          {pastOrders.map((o) => (<li key={o.id}>#{o.id} · {o.tier === "pro" ? "Pro" : "Standard"} · {o.method === "gram" ? t("planGram", { gram: fmt(o.gramAmount ?? 0) }) : t("planStars", { stars: fmt(o.stars) })} — {o.status === "confirmed" ? t("grantPastConfirmed") : o.status === "paid" ? t("grantPastPaid") : t("grantPastRejected")}{o.processedAt ? ` · ${fmtDateTime(o.processedAt)}` : ""}</li>))}
         </ul>
       )}
 

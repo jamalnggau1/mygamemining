@@ -107,9 +107,21 @@ CREATE TABLE IF NOT EXISTS premium_orders (
     CHECK (status IN ('pending', 'confirmed', 'rejected', 'paid')),
   telegram_payment_charge_id TEXT,
   total_amount INTEGER,
+  -- GRAM (TON Connect, 2026-11-20): method 'stars' (invoice XTR)
+  -- atau 'gram' (TON Connect); gram_amount = harga paket dalam
+  -- GRAM (Standard 4, Pro 13); tx_hash = hash transaksi TON yang
+  -- membayar (bukti on-chain, UNIQUE — satu hash hanya untuk
+  -- satu pesanan). Lihat deploy/neon/migration-0007-gram-orders.sql.
+  method TEXT NOT NULL DEFAULT 'stars'
+    CHECK (method IN ('stars', 'gram')),
+  gram_amount REAL,
+  tx_hash TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   processed_at TIMESTAMPTZ
 );
+--> statement-breakpoint
+CREATE UNIQUE INDEX IF NOT EXISTS premium_orders_tx_hash_unique
+  ON premium_orders (tx_hash) WHERE tx_hash IS NOT NULL;
 --> statement-breakpoint
 CREATE TABLE IF NOT EXISTS activity (
   id BIGSERIAL PRIMARY KEY,

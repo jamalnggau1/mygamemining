@@ -17,7 +17,7 @@
 
 import { build } from "esbuild";
 import { execFile } from "node:child_process";
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -108,4 +108,11 @@ if (built === html) {
   );
 }
 await writeFile(path.join(outDir, "index.html"), built);
-console.log(`client build OK: dist/index.html + assets/${jsFile} + assets/theme.css`);
+
+// 4. Root URL files copied verbatim (no hashing — TON Connect
+// needs STABLE URLs): the manifest is fetched by wallets at
+// /tonconnect-manifest.json, and its iconUrl points at /icon.webp
+// (repo-root icon, copied under a fixed name).
+await copyFile(path.join(root, "client", "public", "tonconnect-manifest.json"), path.join(outDir, "tonconnect-manifest.json"));
+await copyFile(path.join(root, "icon.webp"), path.join(outDir, "icon.webp"));
+console.log(`client build OK: dist/index.html + assets/${jsFile} + assets/theme.css + tonconnect-manifest.json + icon.webp`);
