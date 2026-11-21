@@ -354,9 +354,14 @@ import {
 } from "./stars.js";
 import {
   GRAM_RECEIVER_ADDRESS,
-  NANO_TON_PER_GRAM,
   verifyGramTransaction,
 } from "./ton.js";
+import {
+  GRAM_FALLBACK_PRICE_USD,
+  getGramPriceUsd,
+  gramAmountForUsd,
+  gramToNanoTon,
+} from "./gram-price.js";
 
 // ---------------------------------------------------------------------------
 // Game design constants
@@ -433,14 +438,21 @@ export const WD_MAX_KT = 5000;
 // transaction sending X GRAM to the owner's public wallet; the
 // server verifies it on-chain (api/_lib/ton.ts) and activates
 // Premium automatically, no hash copying by the player. GRAM
-// prices are FIXED amounts (Standard 4 GRAM ≈ $4.08, Pro 13 GRAM
-// ≈ $13.26 at ~$1.02/GRAM) — slightly above the Stars USD value,
-// and the owner keeps 100% instantly (no Fragment 21-day hold,
-// no 1.000 minimum). GRAM's USD price MOVES, so these fixed
-// amounts need a periodic check against the GRAM price.
+// prices are DYNAMIC (owner 2026-11-21 — a fixed GRAM amount
+// loses the owner money when GRAM drops): each plan has a fixed
+// USD target (Standard $4.08, Pro $13.26 — the value of 4 / 13
+// GRAM at $1.02, when the fixed prices were set) and the GRAM
+// amount is target ÷ live price, rounded UP to 2 decimals
+// (api/_lib/gram-price.ts: tonapi → CoinGecko → $1.02 fallback).
+// GRAM down → the player pays MORE grams; GRAM up → FEWER grams;
+// the owner always receives the same USD value. The fixed 4 / 13
+// GRAM survive only as the fallback when no price source answers
+// (price $1.02). The owner keeps 100% instantly (no Fragment
+// 21-day hold, no 1.000 minimum).
+const PREMIUM_PLAN_USD = { standard: 4.08, pro: 13.26 } as const;
 const PREMIUM_PLANS = {
-  standard: { days: 7, stars: 300, gram: 4, gramNanoTon: 4 * NANO_TON_PER_GRAM, tier: "standard" as const, label: "Standard · 7 hari", labelEn: "Standard · 7 days" },
-  pro: { days: 30, stars: 1000, gram: 13, gramNanoTon: 13 * NANO_TON_PER_GRAM, tier: "pro" as const, label: "Pro · 30 hari", labelEn: "Pro · 30 days" },
+  standard: { days: 7, stars: 300, tier: "standard" as const, label: "Standard · 7 hari", labelEn: "Standard · 7 days" },
+  pro: { days: 30, stars: 1000, tier: "pro" as const, label: "Pro · 30 hari", labelEn: "Pro · 30 days" },
 } as const;
 type PremiumPlanId = keyof typeof PREMIUM_PLANS;
 type PremiumTier = "standard" | "pro";
@@ -1681,6 +1693,9 @@ export const gameActions = {
            *  pembayaran TON Connect; klien tidak pernah
            *  meng-hardcode alamat ini. */
           gramReceiverAddress: z.string(),
+          /** Harga GRAM live dalam USD saat state diambil —
+           *  klien menampilkannya di bawah tombol GRAM. */
+          gramPriceUsd: z.number(),
           plans: z.array(
             z.object({
               id: z.string(),
@@ -1956,6 +1971,10 @@ export const gameActions = {
       const wdPaidCount = await countPaidWithdrawals(db, p.id);
       const wdMinKt = wdMinKtForPaidCount(wdPaidCount);
       const adStats = await getAdStats(db, p.id);
+      // Harga GRAM live (cache 5 menit di gram-price.ts) — harga
+      // paket GRAM di bawah dihitung dari harga ini, jadi pemain
+      // selalu melihat jumlah GRAM yang berlaku saat ini.
+      const gramPriceUsd = await getGramPriceUsd();
       // Anti-cheat: skor risiko pemilik tiap WD di antrean — WD
       // pemilik yang sedang berisiko ditandai needsReview.
       const riskByOwner = new Map<number, number>();
@@ -2010,15 +2029,21 @@ export const gameActions = {
             dualDrill: hasDualDrill(p),
             until: p.premiumUntil ? p.premiumUntil.toISOString() : null,
             gramReceiverAddress: GRAM_RECEIVER_ADDRESS,
-            plans: (Object.keys(PREMIUM_PLANS) as PremiumPlanId[]).map((id) => ({
-              id,
-              label: premiumPlanLabel(PREMIUM_PLANS[id], lang),
-              days: PREMIUM_PLANS[id].days,
-              stars: PREMIUM_PLANS[id].stars,
-              gram: PREMIUM_PLANS[id].gram,
-              gramNanoTon: PREMIUM_PLANS[id].gramNanoTon,
-              tier: PREMIUM_PLANS[id].tier,
-            })),
+            gramPriceUsd,
+            plans: (Object.keys(PREMIUM_PLANS) as PremiumPlanId[]).map((id) => {
+              // Harga GRAM live: target USD ÷ harga pasar, dibulatkan
+              // KE ATAS (pemilik tidak pernah menerima di bawah target).
+              const pricing = gramAmountForUsd(PREMIUM_PLAN_USD[id], gramPriceUsd);
+              return {
+                id,
+                label: premiumPlanLabel(PREMIUM_PLANS[id], lang),
+                days: PREMIUM_PLANS[id].days,
+                stars: PREMIUM_PLANS[id].stars,
+                gram: pricing.gram,
+                gramNanoTon: pricing.gramNanoTon,
+                tier: PREMIUM_PLANS[id].tier,
+              };
+            }),
           },
           totalDigs: p.totalDigs,
           totalScans: p.totalScans,
@@ -2640,7 +2665,7 @@ export const gameActions = {
 
   createGramOrder: defineGameAction({
     description:
-      "Creates a GRAM (TON) Premium Pass order for TON Connect payment (Standard 4 GRAM / 7 days, Pro 13 GRAM / 30 days with the dual drill). Creates the pending premium_orders row (one pending order per player, method 'gram'), and returns the owner's public receiving wallet + the amount in nanoTON — the client opens the player's TON wallet (TON Connect) and sends ONE transaction to that address. The pass activates when the client reports the wallet's BOC and the server verifies the transaction on-chain (confirmGramPayment). If the player is not inside Telegram (web/legacy), the wallet cannot be opened — the action fails with a note to open the game via the Mini App.",
+      "Creates a GRAM (TON) Premium Pass order for TON Connect payment (Standard $4.08 / 7 days, Pro $13.26 / 30 days with the dual drill — the GRAM amount is the USD target ÷ live GRAM price, rounded UP to 2 decimals, so the owner always receives the same USD value). Creates the pending premium_orders row (one pending order per player, method 'gram'), and returns the owner's public receiving wallet + the amount in nanoTON — the client opens the player's TON wallet (TON Connect) and sends ONE transaction to that address. The pass activates when the client reports the wallet's BOC and the server verifies the transaction on-chain (confirmGramPayment) against the amount quoted in this order. If the player is not inside Telegram (web/legacy), the wallet cannot be opened — the action fails with a note to open the game via the Mini App.",
     request: z.object({ plan: z.enum(["standard", "pro"]) }),
     response: resultShape.extend({
       orderId: z.number().nullable(),
@@ -2654,7 +2679,11 @@ export const gameActions = {
       const lang = session.lang;
       const S = serverStrings(lang);
       const plan = PREMIUM_PLANS[args.plan];
-      const fail = (error: string) => ({ ok: false, error, orderId: null as number | null, receiverAddress: null as string | null, amountNanoTon: null as string | null, gram: plan.gram });
+      // gram pada jalur gagal: 0 — klien hanya membaca gram bila
+      // ok; harga live dihitung di bawah, SETELAH cek gagal yang
+      // murah (bukan Telegram / sudah ada pesanan pending), supaya
+      // jalur gagal tidak membayar satu panggilan API harga.
+      const fail = (error: string, gram = 0) => ({ ok: false, error, orderId: null as number | null, receiverAddress: null as string | null, amountNanoTon: null as string | null, gram });
       // GRAM hanya bisa dibayar dari dalam Telegram (dompet TON
       // dibuka lewat TON Connect di Mini App). Pemain web tidak
       // punya dompet yang terhubung.
@@ -2676,20 +2705,26 @@ export const gameActions = {
         .limit(1);
       if (pending[0])
         return fail(S.errPremiumOrderPending);
+      // Harga GRAM live saat pesanan dibuat — jumlah inilah yang
+      // dikutip ke pemain, disimpan di gram_amount, dan dipakai
+      // confirmGramPayment sebagai patokan (bukan harga live saat
+      // konfirmasi — harga bisa bergerak di antaranya).
+      const gramPriceUsd = await getGramPriceUsd();
+      const pricing = gramAmountForUsd(PREMIUM_PLAN_USD[args.plan], gramPriceUsd);
       const inserted = await db
         .insert(schema.premiumOrders)
-        .values({ playerId: p.id, plan: args.plan, stars: 0, days: plan.days, tier: plan.tier, status: "pending", method: "gram", gramAmount: plan.gram })
+        .values({ playerId: p.id, plan: args.plan, stars: 0, days: plan.days, tier: plan.tier, status: "pending", method: "gram", gramAmount: pricing.gram })
         .returning({ id: schema.premiumOrders.id });
       const row = inserted[0];
-      if (!row) return fail(S.errGramOrderFail);
-      await logActivity(db, p.id, "premium_order", S.logPremiumOrderGram(premiumPlanLabel(plan, lang), plan.gram), null);
-      return { ok: true, error: null, orderId: row.id, receiverAddress: GRAM_RECEIVER_ADDRESS, amountNanoTon: String(plan.gramNanoTon), gram: plan.gram };
+      if (!row) return fail(S.errGramOrderFail, pricing.gram);
+      await logActivity(db, p.id, "premium_order", S.logPremiumOrderGram(premiumPlanLabel(plan, lang), pricing.gram), null);
+      return { ok: true, error: null, orderId: row.id, receiverAddress: GRAM_RECEIVER_ADDRESS, amountNanoTon: String(pricing.gramNanoTon), gram: pricing.gram };
     },
   }),
 
   confirmGramPayment: defineGameAction({
     description:
-      "Confirms a GRAM (TON) Premium payment after the player's wallet approved the transaction (TON Connect sendTransaction returned a BOC). The client sends the message hash derived from that BOC plus its connected wallet address; the server looks the transaction up on-chain via tonapi (api/_lib/ton.ts) and checks destination = owner's wallet, sender = connected wallet, amount >= plan price, and the tx hash never used before. On success the order is claimed atomically (pending→paid) and Premium activates with the same extension rule as Stars. If the tx is not indexed yet the call fails with retryable=true so the client retries for a few seconds; wrong recipient/amount/sender or a reused tx hash fail permanently (retryable=false).",
+      "Confirms a GRAM (TON) Premium payment after the player's wallet approved the transaction (TON Connect sendTransaction returned a BOC). The client sends the message hash derived from that BOC plus its connected wallet address; the server looks the transaction up on-chain via tonapi (api/_lib/ton.ts) and checks destination = owner's wallet, sender = connected wallet, amount >= the amount quoted when the order was created (stored gram_amount — NOT the live price at confirmation time, since the GRAM price can move between order creation and confirmation), and the tx hash never used before. On success the order is claimed atomically (pending→paid) and Premium activates with the same extension rule as Stars. If the tx is not indexed yet the call fails with retryable=true so the client retries for a few seconds; wrong recipient/amount/sender or a reused tx hash fail permanently (retryable=false).",
     request: z.object({
       orderId: z.number().int().positive(),
       msgHash: z.string().regex(/^[0-9a-fA-F]{64}$/),
@@ -2725,12 +2760,24 @@ export const gameActions = {
       const plan = PREMIUM_PLANS[order.plan as PremiumPlanId];
       if (!plan || plan.tier !== order.tier)
         return fail(S.errGramOrderInvalid, false);
+      // Jumlah patokan adalah jumlah yang DIKUTIP saat pesanan
+      // dibuat (kolom gram_amount) — BUKAN harga live saat ini:
+      // harga GRAM bisa bergerak antara pembuatan pesanan dan
+      // konfirmasi, dan pemain yang membayar jumlah yang dikutip
+      // tidak boleh gagal karena harganya bergerak. Fallback untuk
+      // pesanan lama tanpa gram_amount: target USD ÷ $1,02.
+      const quotedGram =
+        order.gramAmount ??
+        gramAmountForUsd(
+          PREMIUM_PLAN_USD[order.plan as PremiumPlanId],
+          GRAM_FALLBACK_PRICE_USD,
+        ).gram;
       // Verifikasi on-chain (tonapi, dengan retry internal ±8 detik
       // karena transaksi butuh satu blok untuk terindeks).
       const checked = await verifyGramTransaction({
         msgHash: args.msgHash,
         senderAddress: args.senderAddress,
-        expectedNanoTon: String(plan.gramNanoTon),
+        expectedNanoTon: String(gramToNanoTon(quotedGram)),
         receiverAddress: GRAM_RECEIVER_ADDRESS,
       });
       if (checked.ok === false) {

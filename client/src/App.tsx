@@ -536,6 +536,33 @@ function ConfettiLayer({ burst }: { burst: Burst }) {
 
 type Tab = "tambang" | "peta" | "pasar" | "upgrade" | "wd" | "komunitas" | "admin";
 
+/** Layar boot bermerek — tampil saat state awal game dimuat (bukan
+ *  saat error). Judul + bar progres animasi + baris status yang
+ *  berganti tiap ~1,6 detik, supaya game terasa seperti aplikasi
+ *  engine, bukan halaman statis. Dipakai dua kali: sebagai layar
+ *  penuh saat getGameState masih pending, dan sebagai overlay yang
+ *  memudar begitu data tiba (lihat efek boot di App). */
+const BOOT_LINES = ["loading", "loadingAsteroid", "loadingDrill"] as const;
+function BootLoader({ sessionLabel }: { sessionLabel: string }) {
+  const [line, setLine] = useState(0);
+  useEffect(() => {
+    const id = setInterval(
+      () => setLine((v) => (v + 1) % BOOT_LINES.length),
+      1600,
+    );
+    return () => clearInterval(id);
+  }, []);
+  return (
+    <main className="mx-auto flex min-h-[100svh] w-full max-w-3xl flex-col items-center justify-center px-4 py-16 text-center">
+      <span aria-hidden="true" className="flex h-16 w-16 items-center justify-center rounded-full border border-cyan-400/50 bg-cyan-400/10 text-cyan-300 shadow-lg shadow-cyan-500/20"><RocketIcon size={30} /></span>
+      <p className="font-display title-shine mt-4 text-2xl font-black tracking-widest">ASTRA MINING</p>
+      <div className="mt-6 h-2.5 w-56 overflow-hidden rounded-full bg-[var(--surface2)]" role="progressbar" aria-label={t("loading")}><div className="boot-bar-fill h-full w-2/5 rounded-full bg-gradient-to-r from-cyan-400 to-sky-600" /></div>
+      <p key={line} className="boot-line mt-3 text-sm text-[var(--dim)]">{t(BOOT_LINES[line] ?? "loading")}</p>
+      <p className="mt-2 text-[11px] text-[var(--dim)]">{sessionLabel}</p>
+    </main>
+  );
+}
+
 export function App() {
   // Subscribe to the language context so the whole game re-renders
   // when the player switches ID/EN (t() reads the current language).
@@ -791,7 +818,22 @@ export function App() {
   const buy = useMutation({ mutationFn: (upgradeId: string) => api.buyUpgrade({ upgradeId }), onSuccess: (r) => { showResult(r.ok, r.error, t("upgradeBought", { level: r.newLevel ?? "?", cost: fmt(r.costPaid) })); refresh(); } });
   const cancelWd = useMutation({ mutationFn: (wdId: number) => api.cancelWithdrawal({ wdId }), onSuccess: (r) => { showResult(r.ok, r.error, t("wdCancelled")); refresh(); } });
 
-  if (state.isPending) return (<div className="min-h-screen bg-[var(--bg)] text-[var(--text)]"><div aria-hidden="true" className="bg-[var(--bg)] pt-safe" /><main className="mx-auto max-w-3xl px-4 py-16 text-center"><p className="font-display text-2xl tracking-widest">ASTRA MINING</p><p className="mt-2 text-sm text-[var(--dim)]">{t("loading")}</p><p className="mt-2 text-[11px] text-[var(--dim)]">{sessionLabel}</p></main></div>);
+  // Boot: begitu data pertama tiba, loader overlay memudar (500ms)
+  // lalu dilepas — game muncul dengan halus, bukan terpotong
+  // tiba-tiba. Efek hanya berjalan sekali (ref menahan refetch
+  // tiap 5 detik supaya tidak mengulang).
+  const [bootDone, setBootDone] = useState(false);
+  const [bootFaded, setBootFaded] = useState(false);
+  const bootFadedRef = useRef(false);
+  useEffect(() => {
+    if (!state.data || bootFadedRef.current) return;
+    bootFadedRef.current = true;
+    const raf = requestAnimationFrame(() => setBootFaded(true));
+    const timer = setTimeout(() => setBootDone(true), 550);
+    return () => { cancelAnimationFrame(raf); clearTimeout(timer); };
+  }, [state.data]);
+
+  if (state.isPending) return (<div className="min-h-screen bg-[var(--bg)] text-[var(--text)] starfield"><div aria-hidden="true" className="bg-[var(--bg)] pt-safe" /><BootLoader sessionLabel={sessionLabel} /></div>);
   if (state.error || !state.data) return (<div className="min-h-screen bg-[var(--bg)] text-[var(--text)]"><div aria-hidden="true" className="bg-[var(--bg)] pt-safe" /><main className="mx-auto max-w-3xl px-4 py-16 text-center"><p className="font-display text-xl">{t("connLost")}</p><p className="mt-2 text-sm text-[var(--dim)]">{t("connLostDesc")}</p><p className="mt-2 text-[11px] text-[var(--dim)]">{sessionLabel}</p><button type="button" onClick={() => state.refetch()} className="btn-press mt-4 rounded-xl bg-cyan-500 px-5 py-2 font-bold text-black">{t("retry")}</button></main></div>);
 
   const data = state.data; const p = data.player; const exp = data.expedition; const job = data.job;
@@ -819,6 +861,11 @@ export function App() {
 
   return (
     <div className="min-h-screen bg-[var(--bg)] text-[var(--text)] starfield">
+      {!bootDone && (
+        <div aria-hidden="true" className={`pointer-events-none fixed inset-0 z-50 bg-[var(--bg)] transition-opacity duration-500 ${bootFaded ? "opacity-0" : "opacity-100"}`}>
+          <BootLoader sessionLabel={sessionLabel} />
+        </div>
+      )}
       <div aria-hidden="true" className="bg-[var(--bg)] pt-safe" />
       {burst && <ConfettiLayer burst={burst} />}
       {/* HERO REALISTIS */}
@@ -1085,6 +1132,7 @@ function PremiumCard({ data, onBuy, buying, onBuyGram, buyingGram, gramPhase, in
               </button>
             ))}
           </div>
+          {p.premium.gramPriceUsd != null && (<p className="mt-2 text-center text-xs font-bold text-teal-300">{t("premiumGramRate", { price: fmt(p.premium.gramPriceUsd) })}</p>)}
           <p className="mt-2 text-xs text-[var(--dim)]">{t("premiumGramNote")}</p>
         </div>
       )}

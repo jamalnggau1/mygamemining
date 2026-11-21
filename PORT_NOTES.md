@@ -2434,3 +2434,142 @@ pekerjaan sebelumnya:
   akibat VM restart — diinstal ulang via apt (postgresql-16),
   cluster 16/main dinyalakan, astra_test dibuat ulang dari
   init.sql + migrasi 0001–0008.
+
+## Harga GRAM dinamis dari API live (2026-11-21, PUSHED)
+
+Alasan: harga GRAM turun dari $1,02 (saat harga tetap 4/13 GRAM
+ditetapkan) ke ~$0,96 pada 2026-11-21 — dengan harga tetap,
+owner menerima $3,84 bukan $4,08 per Standard. Harga GRAM
+sekarang mengikuti pasar supaya owner selalu menerima nilai
+USD yang sama.
+
+- Target USD tetap: `PREMIUM_PLAN_USD = { standard: 4.08,
+  pro: 13.26 }` (nilai 4 / 13 GRAM pada $1,02) di
+  `api/_lib/game.ts`.
+- `api/_lib/gram-price.ts` (baru): `getGramPriceUsd()` dengan
+  cache in-memory 5 menit + dedup request bersamaan.
+  Sumber utama: tonapi.io `GET /v2/rates?tokens=ton&currencies=usd`
+  → `rates.TON.prices.USD` (tanpa key; limit 1 req/detik tanpa
+  key — cache 5 menit membuat ini bukan masalah). Cadangan:
+  CoinGecko `GET /v3/simple/price?ids=the-open-network&vs_currencies=usd`
+  (tanpa key). Keduanya gagal → harga cache terakhir; tidak ada
+  cache → fallback tetap $1,02 (harga lama 4/13 GRAM). Setiap
+  fetch memakai timeout ~4 detik (AbortController) supaya API
+  lambat tidak pernah menggantung request. Tidak ada API key
+  di mana pun. Test seam `setGramPriceFetchForTests` /
+  `resetGramPriceFetchForTests` / `resetGramPriceCacheForTests`
+  (pola sama seperti `setTonFetchForTests`).
+- Pembulatan: jumlah GRAM = `ceil2(usdTarget / livePrice)` —
+  dibulatkan KE ATAS ke 2 desimal supaya nilai USD selalu ≥
+  target (pembulatan ke bawah akan merugikan owner).
+  `gramAmountForUsd()` memakai matematika gram-cents integer
+  (`ceil(usd/price*100 − 1e-9)`); `gramToNanoTon()` membulatkan
+  dulu ke 2 desimal — ini melindungi dari error penyimpanan
+  float32 kolom `gram_amount` (REAL).
+- `getGameState`: tiap plan mengembalikan `gram`/`gramNanoTon`
+  live + field baru `gramPriceUsd` di objek premium (bentuk
+  zod diperluas; tipe client mengikuti otomatis).
+  `createGramOrder`: menghitung harga live SETELAH cek gagal
+  murah (bukan Telegram / ada order pending), menyimpannya di
+  kolom `gram_amount` yang sudah ada.
+  `confirmGramPayment`: memverifikasi jumlah on-chain terhadap
+  `gramAmount` YANG TERSIMPAN di order (jumlah yang dikutip
+  saat order dibuat), BUKAN harga live saat itu — pemain yang
+  membayar jumlah yang dikutip tidak boleh gagal hanya karena
+  harga bergerak antara pembuatan order dan konfirmasi. Order
+  lama tanpa `gramAmount` memakai fallback target USD ÷ $1,02.
+  Tidak ada migrasi DB (kolom `gram_amount` sudah ada).
+- Client: tombol plan sudah me-render `plan.gram` dari server,
+  jadi menampilkan harga live otomatis — tidak ada sumber harga
+  kedua di client. Satu baris baru di bawah tombol GRAM di
+  PremiumCard (hanya bila `gramPriceUsd != null`): "1 GRAM ≈
+  $0,96 — harga mengikuti pasar" / "1 GRAM ≈ $0.96 — price
+  follows the market" (key baru `premiumGramRate`, id + en).
+  Tidak ada perubahan kata lain.
+- Contoh jumlah (terverifikasi): harga $0,51 → Standard 8 /
+  Pro 26 GRAM; $1,02 → 4 / 13 GRAM; $2,04 → 2 / 6,5 GRAM;
+  harga live 2026-11-21 ~$0,96 → Standard 4,25 / Pro 13,82
+  GRAM. Cek live langsung dengan modul asli (bukan stub):
+  $0,9599976… → Standard 4,26 GRAM ($4,0896 ≥ $4,08),
+  Pro 13,82 GRAM ($13,2672 ≥ $13,26).
+- Tes: `gram.test.ts` +6 tes (total 21 di file): $0,51 →
+  8/26 GRAM; $2,04 → 2/6,5; $0,96 → 4,25/13,82 (cek ceil:
+  13,26/0,96 = 13,8125 → 13,82; 13,82 × $0,96 = $13,2672 ≥
+  $13,26); kedua API mati → fallback 4/13 ($1,02); harga turun
+  setelah order dibuat (order 4 GRAM di $1,02, harga jadi $0,51
+  → pembayaran 4 GRAM tetap mengaktifkan Premium — plus
+  getGameState baru menegaskan harga live sudah 8 GRAM); harga
+  naik setelah order dibuat (order 8 GRAM di $0,51, harga jadi
+  $2,04 → pembayaran 8 GRAM tetap mengaktifkan). Helper
+  `stubGramPrice(priceUsd | null)` menjawab dalam bentuk
+  respons masing-masing sumber; `beforeEach` men-stub $1,02
+  (tes lama tetap mengharapkan 4/13) + reset cache; `afterEach`
+  reset seam + cache.
+- Verifikasi: typecheck 0 (strict + Vercel-style), build OK
+  (main-V34VR77X.js), full suite 116/116 (2.924 expects).
+  Harness render (jsdom, tanpa global Buffer, state getGameState
+  dari kode server lokal dengan harga live): tombol plan
+  menampilkan 4,26 / 13,82 GRAM dan baris kurs "1 GRAM ≈ $0.96
+  — price follows the market" tampil di tab Hanggar.
+  PENTING — harga GRAM yang dibayar pemain SEKARANG BERUBAH
+  setiap ~5 menit mengikuti pasar; pembelian GRAM live pertama
+  (Standard, dari wallet TON terisi) masih harus diuji di
+  Telegram asli, dan jumlahnya kini harga live, bukan 4 GRAM.
+
+## Boot loader + transisi tab — game terasa seperti engine (2026-11-21, PUSHED)
+
+Alasan: game terasa statis — tidak ada loading, tab berganti
+tanpa animasi. Perubahan: boot screen + transisi tab saja.
+Tidak ada klaim progres palsu, modal, atau loader di setiap
+aksi; tidak ada perubahan logika game, harga (kecuali harga
+GRAM dinamis di atas), atau kata-kata selain baris status
+loader.
+
+- Transisi tab: SUDAH ADA, tidak dibuat ulang — `App.tsx`
+  `<div key={tab} className="tab-content">` + `theme.css`
+  `.tab-content` fade-in-up (0,38s ease-out). Mengganti tab
+  sudah menganimasikan konten masuk (fade + naik sedikit).
+- BootLoader (`client/src/App.tsx`, komponen baru sebelum
+  `App()`): layar penuh bermerek — RocketIcon dalam lingkaran
+  bercahaya, judul "ASTRA MINING" dengan `title-shine`, bar
+  progres animasi tak tentu (`.boot-bar-fill`, segmen meluncur),
+  baris status bergilir tiap ~1,6 detik lewat key i18n baru
+  `loading` / `loadingAsteroid` ("Memuat asteroid…" /
+  "Loading the asteroid…") / `loadingDrill` ("Menyiapkan bor…"
+  / "Preparing the drill…"), plus baris sesi. Dipakai dua kali:
+  sebagai return layar penuh saat `getGameState` pending
+  (menggantikan teks polos "Connecting to the orbital
+  station…" di baris lama 794), dan sebagai overlay tetap yang
+  memudar saat data tiba.
+- Fade-out (di `App`): state `bootDone` / `bootFaded` +
+  `bootFadedRef` (efek berjalan sekali, dijaga oleh
+  `state.data`, jadi refetch 5 detik tidak pernah
+  memicunya lagi): saat data pertama tiba overlay mulai buram,
+  `requestAnimationFrame` mengubahnya jadi transparan (transisi
+  CSS 500ms), timer 550ms melepasnya (unmount). Overlay
+  `pointer-events-none` + `aria-hidden`. Layar error
+  connection-lost yang sudah ada tidak disentuh.
+- `client/src/theme.css`: `@keyframes boot-slide` (segmen
+  −110% → 280%) + `.boot-bar-fill`; `@keyframes boot-line-in`
+  (fade + naik 4px) + `.boot-line`; keduanya masuk blok
+  `prefers-reduced-motion`.
+- Satu error typecheck yang diperbaiki di tengah jalan:
+  `noUncheckedIndexedAccess` pada `t(BOOT_LINES[line])` —
+  diperbaiki dengan `?? "loading"`.
+- Verifikasi: typecheck 0 (strict + Vercel-style), build OK
+  (main-V34VR77X.js), full suite 116/116 (2.924 expects).
+  Harness render (jsdom, tanpa global Buffer, state getGameState
+  asli): loader tampil saat loading (judul + bar + baris
+  status), setelah query selesai UI Explore me-render dan
+  overlay boot hilang setelah fade. Catatan harness: pengecekan
+  harus membaca DOM hasil render di dalam root React, BUKAN
+  `document.body.innerHTML` — innerHTML juga berisi tag
+  `<script>` dengan seluruh sumber bundle, sehingga pencocokan
+  substring memberi false positive (string kamus i18n) maupun
+  false negative (class di sumber). Selain itu: tombol Premium
+  (Stars + GRAM) dan baris kurs HANYA tampil untuk sesi
+  Telegram — harness harus men-stub `window.Telegram.WebApp`
+  (sesi web menampilkan pemberitahuan "buka lewat Telegram").
+  Pelajaran yang sama untuk loader: tombol Buy Premium hanya
+  ada di tab Hanggar, jadi harness harus mengklik tab dulu.
+  Tampilan loader di Mini App asli masih harus dicek di HP.

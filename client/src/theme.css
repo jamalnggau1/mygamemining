@@ -75,6 +75,24 @@
   letter-spacing: 0.04em;
 }
 
+/* Boot loader: indeterminate progress segment sliding across the track */
+@keyframes boot-slide {
+  0% { transform: translateX(-110%); }
+  100% { transform: translateX(280%); }
+}
+.boot-bar-fill {
+  animation: boot-slide 1.4s ease-in-out infinite;
+  will-change: transform;
+}
+/* Rotating boot status line fades in on each change (key remount) */
+@keyframes boot-line-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.boot-line {
+  animation: boot-line-in 0.4s ease-out both;
+}
+
 /* Animated diagonal stripes + sheen on the progress bar of a running job */
 @keyframes job-sheen {
   0% { filter: brightness(1); }
@@ -363,6 +381,8 @@
   .collect-pop,
   .banner-in,
   .tab-content,
+  .boot-bar-fill,
+  .boot-line,
   .energy-shimmer::after,
   .balance-glow,
   .confetti-piece {
