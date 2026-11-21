@@ -78,8 +78,8 @@ export const player = pgTable("player", {
   // Progres sektor (2026-11-20): ekspedisi yang sudah diselesaikan
   // di sektor saat ini. Naik dari sektor L ke L+1 butuh L ekspedisi
   // (1→2 butuh 1, 2→3 butuh 2, ...); saat sektor naik, kembali 0.
-  // Ini yang membuat peta jauh sulit dicapai (Sektor 15 = 105
-  // ekspedisi total) — bukan timer, melainkan jumlah ekspedisi.
+  // Ini yang membuat peta jauh sulit dicapai (Sektor 20 = 190
+  // ekspedisi total sejak 2026-11-21) — bukan timer, melainkan jumlah ekspedisi.
   sectorProgress: integer("sector_progress").notNull().default(0),
   currentZone: integer("current_zone").notNull().default(0),
   premiumUntil: timestamp("premium_until", {
@@ -118,6 +118,23 @@ export const player = pgTable("player", {
   // evaluasi dibatasi max 1×/jam/pemain supaya getGameState yang
   // di-poll tiap 5 detik tidak membebani database.
   lastEvalHour: integer("last_eval_hour"),
+  // Kapan baris pemain ini dibuat — fallback logika pengingat
+  // tidak aktif (migrasi 0009): pemain tanpa baris activity sama
+  // sekali dinilai dari tanggal ini.
+  createdAt: timestamp("created_at", {
+    withTimezone: true,
+    mode: "date",
+  })
+    .notNull()
+    .defaultNow(),
+  // Pengingat tidak aktif (2026-11-21, migrasi 0009): kapan
+  // terakhir pemain ini dikirimi pengingat 3-hari-tidak-aktif.
+  // NULL = belum pernah. Cron mengisi ini tiap kali pengingat
+  // terkirim; jeda minimum antar pengingat 7 hari.
+  lastInactiveNudgeAt: timestamp("last_inactive_nudge_at", {
+    withTimezone: true,
+    mode: "date",
+  }),
 });
 
 export const inventory = pgTable(

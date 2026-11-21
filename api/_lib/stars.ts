@@ -128,10 +128,15 @@ async function callBotApi<T>(
   const f = fetchImpl ?? botFetch;
   let res: Response;
   try {
+    // Batas 5 detik: Telegram yang lambat/mati tidak boleh
+    // menggantung pemanggil — pre_checkout_query harus dijawab
+    // dalam ~10 detik, dan notifikasi WD (best-effort) tidak boleh
+    // menahan aksi WD lebih dari ini.
     res = await f(`${TELEGRAM_API}/bot${token}/${method}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
+      signal: AbortSignal.timeout(5000),
     });
   } catch {
     return { ok: false, error: "network" };
@@ -184,6 +189,24 @@ export async function createInvoiceLink(
   );
   if (r.ok === false) return { ok: false, error: r.error };
   return { ok: true, invoiceUrl: r.data };
+}
+
+/** Mengirim pesan teks ke satu chat Telegram via Bot API. Dipakai
+ *  broadcast Kendali, notifikasi WD, dan pengingat pemain tidak
+ *  aktif. Mengembalikan true bila Telegram menerimanya, false bila
+ *  token hilang / jaringan gagal / Telegram menolak (mis. pemain
+ *  memblokir bot → 403). TIDAK PERNAH throw: pemanggil (aksi game,
+ *  cron) tidak boleh gagal hanya karena satu pesan gagal terkirim. */
+export async function sendTelegramMessage(
+  args: { chatId: number; text: string },
+  fetchImpl?: typeof fetch,
+): Promise<boolean> {
+  const r = await callBotApi<true>(
+    "sendMessage",
+    { chat_id: args.chatId, text: args.text },
+    fetchImpl,
+  );
+  return r.ok;
 }
 
 /** Menjawab pre_checkout_query. Harus dijawab dalam ~10 detik —

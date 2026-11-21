@@ -2573,3 +2573,137 @@ loader.
   Pelajaran yang sama untuk loader: tombol Buy Premium hanya
   ada di tab Hanggar, jadi harness harus mengklik tab dulu.
   Tampilan loader di Mini App asli masih harus dicek di HP.
+
+## Pintu peta diperberat + Statistik Pemain + Broadcast + Notifikasi WD + Pengingat tidak aktif (2026-11-21, implemented, BELUM di-push)
+
+Perintah pemilik 2026-11-21 ("Ya, kerjakan semuanya"): Map 2 di Sektor 3
+terlalu cepat, plus 4 fitur admin/notifikasi. Lima perubahan, staging
+saja — JANGAN push sebelum pemilik menjalankan migrasi 0009 di Neon
+DAN menyetel CRON_SECRET di Vercel (lihat bawah).
+
+### 1. Pintu peta 1/3/6/10/15 → 1/5/9/14/20
+- `api/_lib/game.ts` MAPS `minLayer`: Sabuk Asteroid 3→5, Bulan 6→9,
+  16 Psyche 10→14, Sabuk Kuiper 15→20. Total ekspedisi: 0/10/36/91/190
+  (pemain aktif ~6/hari: Peta 2 ~2 hari, Peta 5 ~32 hari). Aturan naik
+  sektor (triangular, L ekspedisi) TIDAK berubah — hanya pintunya
+  digeser. `rule14` (client/src/i18n.ts, id+en) diperbarui.
+  Pemain yang sudah di Sektor 3–4 kehilangan akses Peta 2 sampai
+  mencapai Sektor 5.
+- Sim (run-sim.ts + run-premium-sim.ts, 180 hari): praktis TIDAK
+  berubah — bonus mengikuti sektor, bukan peta. Gratis aktif: WD
+  pertama hari 5, ulang ~169 hari (46–60) → ~143 hari (166–180),
+  ~0,9 → ~1,0 USDT/30 hari. Premium lvl 5 Pro: WD pertama hari 1,
+  ulang ~12,3 → ~10,0 hari, ~12,2 → ~15,0 USDT/30 hari. Dua pin
+  sim di economy.test.ts digeser dan dijelaskan: Premium Standard
+  aktif WD pertama 2 → 2–3 hari (rentang, Monte Carlo ±1 hari),
+  mid-upgrade Standard wall-time 260 → 240 menit batas bawah
+  (~258 sekarang — Map 1 yang operasinya lebih pendek dipakai lebih
+  lama). Pin string error peta terkunci di i18n.test.ts: Sektor 3 → 5.
+
+### 2. Statistik Pemain di Kendali
+- `getGameState.adminStats.playerStats`: {total, active7d,
+  inactive7d, premiumActive} — total = semua baris player; aktif =
+  ≥1 baris activity 7 hari terakhir (SATU query count distinct,
+  tanpa N+1); tidak aktif = total − aktif; Premium = premium_until
+  di masa depan. Dua query agregat saja. Kartu "Statistik Pemain"
+  di AdminTab (client/src/App.tsx, kunci i18n baru statsTitle dkk,
+  id+en). Tanpa migrasi.
+
+### 3. Broadcast (Kendali → semua pemain)
+- Aksi admin baru `sendBroadcast({text})` (api/_lib/game.ts):
+  teks 1–4000 karakter (zod trim), loop semua pemain dengan
+  telegram_id, kirim berurutan dengan jeda ~50ms via
+  `sendTelegramMessage` (baru di api/_lib/stars.ts, memakai
+  callBotApi + seam setBotFetchForTests yang sama), kembalikan
+  {sent, failed} — 403 (pemain memblokir bot) dihitung gagal, satu
+  pemain gagal tidak pernah menghentikan pengiriman. Kartu Broadcast
+  di Kendali: textarea + tombol "Kirim ke Semua Pemain" + baris
+  hasil "Terkirim ke {sent} pemain, gagal {failed}."
+  (kunci i18n baru broadcast*, id+en). Tanpa migrasi, tanpa env baru.
+
+### 4. Notifikasi WD (approve + dibayar)
+- `updateWithdrawal` di api/_lib/game.ts: setelah approve sukses
+  dan setelah pay sukses, server mengirim pesan Telegram ke
+  telegram_id pemilik WD (best-effort via `notifyWdPlayer` —
+  try/catch, pemain web lama tanpa telegram_id dilewati diam-diam,
+  gagal kirim TIDAK PERNAH menggagalkan WD). Teks tetap Bahasa
+  Indonesia: approve — "WD kamu sebesar {amount} USDT sudah
+  disetujui dan sedang diproses."; pay — "WD kamu sebesar {amount}
+  USDT sudah dibayar. Cek dompetmu!" (amount via fmtNum id, mis. 5).
+  TIDAK ada notifikasi untuk reject (tidak diminta).
+
+### 5. Pengingat tidak aktif 3 hari (cron harian)
+- Migrasi baru deploy/neon/migration-0009-inactive-nudge.sql
+  (+ init.sql + schema.pg.ts): player.last_inactive_nudge_at
+  TIMESTAMPTZ NULL, dan player.created_at TIMESTAMPTZ NOT NULL
+  DEFAULT now() — kolom created_at ini TERNYATA belum ada di tabel
+  player, padahal logika pengingat membutuhkannya sebagai fallback
+  (pemain tanpa baris activity dinilai dari tanggal dibuat; baris
+  lama mendapat created_at = waktu migrasi — aman, mereka tidak
+  diingatkan sebelum 3 hari sesudah migrasi).
+- Logika di api/_lib/nudge.ts (selectNudgeCandidates +
+  runInactiveNudge, bisa di-stub pengirimannya di tes): kandidat =
+  telegram_id ada + aktivitas terakhir (max activity.created_at,
+  fallback created_at) > 3 hari lalu + (belum pernah diingatkan
+  ATAU terakhir diingatkan > 7 hari lalu). Pesan (id): "Sudah 3 hari
+  kamu tidak menambang di ASTRA MINING — asteroidmu menunggumu!
+  Buka game dan lanjutkan ekspedisimu.\nhttps://t.me/astra_mining_bot/astra_mining".
+  Setelah terkirim, last_inactive_nudge_at diisi; gagal kirim tidak
+  ditandai (cron besok mencoba lagi). Return {sent, skipped}
+  (skipped = kandidat yang pesannya gagal terkirim).
+- Endpoint api/cron/inactive-nudge.ts (GET): auth header
+  Authorization: Bearer CRON_SECRET (env var; 401 bila hilang /
+  salah — tanpa ini siapa pun bisa memicu kirim massal).
+  vercel.json: crons [{path /api/cron/inactive-nudge, schedule
+  "0 2 * * *"}] (02:00 WITA setiap hari) + maxDuration 60 untuk
+  fungsi cron.
+- LANGKAH PEMILIK SEBELUM PUSH: (1) jalankan migrasi 0009 di Neon,
+  (2) set CRON_SECRET di Vercel (satu string rahasia apa saja).
+  Setelah deploy, periksa dashboard Vercel → Cron Jobs bahwa
+  cron-nya terdaftar (Hobby mengizinkan 1 cron/hari).
+
+### Perubahan keamanan/keandalan terkait
+- `callBotApi` (api/_lib/stars.ts) kini memakai
+  AbortSignal.timeout(5000): Telegram yang lambat/mati tidak boleh
+  menggantung pemanggil — pre_checkout harus dijawab <10 detik, dan
+  notifikasi WD tidak boleh menahan aksi WD. (Ditemukan lewat tes:
+  WD approve/pay tanpa stub Bot API menggantung >5 detik di
+  sandbox karena fetch sungguhan ke api.telegram.org.)
+- Tes yang approve/pay WD kini men-stub Bot API di beforeEach
+  (game, telegram, ceiling, economy test) — pola yang sama seperti
+  stars.test.ts. Tanpa ini suite menggantung pada panggilan jaringan
+  sungguhan yang tidak deterministik di sandbox.
+
+### File baru / diubah
+- Baru: api/_lib/nudge.ts, api/cron/inactive-nudge.ts,
+  deploy/neon/migration-0009-inactive-nudge.sql,
+  /tmp/smoke-test/notify.test.ts (11 tes; mirror di
+  ~/workspace/smoke-test/).
+- Diubah: api/_lib/game.ts (minLayer, adminStats, sendBroadcast,
+  notifyWdPlayer, ADMIN_ACTIONS), api/_lib/stars.ts
+  (sendTelegramMessage + timeout 5 detik), deploy/neon/schema.pg.ts
+  + init.sql (2 kolom), vercel.json (cron + maxDuration),
+  client/src/App.tsx (PlayerStatsCard + BroadcastCard),
+  client/src/api.ts (sendBroadcast), client/src/i18n.ts (rule14 +
+  16 kunci baru id+en), /tmp/smoke-test/{game,telegram,ceiling,
+  economy,i18n}.test.ts + sim.ts (stub Bot API, re-pin).
+
+### Verifikasi
+- Typecheck 0 (strict + Vercel-style --strictNullChecks false),
+  build OK (main-ZUPB5KA6.js), full suite 127/127 (3.037 expects)
+  DUA KALI berturut-turut (flake "player creation + first
+  asteroid" tidak muncul kali ini; 11 tes notify baru lolos).
+- Harness render (jsdom, tanpa global Buffer, fixture getGameState
+  live yang diperbarui 2026-11-21 ~11:4x WITA — gramPriceUsd
+  $0,9145, Standard 4,47 / Pro 14,50 GRAM): bundle-test.mjs
+  HARNESS OK 8/8; check-kendali.mjs (baru, fixture admin) 9/9 —
+  kartu Statistik Pemain + Broadcast tampil setelah klik tab
+  Kendali. Catatan: 2 cek harness sempat FAIL sebelum fixture
+  diperbarui — fixture lama (01:40 WITA) berisi harga GRAM tetap
+  4/13 tanpa gramPriceUsd, sementara cek-nya mengharapkan harga
+  live; cek plan buttons kini membaca angka dari fixture (bukan
+  pin 4,26/13,82).
+- Yang masih butuh cek live di HP: broadcast ke pemain sungguhan,
+  notifikasi saat WD disetujui/dibayar, cron menembak sekali
+  (periksa log Vercel keesokan paginya + satu pemain tidak aktif
+  menerima pesan).

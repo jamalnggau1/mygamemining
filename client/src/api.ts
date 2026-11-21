@@ -145,4 +145,5 @@ export const api: Api = {
   cancelWithdrawal: (args) => callAction("cancelWithdrawal", args),
   updateWithdrawal: (args) => callAction("updateWithdrawal", args),
   clearPlayerFlag: (args) => callAction("clearPlayerFlag", args),
+  sendBroadcast: (args) => callAction("sendBroadcast", args),
 };

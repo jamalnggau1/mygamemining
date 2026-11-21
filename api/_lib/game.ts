@@ -324,7 +324,7 @@
 //   classifies as an economy event in the split log.
 
 import { z } from "zod";
-import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNotNull, sql } from "drizzle-orm";
 import * as schema from "../../deploy/neon/schema.pg.js";
 import { getDb, type Db } from "./store.js";
 import { resolveSession, type Session } from "./telegram.js";
@@ -349,6 +349,7 @@ import {
   buildInvoicePayload,
   createInvoiceLink,
   parseInvoicePayload,
+  sendTelegramMessage,
   setWebhook,
   STARS_WEBHOOK_URL,
 } from "./stars.js";
@@ -547,7 +548,7 @@ export const MAPS: MapDef[] = [
     taglineEn: "Mid map · flying debris",
     desc: "Di antara Mars dan Jupiter, jutaan serpihan batu beterbangan. Kondrit melimpah, besi-nikel mulai muncul dari inti asteroid purba — dan Turkuois Orbit serta Ametis Sabuk bersembunyi di kawah-kawah tua. Serpihan kadang menyumbat mata bor.",
     descEn: "Between Mars and Jupiter, millions of rock fragments fly around. Chondrite is abundant, iron-nickel starts showing up from the cores of ancient asteroids — and Orbital Turquoise and Belt Amethyst hide in old craters. Debris sometimes clogs the drill bit.",
-    minLayer: 3,
+    minLayer: 5,
     image: "asteroid",
     distanceLabel: "±2,8 SA dari Bumi — di antara Mars dan Jupiter",
     distanceLabelEn: "±2.8 AU from Earth — between Mars and Jupiter",
@@ -565,7 +566,7 @@ export const MAPS: MapDef[] = [
     taglineEn: "Advanced map · radiation & sharp dust",
     desc: "Regolith bulan yang keras dan berdebu tajam. Besi-nikel dan kobalt jadi buruan utama, Zamrud Bulan berkilau hijau dari singkapan batuan, dan Rubi Mare yang langka menunggu penambang tekun. Radiasi permukaan menguras daya setiap operasi, dan debu bulan sesekali membuat bor macet.",
     descEn: "Hard lunar regolith and sharp dust. Iron-nickel and cobalt are the main prize, Moon Emerald glints green from rock outcrops, and the rare Mare Ruby waits for patient miners. Surface radiation drains energy on every operation, and moon dust occasionally jams the drill.",
-    minLayer: 6,
+    minLayer: 9,
     image: "moon",
     distanceLabel: "384 ribu km dari Bumi — tetangga terdekat, batuan kerasnya yang bikin lama",
     distanceLabelEn: "384 thousand km from Earth — the closest neighbour, its hard rock is what slows you down",
@@ -583,7 +584,7 @@ export const MAPS: MapDef[] = [
     taglineEn: "Hard map · giant metal core",
     desc: "Asteroid raksasa yang hampir seluruhnya logam padat. Platinum dan iridium jauh lebih sering terlihat, Safir Bintang dan Berlian Psyche tertanam di inti besinya. Batuan sekeras ini membuat bor sering macet, dan serpihan logam tajam bisa merobek lambung kapal — siapkan KT untuk biaya perbaikan.",
     descEn: "A giant asteroid made almost entirely of solid metal. Platinum and iridium show up far more often, Star Sapphire and Psyche Diamond are embedded in its iron core. Rock this hard jams drills often, and sharp metal shards can tear the hull — keep KT ready for repair fees.",
-    minLayer: 10,
+    minLayer: 14,
     image: "psyche",
     distanceLabel: "±3,3 SA dari Bumi — jauh di sabuk utama luar",
     distanceLabelEn: "±3.3 AU from Earth — deep in the outer main belt",
@@ -601,7 +602,7 @@ export const MAPS: MapDef[] = [
     taglineEn: "Hardest map · edge of the solar system",
     desc: "Ujung tata surya: gelap, membeku, dan bermandikan radiasi kosmik. Iridium dan kristal Helium-3 menunggu di sini, bersama Opal Es Hitam dan Kristal Voidium — permata termahal yang dikenal stasiun. Bor membeku dan macet, lambung kapal rapuh diterpa puing es, dan setiap operasi menguras daya jauh lebih besar. Hanya penambang paling sabar yang pulang kaya dari sini.",
     descEn: "The edge of the solar system: dark, freezing, and bathed in cosmic radiation. Iridium and Helium-3 crystals wait here, along with Black Ice Opal and Voidium Crystal — the most expensive gems the station knows. Drills freeze and jam, the hull grows brittle under ice debris, and every operation drains far more energy. Only the most patient miners come home rich from here.",
-    minLayer: 15,
+    minLayer: 20,
     image: "kuiper",
     distanceLabel: "±40 SA dari Bumi — ujung tata surya, sinyal saja butuh berjam-jam",
     distanceLabelEn: "±40 AU from Earth — the edge of the solar system, even a signal takes hours",
@@ -868,11 +869,12 @@ export function completionBonusKt(layer: number): number {
 /** Ekspedisi yang dibutuhkan untuk naik dari sektor L ke L+1.
  *  Aturan progres sektor (2026-11-20, perintah pemilik — naik map
  *  harus susah): Sektor 1→2 butuh 1 ekspedisi, 2→3 butuh 2, 3→4
- *  butuh 3, dst. Total ekspedisi untuk membuka peta: Peta 2
- *  (Sektor 3) = 3, Peta 3 (Sektor 6) = 15, Peta 4 (Sektor 10) =
- *  45, Peta 5 (Sektor 15) = 105. Bonus ekspedisinya TIDAK berubah
- *  (masih 0,125 + 0,025×sektor, cap 8,75) — ia hanya tumbuh lebih
- *  lambat karena sektornya naik lebih lambat. */
+ *  butuh 3, dst. Pintu peta diperberat lagi 2026-11-21 (perintah
+ *  pemilik — Sektor 3 terlalu cepat untuk Peta 2): Peta 2 (Sektor
+ *  5) = 10, Peta 3 (Sektor 9) = 36, Peta 4 (Sektor 14) = 91,
+ *  Peta 5 (Sektor 20) = 190 ekspedisi total. Bonus ekspedisinya
+ *  TIDAK berubah (masih 0,125 + 0,025×sektor, cap 8,75) — ia hanya
+ *  tumbuh lebih lambat karena sektornya naik lebih lambat. */
 export function expeditionsToAdvance(layer: number): number {
   return layer;
 }
@@ -1216,6 +1218,61 @@ async function countPaidWithdrawals(db: Db, playerId: number): Promise<number> {
       ),
     );
   return rows.length;
+}
+
+/** Statistik pemain untuk kartu "Statistik Pemain" di Kendali
+ *  (2026-11-21, perintah pemilik): total baris pemain; aktif =
+ *  punya ≥1 baris activity dalam 7 hari terakhir; tidak aktif =
+ *  total − aktif; Premium aktif = premium_until masih di masa
+ *  depan. Dua query agregat saja — activity dihitung dengan SATU
+ *  GROUP BY (count distinct), tanpa N+1 per pemain. */
+type PlayerStats = {
+  total: number;
+  active7d: number;
+  inactive7d: number;
+  premiumActive: number;
+};
+async function getPlayerStats(db: Db): Promise<PlayerStats> {
+  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+  const [totals, active] = await Promise.all([
+    db
+      .select({
+        total: sql<number>`count(*)`,
+        premiumActive: sql<number>`count(*) filter (where ${schema.player.premiumUntil} > now())`,
+      })
+      .from(schema.player),
+    db
+      .select({
+        active: sql<number>`count(distinct ${schema.activity.playerId})`,
+      })
+      .from(schema.activity)
+      .where(gte(schema.activity.createdAt, sevenDaysAgo)),
+  ]);
+  const total = Number(totals[0]?.total ?? 0);
+  const premiumActive = Number(totals[0]?.premiumActive ?? 0);
+  const active7d = Number(active[0]?.active ?? 0);
+  return {
+    total,
+    active7d,
+    inactive7d: Math.max(0, total - active7d),
+    premiumActive,
+  };
+}
+
+/** Notifikasi WD ke pemain lewat Telegram (best-effort, 2026-11-21):
+ *  pemain web lama tanpa telegram_id dilewati diam-diam; kegagalan
+ *  kirim TIDAK PERNAH menggagalkan aksi WD — ditangkap dan diabaikan
+ *  (WD sudah tercatat di database sebelum notifikasi dikirim). */
+async function notifyWdPlayer(
+  telegramId: number | null,
+  text: string,
+): Promise<void> {
+  if (telegramId === null) return;
+  try {
+    await sendTelegramMessage({ chatId: telegramId, text });
+  } catch {
+    // Best-effort: notifikasi gagal tidak boleh mengembalikan WD.
+  }
 }
 
 // --- Referral (2026-11-20) --------------------------------------------
@@ -1874,9 +1931,20 @@ export const gameActions = {
         }),
       ),
       // Ringkasan Kendali untuk admin (null untuk pemain biasa):
-      // total USDT yang sudah dibayar ke semua pemain.
+      // total USDT yang sudah dibayar ke semua pemain + statistik
+      // pemain (2026-11-21): total baris pemain, aktif dalam 7 hari
+      // terakhir (ada baris activity), tidak aktif, dan Premium
+      // yang sedang berjalan.
       adminStats: z
-        .object({ totalWdPaidUsdt: z.number() })
+        .object({
+          totalWdPaidUsdt: z.number(),
+          playerStats: z.object({
+            total: z.number(),
+            active7d: z.number(),
+            inactive7d: z.number(),
+            premiumActive: z.number(),
+          }),
+        })
         .nullable(),
       // Anti-cheat: daftar pemain mencurigakan untuk Kendali (null
       // untuk pemain biasa) — telegram id, username, skor risiko,
@@ -1990,8 +2058,9 @@ export const gameActions = {
       const flaggedPlayers = session.isAdmin
         ? await listFlaggedPlayers(db)
         : null;
-      // Kendali: total USDT yang sudah dibayar ke SEMUA pemain (hanya
-      // untuk admin; pemain biasa mendapat null).
+      // Kendali: total USDT yang sudah dibayar ke SEMUA pemain +
+      // statistik pemain (hanya untuk admin; pemain biasa mendapat
+      // null).
       const adminStats = session.isAdmin
         ? {
             totalWdPaidUsdt: Number(
@@ -2003,6 +2072,7 @@ export const gameActions = {
                   .from(schema.player)
               )[0]?.total ?? 0,
             ),
+            playerStats: await getPlayerStats(db),
           }
         : null;
       const now = Date.now();
@@ -3430,6 +3500,12 @@ export const gameActions = {
           .set({ status: "approved", adminNote: args.adminNote ?? wd.adminNote })
           .where(eq(schema.wdRequests.id, wd.id));
         await logActivity(db, wd.playerId, "wd_approve", S.logWdApprove(wd.id, wd.amountUsdt), null);
+        // Notifikasi Telegram ke pemain (best-effort — gagal kirim
+        // tidak menggagalkan approve).
+        await notifyWdPlayer(
+          target.telegramId,
+          `WD kamu sebesar ${fmtNum(wd.amountUsdt, "id")} USDT sudah disetujui dan sedang diproses.`,
+        );
         return { ok: true, error: null, status: "approved" as const };
       }
 
@@ -3450,6 +3526,12 @@ export const gameActions = {
           .set({ totalWdPaidUsdt: target.totalWdPaidUsdt + wd.amountUsdt })
           .where(eq(schema.player.id, target.id));
         await logActivity(db, wd.playerId, "wd_paid", S.logWdPaid(wd.id, wd.amountUsdt), null);
+        // Notifikasi Telegram ke pemain (best-effort — gagal kirim
+        // tidak menggagalkan penandaan dibayar).
+        await notifyWdPlayer(
+          target.telegramId,
+          `WD kamu sebesar ${fmtNum(wd.amountUsdt, "id")} USDT sudah dibayar. Cek dompetmu!`,
+        );
         return { ok: true, error: null, status: "paid" as const };
       }
 
@@ -3470,6 +3552,43 @@ export const gameActions = {
         .where(eq(schema.player.id, target.id));
       await logActivity(db, wd.playerId, "wd_reject", S.logWdReject(wd.id, wd.amountKt), wd.amountKt);
       return { ok: true, error: null, status: "rejected" as const };
+    },
+  }),
+
+  sendBroadcast: defineGameAction({
+    description:
+      "Admin action for the owner (Kendali tab): sends one Telegram message to every player who opened the game via Telegram. Sends sequentially with a ~50ms gap; a player who blocked the bot (Telegram 403) is counted as failed, never crashes the run. Returns sent/failed counts. No new env vars — BOT_TOKEN already in Vercel.",
+    request: z.object({ text: z.string().trim().min(1).max(4000) }),
+    response: resultShape.extend({
+      sent: z.number(),
+      failed: z.number(),
+    }),
+    async handler(args) {
+      const db = getDb();
+      const rows = await db
+        .select({ telegramId: schema.player.telegramId })
+        .from(schema.player)
+        .where(isNotNull(schema.player.telegramId));
+      let sent = 0;
+      let failed = 0;
+      for (const r of rows) {
+        // sendTelegramMessage tidak pernah throw (false bila gagal),
+        // tapi tetap dibungkus: satu pemain tidak boleh merusak
+        // pengiriman ke pemain lain.
+        let ok = false;
+        try {
+          ok = await sendTelegramMessage({
+            chatId: r.telegramId as number,
+            text: args.text,
+          });
+        } catch {
+          ok = false;
+        }
+        if (ok) sent++;
+        else failed++;
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      }
+      return { ok: true, error: null, sent, failed };
     },
   }),
 
@@ -3547,6 +3666,7 @@ export async function dispatchGameAction(
     "grantPremium",
     "clearPlayerFlag",
     "setupStarsWebhook",
+    "sendBroadcast",
   ]);
   if (ADMIN_ACTIONS.has(action) && !resolved.session.isAdmin) {
     return { ok: false, error: serverStrings(resolved.session.lang).errAdminOnly };

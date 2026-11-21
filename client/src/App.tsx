@@ -1431,12 +1431,31 @@ function GrantPremiumCard({ data, onDone }: { data: GameState; onDone: (ok: bool
   );
 }
 
+function PlayerStatsCard({ data }: { data: GameState }) {
+  const s = data.adminStats?.playerStats;
+  if (!s) return null;
+  return (<div className="rounded-2xl bg-[var(--surface)] border border-[var(--border)] p-3"><h2 className="font-display text-base">{t("statsTitle")}</h2><div className="mt-2.5 grid grid-cols-4 gap-2 text-center"><div className="rounded-xl bg-[var(--surface2)] px-2 py-2"><p className="font-display text-base">{fmt(s.total)}</p><p className="text-[11px] font-semibold text-[var(--dim)]">{t("statsTotal")}</p></div><div className="rounded-xl bg-[var(--surface2)] px-2 py-2"><p className="font-display text-base">{fmt(s.active7d)}</p><p className="text-[11px] font-semibold text-[var(--dim)]">{t("statsActive7d")}</p></div><div className="rounded-xl bg-[var(--surface2)] px-2 py-2"><p className="font-display text-base">{fmt(s.inactive7d)}</p><p className="text-[11px] font-semibold text-[var(--dim)]">{t("statsInactive7d")}</p></div><div className="rounded-xl bg-[var(--surface2)] px-2 py-2"><p className="font-display text-base">{fmt(s.premiumActive)}</p><p className="text-[11px] font-semibold text-[var(--dim)]">{t("statsPremium")}</p></div></div></div>);
+}
+
+function BroadcastCard({ onDone }: { onDone: (ok: boolean, error: string | null, good: string) => void }) {
+  const [text, setText] = useState("");
+  const [result, setResult] = useState<{ sent: number; failed: number } | null>(null);
+  const send = useMutation({
+    mutationFn: () => api.sendBroadcast({ text: text.trim() }),
+    onSuccess: (r) => {
+      if (r.ok) { setResult({ sent: r.sent, failed: r.failed }); setText(""); }
+      onDone(r.ok, r.error, r.ok ? t("broadcastSent", { sent: r.sent, failed: r.failed }) : "");
+    },
+  });
+  return (<div className="rounded-2xl bg-[var(--surface)] border border-[var(--border)] p-3"><h2 className="font-display text-base">{t("broadcastTitle")}</h2><ExpandableText className="mt-0.5 text-sm text-[var(--dim)]">{t("broadcastDesc")}</ExpandableText><textarea value={text} onChange={(e) => setText(e.target.value)} placeholder={t("broadcastPlaceholder")} rows={3} maxLength={4000} className="mt-2 w-full rounded-xl border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-sm" /><div className="mt-2 flex flex-wrap items-center gap-2"><button type="button" onClick={() => send.mutate()} disabled={send.isPending || text.trim().length === 0} className="btn-press rounded-xl bg-sky-600 px-4 py-2 font-bold text-white disabled:opacity-40">{t("broadcastBtn")}</button>{result && (<p className="text-sm font-bold">{t("broadcastSent", { sent: result.sent, failed: result.failed })}</p>)}</div></div>);
+}
+
 function AdminTab({ data, onDone }: { data: GameState; onDone: (ok: boolean, error: string | null, good: string) => void }) {
   const order: Record<Wd["status"], number> = { pending: 0, approved: 1, paid: 2, rejected: 3, cancelled: 4 };
   const queue = [...data.withdrawals].sort((a, b) => order[a.status] - order[b.status] || b.id - a.id);
   const lockedKt = data.withdrawals.filter((w) => w.status === "pending" || w.status === "approved").reduce((a, w) => a + w.amountKt, 0);
   const owedUsdt = data.withdrawals.filter((w) => w.status === "approved").reduce((a, w) => a + w.amountUsdt, 0);
-  return (<section className="mt-3 space-y-3"><GrantPremiumCard data={data} onDone={onDone} /><FlaggedPlayersCard data={data} onDone={onDone} /><div className="rounded-2xl bg-[var(--surface)] border border-[var(--border)] p-3"><h2 className="font-display text-base">{t("adminTitle")}</h2><ExpandableText className="mt-0.5 text-sm text-[var(--dim)]">{t("adminFlow")}</ExpandableText><div className="mt-2.5 grid grid-cols-3 gap-2 text-center"><div className="rounded-xl bg-[var(--surface2)] px-2 py-2"><p className="font-display text-base">{fmt(lockedKt)} KT</p><p className="text-[11px] font-semibold text-[var(--dim)]">{t("adminLocked")}</p></div><div className="rounded-xl bg-[var(--surface2)] px-2 py-2"><p className="font-display text-base">{fmt(owedUsdt)} USDT</p><p className="text-[11px] font-semibold text-[var(--dim)]">{t("adminReady")}</p></div><div className="rounded-xl bg-[var(--surface2)] px-2 py-2"><p className="font-display text-base">{fmt(data.adminStats?.totalWdPaidUsdt ?? data.player.totalWdPaidUsdt)} USDT</p><p className="text-[11px] font-semibold text-[var(--dim)]">{t("adminPaid")}</p></div></div></div>{queue.length === 0 ? (<p className="rounded-2xl bg-[var(--surface)] border border-[var(--border)] p-3 text-sm text-[var(--dim)]">{t("adminEmpty")}</p>) : (queue.map((w) => <AdminWdCard key={w.id} wd={w} onDone={onDone} />))}</section>);
+  return (<section className="mt-3 space-y-3"><PlayerStatsCard data={data} /><GrantPremiumCard data={data} onDone={onDone} /><FlaggedPlayersCard data={data} onDone={onDone} /><BroadcastCard onDone={onDone} /><div className="rounded-2xl bg-[var(--surface)] border border-[var(--border)] p-3"><h2 className="font-display text-base">{t("adminTitle")}</h2><ExpandableText className="mt-0.5 text-sm text-[var(--dim)]">{t("adminFlow")}</ExpandableText><div className="mt-2.5 grid grid-cols-3 gap-2 text-center"><div className="rounded-xl bg-[var(--surface2)] px-2 py-2"><p className="font-display text-base">{fmt(lockedKt)} KT</p><p className="text-[11px] font-semibold text-[var(--dim)]">{t("adminLocked")}</p></div><div className="rounded-xl bg-[var(--surface2)] px-2 py-2"><p className="font-display text-base">{fmt(owedUsdt)} USDT</p><p className="text-[11px] font-semibold text-[var(--dim)]">{t("adminReady")}</p></div><div className="rounded-xl bg-[var(--surface2)] px-2 py-2"><p className="font-display text-base">{fmt(data.adminStats?.totalWdPaidUsdt ?? data.player.totalWdPaidUsdt)} USDT</p><p className="text-[11px] font-semibold text-[var(--dim)]">{t("adminPaid")}</p></div></div></div>{queue.length === 0 ? (<p className="rounded-2xl bg-[var(--surface)] border border-[var(--border)] p-3 text-sm text-[var(--dim)]">{t("adminEmpty")}</p>) : (queue.map((w) => <AdminWdCard key={w.id} wd={w} onDone={onDone} />))}</section>);
 }
 
 function FlaggedPlayersCard({ data, onDone }: { data: GameState; onDone: (ok: boolean, error: string | null, good: string) => void }) {

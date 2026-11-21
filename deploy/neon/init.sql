@@ -66,7 +66,16 @@ CREATE TABLE IF NOT EXISTS player (
   instant_collect_streak INTEGER NOT NULL DEFAULT 0,
   tamper_count INTEGER NOT NULL DEFAULT 0,
   tamper_since TIMESTAMPTZ,
-  last_eval_hour INTEGER
+  last_eval_hour INTEGER,
+  -- Kapan baris pemain ini dibuat — fallback logika pengingat
+  -- tidak aktif (migrasi 0009): pemain tanpa baris activity sama
+  -- sekali dinilai dari tanggal ini.
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  -- Pengingat tidak aktif (2026-11-21, migrasi 0009): kapan
+  -- terakhir pemain ini dikirimi pengingat 3-hari-tidak-aktif.
+  -- NULL = belum pernah. Cron mengisi ini tiap kali pengingat
+  -- terkirim; jeda minimum antar pengingat 7 hari.
+  last_inactive_nudge_at TIMESTAMPTZ
 );
 --> statement-breakpoint
 CREATE TABLE IF NOT EXISTS inventory (
