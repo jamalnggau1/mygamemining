@@ -2707,3 +2707,63 @@ DAN menyetel CRON_SECRET di Vercel (lihat bawah).
   notifikasi saat WD disetujui/dibayar, cron menembak sekali
   (periksa log Vercel keesokan paginya + satu pemain tidak aktif
   menerima pesan).
+
+## Waktu bor digandakan (2026-11-22, perintah pemilik — BELUM di-push)
+
+Pemilik: waktu bor sekarang hampir tidak terasa, terutama untuk
+Premium (Standard ×0,75, Pro ×0,375 dari base) — minta waktu
+ditambah lagi, daya dibiarkan begitu saja.
+
+### Perubahan (satu tuas)
+- `api/_lib/game.ts` `mineDurationSec`: base `30 + hardness*25 +
+  qty*8` → **`60 + hardness*50 + qty*16`**, floor `Math.max(25, …)`
+  → **`Math.max(60, …)`**. Yang lain TIDAK berubah: exp/map
+  timeFactor, Beliung −6%/level, Premium ×0,75, Bor Ganda ×0,5.
+- Biaya DAYA bor (`mineEnergyCost`: 4 + hardness + radiasi)
+  TIDAK disentuh, sesuai perintah.
+- Tidak ada teks yang perlu diubah: rule3 ("pengeboran urat butuh
+  waktu sesuai kekerasan batuannya") dan rule16 (faktor waktu peta)
+  tidak menyebut angka detik/menit; doc comment `startMine` juga
+  kualitatif — semuanya tetap akurat.
+
+### Contoh (Map 1, qty 5, tanpa upgrade — lama → baru, detik)
+- Regolith (keras 1): gratis 95→190, Std 71→143, Pro 36→71
+- Besi-Nikel (keras 2): gratis 120→240, Std 90→180, Pro 45→90
+- Platinum (keras 3): gratis 145→290, Std 109→218, Pro 54→109
+- Helium-3 (keras 4): gratis 170→340, Std 128→255, Pro 64→128
+- Map 5 Helium-3 qty 5: gratis 425→850, Pro 159→319
+
+### Sim (180 hari, angka PAYOUT tidak berubah — energi yang
+### mengikat, bukan waktu; hanya waktu dinding yang naik ~2×)
+- Gratis aktif: first WD hari 5, repeat ~168d (46–60) → ~143d
+  (166–180), ~0,9 → ~1,0 USDT/30d. Premium lvl-5: first WD
+  hari 1, repeat ~12,3d → ~10,0d, ~12,2 → ~14,9 USDT/30d.
+- Waktu dinding/hari: gratis max-effort 264 mnt, Premium Std
+  max-effort 396 mnt, Premium Std mid-upgrade 460 mnt (dari ~258),
+  Premium Pro mid-upgrade 264 mnt. SEMUA profil masih jauh di
+  bawah batas 16 jam sadar (960 mnt) dan 24 jam (1.440 mnt) —
+  waktu TIDAK mengikat secara keras; tapi profil terburuk kini
+  menghabiskan 7,7 jam/hari waktu job berurutan (dari 4,3 jam).
+  Job tetap selesai di server walau halaman ditutup, jadi dampak
+  ke pemain adalah menunggu lebih lama antar ketukan — persis
+  rasa yang diminta pemilik.
+- Satu tes gagal dulu dan di-pin ulang dengan jujur:
+  economy.test.ts "operation time does NOT bind any Premium
+  profile" — batas kenyamanan 300 mnt/hari tidak lagi berlaku
+  (mid-upgrade Std 460 mnt); batas baru 960 mnt (anggaran sadar
+  16 jam, sudah dikutip di komentar tes), pin midStd 430–490 mnt.
+  Premis tes (waktu tidak mengikat) tetap benar.
+
+### Verifikasi
+- Typecheck 0 (strict + Vercel-style --strictNullChecks false),
+  build OK — TIDAK ada bundle baru: perubahan ini server-side
+  saja, bundle klien tetap main-ZUPB5KA6.js. Full suite 127/127
+  (3.037 expects) dua kali berturut-turut.
+- Harness render (jsdom, tanpa global Buffer, fixture
+  getGameState live yang diperbarui 2026-11-22): bundle-test.mjs
+  HARNESS OK 5/5 (satu cek sempat FAIL karena harness mengira
+  label tab bahasa Indonesia "Hanggar" — jsdom default bahasa
+  Inggris "Hangar"; bukan bug game).
+- Yang masih butuh cek live di HP: rasa satu siklus bor sebagai
+  pemain Premium Pro (apakah 2× lebih lama terasa pas, bukan
+  membosankan).

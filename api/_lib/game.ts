@@ -821,9 +821,14 @@ export function mineDurationSec(vein: Vein, exp: Expedition, levels: Record<stri
   const ore = oreById(vein.oreId);
   const hardness = ore?.hardness ?? 1;
   const map = mapByIndex(expeditionZone(exp, 0));
-  const base = 30 + hardness * 25 + vein.qty * 8;
+  // Drill times DOUBLED (2026-11-22, owner order — the old times were
+  // barely felt, especially by Premium users). Only the TIME changes:
+  // the drill ENERGY cost (mineEnergyCost: 4 + hardness + radiation)
+  // is untouched, as are exp/map time factors, Beliung −6%/level,
+  // Premium ×0.75 and dual drill ×0.5.
+  const base = 60 + hardness * 50 + vein.qty * 16;
   const sped = base * exp.timeFactor * map.timeFactor * (1 - 0.06 * (levels["beliung"] ?? 0)) * (premium ? PREMIUM_TIME_FACTOR : 1) * (dualDrill ? DUAL_DRILL_FACTOR : 1);
-  return Math.max(25, Math.round(sped));
+  return Math.max(60, Math.round(sped));
 }
 export function scanEnergyCost(exp: Expedition): number {
   return SCAN_ENERGY_COST + mapByIndex(expeditionZone(exp, 0)).radiation;
