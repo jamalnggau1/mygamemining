@@ -75,8 +75,45 @@ CREATE TABLE IF NOT EXISTS player (
   -- terakhir pemain ini dikirimi pengingat 3-hari-tidak-aktif.
   -- NULL = belum pernah. Cron mengisi ini tiap kali pengingat
   -- terkirim; jeda minimum antar pengingat 7 hari.
-  last_inactive_nudge_at TIMESTAMPTZ
+  last_inactive_nudge_at TIMESTAMPTZ,
+  -- PvP (2026-11-22, migrasi 0010): perisai 1 jam setelah diserang
+  -- (menang/kalah), kapan terakhir menyerang (cooldown 30 menit
+  -- antar serangan), dan penawaran pertemuan yang sedang aktif
+  -- (JSON, NULL = tidak ada; kedaluwarsa 10 menit / scan berikut).
+  pvp_shield_until TIMESTAMPTZ,
+  pvp_last_attack_at TIMESTAMPTZ,
+  pvp_encounter TEXT
 );
+--> statement-breakpoint
+-- PvP (2026-11-22): pasukan per pemain — dua jenis, 'attack'
+-- (Drone Serbu) dan 'defense' (Drone Perisai). count = jumlah
+-- drone, level = level teknologi (mulai 1). Kekuatan =
+-- count × (6 + 4×level). Beli + upgrade pakai KT yang sama dengan
+-- saldo WD (satu mata uang — itu dilemanya).
+CREATE TABLE IF NOT EXISTS pvp_troops (
+  player_id INTEGER NOT NULL REFERENCES player (id),
+  kind TEXT NOT NULL CHECK (kind IN ('attack', 'defense')),
+  count INTEGER NOT NULL DEFAULT 0,
+  level INTEGER NOT NULL DEFAULT 1,
+  PRIMARY KEY (player_id, kind)
+);
+--> statement-breakpoint
+-- PvP (2026-11-22): jejak audit setiap pertempuran.
+CREATE TABLE IF NOT EXISTS pvp_battles (
+  id BIGSERIAL PRIMARY KEY,
+  attacker_player_id INTEGER NOT NULL REFERENCES player (id),
+  defender_player_id INTEGER REFERENCES player (id),
+  is_npc BOOLEAN NOT NULL DEFAULT false,
+  winner TEXT NOT NULL CHECK (winner IN ('attacker', 'defender')),
+  attacker_power INTEGER NOT NULL,
+  defender_power INTEGER NOT NULL,
+  loot_kt DOUBLE PRECISION NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS pvp_battles_attacker_idx ON pvp_battles (attacker_player_id, created_at DESC);
+--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS pvp_battles_defender_idx ON pvp_battles (defender_player_id, created_at DESC);
 --> statement-breakpoint
 CREATE TABLE IF NOT EXISTS inventory (
   player_id INTEGER NOT NULL REFERENCES player (id),

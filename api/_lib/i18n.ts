@@ -163,6 +163,18 @@ export interface ServerStrings {
   errOrderAlreadyProcessed: string;
   errOrderOwnerNotFound: string;
   errPlayerNotFound: string;
+  // PvP (2026-11-22)
+  errPvpNoEncounter: string;
+  errPvpEncounterExpired: string;
+  errPvpAttackCooldown: (seconds: number) => string;
+  errPvpDefenderShielded: string;
+  errPvpDefenderGone: string;
+  errPvpTroopNone: (name: string) => string;
+  errPvpTroopMaxCount: (name: string) => string;
+  errPvpTroopMaxLevel: (name: string) => string;
+  /** Nama lawan NPC + penambang tanpa nama, untuk pesan log PvP. */
+  pvpPirate: string;
+  pvpUnknownMiner: string;
   errDailyBonusClaimed: string;
   errAdCapReached: (cap: number) => string;
   errAdCooldown: (seconds: number, cooldown: number) => string;
@@ -245,6 +257,21 @@ export interface ServerStrings {
   // Referral: hadiah 10 KT yang dibayar ke pengundang saat teman
   // yang diundangnya menyelesaikan ekspedisi pertama.
   logReferralReward: (amount: number) => string;
+  // PvP (2026-11-22): hasil serang/bertahan (Log Misi) + rampasan
+  // yang didapat/hilang (Log Ekonomi). Entri untuk pemain yang
+  // diserang ditulis dalam bahasa penyerang (sama seperti log
+  // referral/admin — bahasa per pemain tidak disimpan).
+  logPvpAttackWin: (defenderName: string, lootKt: number) => string;
+  logPvpAttackWinEmpty: (defenderName: string) => string;
+  logPvpAttackLose: (defenderName: string) => string;
+  logPvpDefendedWin: (attackerName: string) => string;
+  logPvpDefendedLose: (attackerName: string, lootKt: number) => string;
+  logPvpDefendedLoseEmpty: (attackerName: string) => string;
+  logPvpTroopBuy: (name: string, count: number) => string;
+  logPvpTroopUpgrade: (name: string, level: number) => string;
+  logPvpLootGain: (lootKt: number) => string;
+  logPvpLootStolen: (lootKt: number) => string;
+  logPvpLootDestroyed: (lootKt: number) => string;
   // Anti-cheat
   tamperScan: string;
   tamperMine: string;
@@ -323,6 +350,18 @@ const id: ServerStrings = {
   errOrderAlreadyProcessed: "Pesanan ini sudah diproses.",
   errOrderOwnerNotFound: "Pemain pemilik pesanan tidak ditemukan.",
   errPlayerNotFound: "Pemain tidak ditemukan.",
+  errPvpNoEncounter: "Tidak ada penawaran pertemuan PvP — selesaikan scan untuk bertemu penambang lain.",
+  errPvpEncounterExpired: "Penawaran pertemuan ini sudah kedaluwarsa — selesaikan scan baru untuk bertemu lagi.",
+  errPvpAttackCooldown: (seconds) =>
+    `Serangan berikutnya baru bisa dalam ${fmtDur(seconds, "id")} lagi — jeda 30 menit antar serangan.`,
+  errPvpDefenderShielded: "Penambang ini sedang kebal — ia baru saja diserang, coba pemain lain.",
+  errPvpDefenderGone: "Penambang itu sudah tidak bisa diserang — penawarannya dibatalkan.",
+  errPvpTroopNone: (name) =>
+    `Kamu belum memiliki ${name} — beli dulu sebelum meng-upgrade.`,
+  errPvpTroopMaxCount: (name) => `${name} sudah mencapai jumlah maksimum.`,
+  errPvpTroopMaxLevel: (name) => `${name} sudah level maksimum.`,
+  pvpPirate: "Perompak",
+  pvpUnknownMiner: "Penambang Lain",
   errDailyBonusClaimed:
     "Bonus harian sudah diklaim hari ini. Kembali lagi besok!",
   errAdCapReached: (cap) =>
@@ -410,6 +449,27 @@ const id: ServerStrings = {
     `WD #${id} ditolak — ${fmtNum(kt, "id")} KT dikembalikan ke saldo pemain.`,
   logReferralReward: (amount) =>
     `Teman yang kamu undang menyelesaikan ekspedisi pertamanya — hadiah referral ${fmtNum(amount, "id")} KT masuk ke saldo.`,
+  logPvpAttackWin: (defenderName, lootKt) =>
+    `Kamu menyerang ${defenderName} dan MENANG — merampas hasil tambang senilai ${fmtNum(lootKt, "id")} KT.`,
+  logPvpAttackWinEmpty: (defenderName) =>
+    `Kamu menyerang ${defenderName} dan MENANG — tapi tidak ada hasil tambang yang bisa dirampas.`,
+  logPvpAttackLose: (defenderName) =>
+    `Kamu menyerang ${defenderName} dan KALAH — kekuatan bertahannya lebih besar.`,
+  logPvpDefendedWin: (attackerName) =>
+    `${attackerName} menyerangmu tapi pertahananmu menang — hasil tambangmu aman, dan kamu kebal 1 jam.`,
+  logPvpDefendedLose: (attackerName, lootKt) =>
+    `${attackerName} menyerangmu dan menang — ${fmtNum(lootKt, "id")} KT hasil tambangmu dirampas. Kamu kebal 1 jam.`,
+  logPvpDefendedLoseEmpty: (attackerName) =>
+    `${attackerName} menyerangmu dan menang — tapi tidak ada hasil tambang yang bisa dirampas. Kamu kebal 1 jam.`,
+  logPvpTroopBuy: (name, count) =>
+    `${name} ke-${count} dibeli.`,
+  logPvpTroopUpgrade: (name, level) => `${name} naik ke level ${level}.`,
+  logPvpLootGain: (lootKt) =>
+    `Rampasan PvP senilai ${fmtNum(lootKt, "id")} KT masuk ke kargomu.`,
+  logPvpLootStolen: (lootKt) =>
+    `Hasil tambang senilai ${fmtNum(lootKt, "id")} KT dirampas penyerang dalam PvP.`,
+  logPvpLootDestroyed: (lootKt) =>
+    `Hasil tambang senilai ${fmtNum(lootKt, "id")} KT hancur dalam pertempuran PvP.`,
   tamperScan: "memulai scan saat operasi masih berjalan",
   tamperMine: "memulai pengeboran saat operasi masih berjalan",
   tamperCollect: "ambil hasil sebelum operasi selesai",
@@ -491,6 +551,18 @@ const en: ServerStrings = {
   errOrderAlreadyProcessed: "This order has already been processed.",
   errOrderOwnerNotFound: "The player who owns this order was not found.",
   errPlayerNotFound: "Player not found.",
+  errPvpNoEncounter: "There is no PvP encounter offer — finish a scan to meet another miner.",
+  errPvpEncounterExpired: "This encounter offer has expired — finish a new scan to meet someone again.",
+  errPvpAttackCooldown: (seconds) =>
+    `Your next attack is available in ${fmtDur(seconds, "en")} — there is a 30-minute gap between attacks.`,
+  errPvpDefenderShielded: "This miner is currently immune — they were just attacked, try another player.",
+  errPvpDefenderGone: "That miner can no longer be attacked — the offer was cancelled.",
+  errPvpTroopNone: (name) =>
+    `You do not own any ${name} yet — buy one before upgrading.`,
+  errPvpTroopMaxCount: (name) => `${name} is already at the maximum count.`,
+  errPvpTroopMaxLevel: (name) => `${name} is already at max level.`,
+  pvpPirate: "Pirate",
+  pvpUnknownMiner: "Another Miner",
   errDailyBonusClaimed:
     "The daily bonus has already been claimed today. Come back tomorrow!",
   errAdCapReached: (cap) =>
@@ -578,6 +650,27 @@ const en: ServerStrings = {
     `WD #${id} rejected — ${fmtNum(kt, "en")} KT refunded to the player's balance.`,
   logReferralReward: (amount) =>
     `A friend you invited completed their first expedition — referral reward of ${fmtNum(amount, "en")} KT added to your balance.`,
+  logPvpAttackWin: (defenderName, lootKt) =>
+    `You attacked ${defenderName} and WON — looting ore worth ${fmtNum(lootKt, "en")} KT.`,
+  logPvpAttackWinEmpty: (defenderName) =>
+    `You attacked ${defenderName} and WON — but there was no ore to loot.`,
+  logPvpAttackLose: (defenderName) =>
+    `You attacked ${defenderName} and LOST — their defense was stronger.`,
+  logPvpDefendedWin: (attackerName) =>
+    `${attackerName} attacked you but your defense won — your ore is safe, and you are immune for 1 hour.`,
+  logPvpDefendedLose: (attackerName, lootKt) =>
+    `${attackerName} attacked you and won — ${fmtNum(lootKt, "en")} KT of your ore was looted. You are immune for 1 hour.`,
+  logPvpDefendedLoseEmpty: (attackerName) =>
+    `${attackerName} attacked you and won — but there was no ore to loot. You are immune for 1 hour.`,
+  logPvpTroopBuy: (name, count) =>
+    `${name} #${count} bought.`,
+  logPvpTroopUpgrade: (name, level) => `${name} upgraded to level ${level}.`,
+  logPvpLootGain: (lootKt) =>
+    `PvP loot worth ${fmtNum(lootKt, "en")} KT added to your cargo.`,
+  logPvpLootStolen: (lootKt) =>
+    `Ore worth ${fmtNum(lootKt, "en")} KT was looted by an attacker in PvP.`,
+  logPvpLootDestroyed: (lootKt) =>
+    `Ore worth ${fmtNum(lootKt, "en")} KT was destroyed in a PvP battle.`,
   tamperScan: "starting a scan while an operation was running",
   tamperMine: "starting a mining job while an operation was running",
   tamperCollect: "collecting before the operation finished",

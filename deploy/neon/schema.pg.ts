@@ -36,6 +36,7 @@
 import {
   bigint,
   bigserial,
+  boolean,
   doublePrecision,
   index,
   integer,
@@ -135,6 +136,19 @@ export const player = pgTable("player", {
     withTimezone: true,
     mode: "date",
   }),
+  // PvP (2026-11-22, migrasi 0010): perisai 1 jam setelah diserang
+  // (menang/kalah), kapan terakhir menyerang (cooldown 30 menit
+  // antar serangan), dan penawaran pertemuan yang sedang aktif
+  // (JSON, NULL = tidak ada; kedaluwarsa 10 menit / scan berikut).
+  pvpShieldUntil: timestamp("pvp_shield_until", {
+    withTimezone: true,
+    mode: "date",
+  }),
+  pvpLastAttackAt: timestamp("pvp_last_attack_at", {
+    withTimezone: true,
+    mode: "date",
+  }),
+  pvpEncounter: text("pvp_encounter"),
 });
 
 export const inventory = pgTable(
@@ -300,6 +314,52 @@ export const playerIp = pgTable(
   (t) => [
     primaryKey({ columns: [t.playerId, t.ip] }),
     index("player_ip_ip_idx").on(t.ip, t.lastSeenAt),
+  ],
+);
+
+// PvP (2026-11-22): pasukan per pemain — dua jenis, 'attack'
+// (Drone Serbu) dan 'defense' (Drone Perisai). count = jumlah
+// drone, level = level teknologi (mulai 1). Kekuatan =
+// count × (6 + 4×level). Beli + upgrade pakai KT yang sama dengan
+// saldo WD (satu mata uang — itu dilemanya).
+export const pvpTroops = pgTable(
+  "pvp_troops",
+  {
+    playerId: integer("player_id")
+      .notNull()
+      .references(() => player.id),
+    kind: text("kind", { enum: ["attack", "defense"] }).notNull(),
+    count: integer("count").notNull().default(0),
+    level: integer("level").notNull().default(1),
+  },
+  (t) => [primaryKey({ columns: [t.playerId, t.kind] })],
+);
+
+// PvP (2026-11-22): jejak audit setiap pertempuran — siapa
+// menyerang siapa, NPC atau pemain, siapa menang, kekuatan kedua
+// pihak, dan nilai KT rampasan (0 bila tidak ada yang dirampas).
+export const pvpBattles = pgTable(
+  "pvp_battles",
+  {
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    attackerPlayerId: integer("attacker_player_id")
+      .notNull()
+      .references(() => player.id),
+    defenderPlayerId: integer("defender_player_id").references(
+      () => player.id,
+    ),
+    isNpc: boolean("is_npc").notNull().default(false),
+    winner: text("winner", { enum: ["attacker", "defender"] }).notNull(),
+    attackerPower: integer("attacker_power").notNull(),
+    defenderPower: integer("defender_power").notNull(),
+    lootKt: doublePrecision("loot_kt").notNull().default(0),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    index("pvp_battles_attacker_idx").on(t.attackerPlayerId, t.createdAt),
+    index("pvp_battles_defender_idx").on(t.defenderPlayerId, t.createdAt),
   ],
 );
 

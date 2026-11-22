@@ -1204,7 +1204,7 @@ async function logActivity(
 // that moves KT, upgrades or Premium). Selling belongs to the economy
 // stream, expeditions to the mission stream — classified here from the
 // stored kind so old rows split correctly too.
-const MISSION_KINDS = new Set(["scan", "jam", "rare_find", "expedition_bonus", "travel", "hull_damage"]);
+const MISSION_KINDS = new Set(["scan", "jam", "rare_find", "expedition_bonus", "travel", "hull_damage", "pvp_attack", "pvp_defend"]);
 function activityCategory(kind: string): "mission" | "economy" {
   return MISSION_KINDS.has(kind) ? "mission" : "economy";
 }
@@ -1409,6 +1409,369 @@ async function payReferralRewardIfPending(
     // Hadiah gagal = referral sekadar tidak terbayar kali ini;
     // ekspedisi si yang diundang tetap selesai seperti biasa.
   }
+}
+
+// --- PvP (2026-11-22) -------------------------------------------------
+// Aturan yang disepakati pemilik (diskusi 2026-11-22, jangan
+// diligitasi ulang):
+//   - KT SATU jenis: semua KT bisa di-WD. Pasukan dibeli/di-upgrade
+//     pakai KT yang sama — itu dilemanya (KT buat WD vs pasukan).
+//   - Pertemuan: saat scan SELESAI, kadang ketemu penambang lain.
+//     Peta 1 aman (0%); peluang naik per peta. Bukan tiap scan.
+//   - Menang-kalah MURNI dari kekuatan — TANPA faktor acak yang
+//     membuat yang lemah bisa menang. Pelindungnya adalah kebal
+//     1 jam setelah diserang, bukan keberuntungan. Seri = bertahan
+//     menang (keuntungan kandang).
+//   - Rampas dari HASIL TAMBANG (bijih belum dijual), bukan saldo
+//     KT. Pemenang mengambil 15% hasil tambang si kalah; penyerang
+//     yang kalah kehilangan 10% hasil tambangnya sendiri (DIHANCURKAN
+//     — KT sink, bukan dipindah).
+//   - Pertemuan adalah kejadian sampingan: "Lewati" maupun bertarung
+//     TIDAK menambah progres sektor — sektor hanya naik saat
+//     ekspedisi selesai (semua urat dibor), di map mana pun.
+//   - Yang diserang tidak harus online — pertahanannya dihitung
+//     otomatis dari pasukannya.
+//   - PvP TIDAK menciptakan KT (rampasan = transfer; kekalahan =
+//     penghancuran). Satu-satunya pengecualian: rampasan dari
+//     Perompak NPC (cadangan bila tidak ada pemain layak diserang)
+//     adalah faucet kecil, dibatasi cooldown serangan + peluang
+//     pertemuan.
+
+// Peluang bertemu penambang lain saat scan selesai, per peta
+// (indeks peta 0..4). Peta 1 (Orbit Rendah) aman: 0%.
+export const PVP_ENCOUNTER_CHANCE = [0, 0.1, 0.15, 0.2, 0.3] as const;
+// Penawaran pertemuan berlaku 10 menit, atau sampai scan/asteroid/
+// peta berikutnya dimulai (startScan/abandon/travel/complete
+// menghapus penawaran lama).
+export const PVP_ENCOUNTER_EXPIRY_MS = 10 * 60 * 1000;
+// Setelah diserang (menang/kalah), pemain kebal 1 jam.
+export const PVP_SHIELD_MS = 60 * 60 * 1000;
+// Jeda antar serangan penyerang: 30 menit.
+export const PVP_ATTACK_COOLDOWN_MS = 30 * 60 * 1000;
+// Pemenang merampas 15% hasil tambang si kalah (per jenis mineral,
+// dibulatkan ke bawah, dipindah sebagai unit bijih).
+export const PVP_STEAL_PCT = 0.15;
+// Penyerang yang kalah kehilangan 10% hasil tambangnya sendiri —
+// DIHANCURKAN dalam pertempuran (bukan dipindah), jadi ini KT sink.
+export const PVP_LOSER_LOSS_PCT = 0.1;
+// Lawan hanya layak dipilih bila setidaknya satu jenis bijihnya
+// ≥7 unit — 15% dari 7 baru menghasilkan ≥1 unit rampasan.
+const PVP_MIN_LOOT_QTY = 7;
+
+// Pasukan: dua jenis, dibeli + di-upgrade pakai KT yang sama dengan
+// saldo WD (SATU mata uang — itu dilemanya).
+export const TROOP_MAX_COUNT = 20;
+export const TROOP_MAX_LEVEL = 5;
+const TROOP_BUY_BASE_KT = 10; // beli satu drone lagi: 10 + 5×jumlah sekarang
+const TROOP_BUY_PER_COUNT_KT = 5;
+const TROOP_UPGRADE_BASE_KT = 25; // upgrade L→L+1: 25×L KT
+const TROOP_POWER_BASE = 6; // kekuatan per drone: 6 + 4×level
+const TROOP_POWER_PER_LEVEL = 4;
+
+export type TroopKind = "attack" | "defense";
+
+type TroopDef = {
+  kind: TroopKind;
+  name: string;
+  nameEn: string;
+  desc: string;
+  descEn: string;
+};
+
+export const TROOP_DEFS: TroopDef[] = [
+  {
+    kind: "attack",
+    name: "Drone Serbu",
+    nameEn: "Assault Drone",
+    desc: "Drone tempur untuk menyerang penambang lain — kekuatan serangmu adalah jumlah Drone Serbu × kekuatan per drone.",
+    descEn: "Combat drone for attacking other miners — your attack power is your Assault Drone count × power per drone.",
+  },
+  {
+    kind: "defense",
+    name: "Drone Perisai",
+    nameEn: "Shield Drone",
+    desc: "Drone penjaga yang melindungi hasil tambangmu saat diserang — kekuatan bertahanmu adalah jumlah Drone Perisai × kekuatan per drone.",
+    descEn: "Guard drone that protects your ore when attacked — your defense power is your Shield Drone count × power per drone.",
+  },
+];
+
+function troopDef(kind: TroopKind): TroopDef {
+  return TROOP_DEFS.find((d) => d.kind === kind) ?? TROOP_DEFS[0]!;
+}
+
+function troopName(def: TroopDef, lang: Lang): string {
+  return lang === "en" ? def.nameEn : def.name;
+}
+
+/** Biaya beli satu drone lagi (jumlah sekarang → +1). */
+export function troopBuyCost(count: number): number {
+  return TROOP_BUY_BASE_KT + TROOP_BUY_PER_COUNT_KT * count;
+}
+
+/** Biaya upgrade level L → L+1. */
+export function troopUpgradeCost(level: number): number {
+  return TROOP_UPGRADE_BASE_KT * level;
+}
+
+/** Kekuatan satu jenis pasukan: jumlah drone × (6 + 4×level). */
+export function troopPower(count: number, level: number): number {
+  return count * (TROOP_POWER_BASE + TROOP_POWER_PER_LEVEL * Math.max(1, level));
+}
+
+// Perompak NPC — lawan cadangan bila tidak ada pemain lain yang
+// layak diserang (jumlah pemain masih sedikit). Kekuatan bertahan
+// 9: satu Drone Serbu level 1 (kekuatan 10) sudah bisa menang —
+// perompak adalah lawan pemula, bukan tembok.
+export const NPC_PIRATE_DEFENSE = 9;
+// Harta Perompak (tetap): 15% per jenis, dibulatkan ke bawah →
+// 3 Regolith + 2 Kondrit + 1 Besi-Nikel + 0 Kobalt ≈ 0,3 KT.
+// Rampasan NPC adalah satu-satunya KT yang PvP "ciptakan" — faucet
+// kecil, dibatasi cooldown serangan 30 menit + peluang pertemuan
+// ≤30% (dan NPC hanya muncul bila tidak ada pemain layak diserang).
+export const NPC_PIRATE_HAUL: Record<string, number> = {
+  regolith: 20,
+  kondrit: 14,
+  besinikel: 7,
+  kobalt: 4,
+};
+
+/** Penawaran pertemuan PvP yang tersimpan di player.pvp_encounter
+ *  (JSON). defenderPlayerId null = Perompak NPC. */
+export type PvpEncounter = {
+  defenderPlayerId: number | null;
+  defenderName: string | null;
+  defensePower: number;
+  expiresAt: number;
+  zoneIndex: number;
+};
+
+function parseEncounter(raw: string | null): PvpEncounter | null {
+  if (!raw) return null;
+  try {
+    const v = JSON.parse(raw) as Partial<PvpEncounter>;
+    if (typeof v !== "object" || v === null) return null;
+    if (typeof v.defensePower !== "number" || typeof v.expiresAt !== "number") return null;
+    if (v.defenderPlayerId !== null && typeof v.defenderPlayerId !== "number") return null;
+    return {
+      defenderPlayerId: v.defenderPlayerId ?? null,
+      defenderName: typeof v.defenderName === "string" ? v.defenderName : null,
+      defensePower: v.defensePower,
+      expiresAt: v.expiresAt,
+      zoneIndex: typeof v.zoneIndex === "number" ? v.zoneIndex : 0,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function pvpEncounterExpired(enc: PvpEncounter): boolean {
+  return Date.now() >= enc.expiresAt;
+}
+
+/** Bentuk penawaran yang dikirim ke klien (tanpa id internal). */
+function toClientEncounter(enc: PvpEncounter): {
+  defenderName: string | null;
+  isNpc: boolean;
+  defensePower: number;
+  expiresAt: string;
+} {
+  return {
+    defenderName: enc.defenderName,
+    isNpc: enc.defenderPlayerId === null,
+    defensePower: enc.defensePower,
+    expiresAt: new Date(enc.expiresAt).toISOString(),
+  };
+}
+
+export type TroopState = { count: number; level: number };
+
+/** Memuat pasukan satu pemain (default: 0 drone, level 1). Tabel
+ *  yang belum ada (migrasi 0010 belum jalan) = tidak ada pasukan —
+ *  getGameState tidak boleh mati karena itu. */
+async function loadTroops(
+  db: Db,
+  playerId: number,
+): Promise<Record<TroopKind, TroopState>> {
+  const out: Record<TroopKind, TroopState> = {
+    attack: { count: 0, level: 1 },
+    defense: { count: 0, level: 1 },
+  };
+  try {
+    const rows = await db
+      .select()
+      .from(schema.pvpTroops)
+      .where(eq(schema.pvpTroops.playerId, playerId));
+    for (const r of rows) {
+      if (r.kind === "attack" || r.kind === "defense") {
+        out[r.kind] = { count: r.count, level: Math.max(1, r.level) };
+      }
+    }
+  } catch {
+    // Migrasi 0010 belum jalan — tidak ada pasukan, game tetap jalan.
+  }
+  return out;
+}
+
+type HaulItem = { oreId: string; qty: number };
+
+/** Hasil tambang yang belum dijual (inventory) satu pemain. */
+async function loadHaul(db: Db, playerId: number): Promise<HaulItem[]> {
+  const rows = await db
+    .select()
+    .from(schema.inventory)
+    .where(
+      and(
+        eq(schema.inventory.playerId, playerId),
+        gte(schema.inventory.qty, 1),
+      ),
+    );
+  return rows.map((r) => ({ oreId: r.oreId, qty: r.qty }));
+}
+
+/** Menggeser inventory satu jenis bijih (delta negatif menghapus
+ *  baris bila habis). */
+async function adjustInventory(
+  db: Db,
+  playerId: number,
+  oreId: string,
+  delta: number,
+): Promise<void> {
+  if (delta === 0) return;
+  if (delta > 0) {
+    await db
+      .insert(schema.inventory)
+      .values({ playerId, oreId, qty: delta })
+      .onConflictDoUpdate({
+        target: [schema.inventory.playerId, schema.inventory.oreId],
+        set: { qty: sql`${schema.inventory.qty} + ${delta}` },
+      });
+    return;
+  }
+  const rows = await db
+    .select()
+    .from(schema.inventory)
+    .where(
+      and(
+        eq(schema.inventory.playerId, playerId),
+        eq(schema.inventory.oreId, oreId),
+      ),
+    )
+    .limit(1);
+  const cur = rows[0]?.qty ?? 0;
+  const next = cur + delta;
+  if (next <= 0) {
+    await db
+      .delete(schema.inventory)
+      .where(
+        and(
+          eq(schema.inventory.playerId, playerId),
+          eq(schema.inventory.oreId, oreId),
+        ),
+      );
+  } else {
+    await db
+      .update(schema.inventory)
+      .set({ qty: next })
+      .where(
+        and(
+          eq(schema.inventory.playerId, playerId),
+          eq(schema.inventory.oreId, oreId),
+        ),
+      );
+  }
+}
+
+/** Nilai KT (harga dasar) dari sederet unit bijih. */
+function haulKtValue(haul: HaulItem[]): number {
+  let v = 0;
+  for (const h of haul) {
+    const ore = oreById(h.oreId);
+    if (ore) v += h.qty * ore.price;
+  }
+  return roundKt(v);
+}
+
+/** Ambil `pct` dari tiap jenis bijih (per jenis, dibulatkan ke
+ *  bawah) — rampasan / kehancuran selalu per jenis, bukan total. */
+function takeFromHaul(haul: HaulItem[], pct: number): HaulItem[] {
+  return haul
+    .map((h) => ({ oreId: h.oreId, qty: Math.floor(h.qty * pct) }))
+    .filter((h) => h.qty > 0);
+}
+
+/** Cari satu pemain lain yang layak diserang: punya hasil tambang
+ *  yang cukup (≥7 unit pada satu jenis bijih — 15%-nya baru jadi
+ *  ≥1 unit rampasan), tidak kebal, dan bukan penyerang sendiri.
+ *  Dipilih acak di antara paling banyak 50 kandidat. Mengembalikan
+ *  null bila tidak ada yang layak — pemanggil memakai Perompak NPC
+ *  sebagai cadangan. Diekspor untuk tes (deterministik). */
+export async function findPvpDefender(
+  db: Db,
+  attackerId: number,
+): Promise<{
+  playerId: number;
+  username: string | null;
+  defensePower: number;
+} | null> {
+  const candidates = await db
+    .select({ playerId: schema.inventory.playerId })
+    .from(schema.inventory)
+    .innerJoin(schema.player, eq(schema.player.id, schema.inventory.playerId))
+    .where(
+      and(
+        gte(schema.inventory.qty, PVP_MIN_LOOT_QTY),
+        sql`${schema.player.id} <> ${attackerId}`,
+        sql`(${schema.player.pvpShieldUntil} IS NULL OR ${schema.player.pvpShieldUntil} < now())`,
+      ),
+    )
+    .limit(50);
+  const ids = [...new Set(candidates.map((c) => c.playerId))];
+  if (ids.length === 0) return null;
+  const picked = ids[Math.floor(Math.random() * ids.length)]!;
+  const target = await loadPlayerRowOrNull(db, picked);
+  if (!target) return null;
+  const troops = await loadTroops(db, picked);
+  return {
+    playerId: picked,
+    username: target.username,
+    defensePower: troopPower(troops.defense.count, troops.defense.level),
+  };
+}
+
+/** Lempar dadu pertemuan saat scan selesai (peta 1 = 0%, tidak
+ *  pernah). Bila kena, cari lawan sungguhan; bila tidak ada, lawan
+ *  adalah Perompak NPC. Penawaran disimpan di baris penyerang.
+ *  `rand` bisa di-inject di tes supaya deterministik. */
+export async function rollPvpEncounter(
+  db: Db,
+  attacker: PlayerRow,
+  zoneIdx: number,
+  rand: () => number = Math.random,
+): Promise<PvpEncounter | null> {
+  const chance = PVP_ENCOUNTER_CHANCE[zoneIdx] ?? 0;
+  if (chance <= 0) return null;
+  if (rand() >= chance) return null;
+  const defender = await findPvpDefender(db, attacker.id);
+  const enc: PvpEncounter = defender
+    ? {
+        defenderPlayerId: defender.playerId,
+        defenderName: defender.username,
+        defensePower: defender.defensePower,
+        expiresAt: Date.now() + PVP_ENCOUNTER_EXPIRY_MS,
+        zoneIndex: zoneIdx,
+      }
+    : {
+        defenderPlayerId: null,
+        defenderName: null,
+        defensePower: NPC_PIRATE_DEFENSE,
+        expiresAt: Date.now() + PVP_ENCOUNTER_EXPIRY_MS,
+        zoneIndex: zoneIdx,
+      };
+  await db
+    .update(schema.player)
+    .set({ pvpEncounter: JSON.stringify(enc) })
+    .where(eq(schema.player.id, attacker.id));
+  return enc;
 }
 
 async function canClaimDailyBonus(db: Db, playerId: number): Promise<boolean> {
@@ -1935,6 +2298,42 @@ export const gameActions = {
           createdAt: z.string(),
         }),
       ),
+      // PvP (2026-11-22): pasukan + kekuatan + perisai/cooldown +
+      // penawaran pertemuan yang sedang aktif (null bila tidak ada).
+      pvp: z.object({
+        attackPower: z.number(),
+        defensePower: z.number(),
+        troops: z.object({
+          attack: z.object({
+            count: z.number(),
+            level: z.number(),
+            power: z.number(),
+            buyCost: z.number(),
+            upgradeCost: z.number().nullable(),
+            maxCount: z.number(),
+            maxLevel: z.number(),
+          }),
+          defense: z.object({
+            count: z.number(),
+            level: z.number(),
+            power: z.number(),
+            buyCost: z.number(),
+            upgradeCost: z.number().nullable(),
+            maxCount: z.number(),
+            maxLevel: z.number(),
+          }),
+        }),
+        shieldUntil: z.string().nullable(),
+        attackReadyAt: z.string().nullable(),
+        encounter: z
+          .object({
+            defenderName: z.string().nullable(),
+            isNpc: z.boolean(),
+            defensePower: z.number(),
+            expiresAt: z.string(),
+          })
+          .nullable(),
+      }),
       // Ringkasan Kendali untuk admin (null untuk pemain biasa):
       // total USDT yang sudah dibayar ke semua pemain + statistik
       // pemain (2026-11-21): total baris pemain, aktif dalam 7 hari
@@ -2044,6 +2443,14 @@ export const gameActions = {
       const wdPaidCount = await countPaidWithdrawals(db, p.id);
       const wdMinKt = wdMinKtForPaidCount(wdPaidCount);
       const adStats = await getAdStats(db, p.id);
+      // PvP: pasukan + penawaran pertemuan (yang kedaluwarsa tidak
+      // dikembalikan — pvpAttack tetap memvalidasi ulang).
+      const troops = await loadTroops(db, p.id);
+      const pvpEncounterRaw = parseEncounter(p.pvpEncounter);
+      const pvpEncounter =
+        pvpEncounterRaw && !pvpEncounterExpired(pvpEncounterRaw)
+          ? pvpEncounterRaw
+          : null;
       // Harga GRAM live (cache 5 menit di gram-price.ts) — harga
       // paket GRAM di bawah dihitung dari harga ini, jadi pemain
       // selalu melihat jumlah GRAM yang berlaku saat ini.
@@ -2262,6 +2669,45 @@ export const gameActions = {
           amountKt: a.amountKt,
           createdAt: a.createdAt.toISOString(),
         })),
+        pvp: {
+          attackPower: troopPower(troops.attack.count, troops.attack.level),
+          defensePower: troopPower(troops.defense.count, troops.defense.level),
+          troops: {
+            attack: {
+              count: troops.attack.count,
+              level: troops.attack.level,
+              power: troopPower(troops.attack.count, troops.attack.level),
+              buyCost: troopBuyCost(troops.attack.count),
+              upgradeCost:
+                troops.attack.level >= TROOP_MAX_LEVEL
+                  ? null
+                  : troopUpgradeCost(troops.attack.level),
+              maxCount: TROOP_MAX_COUNT,
+              maxLevel: TROOP_MAX_LEVEL,
+            },
+            defense: {
+              count: troops.defense.count,
+              level: troops.defense.level,
+              power: troopPower(troops.defense.count, troops.defense.level),
+              buyCost: troopBuyCost(troops.defense.count),
+              upgradeCost:
+                troops.defense.level >= TROOP_MAX_LEVEL
+                  ? null
+                  : troopUpgradeCost(troops.defense.level),
+              maxCount: TROOP_MAX_COUNT,
+              maxLevel: TROOP_MAX_LEVEL,
+            },
+          },
+          shieldUntil: p.pvpShieldUntil ? p.pvpShieldUntil.toISOString() : null,
+          attackReadyAt:
+            p.pvpLastAttackAt &&
+            p.pvpLastAttackAt.getTime() + PVP_ATTACK_COOLDOWN_MS > now
+              ? new Date(
+                  p.pvpLastAttackAt.getTime() + PVP_ATTACK_COOLDOWN_MS,
+                ).toISOString()
+              : null,
+          encounter: pvpEncounter ? toClientEncounter(pvpEncounter) : null,
+        },
         adminStats,
         flaggedPlayers,
       };
@@ -2309,7 +2755,9 @@ export const gameActions = {
       const spend = energyAfterSpend(p, levels, cost);
       await db
         .update(schema.player)
-        .set({ ...spend, job: JSON.stringify(job) })
+        // PvP: scan baru menghapus penawaran pertemuan lama (konteks
+        // scan sebelumnya sudah tidak berlaku).
+        .set({ ...spend, job: JSON.stringify(job), pvpEncounter: null })
         .where(eq(schema.player.id, p.id));
       return { ok: true, error: null, durationSec, energy: spend.energy };
     },
@@ -2385,6 +2833,17 @@ export const gameActions = {
       jammed: z.boolean(),
       hullHit: z.boolean(),
       repairFeeKt: z.number(),
+      // PvP: penawaran pertemuan yang muncul saat scan ini selesai
+      // (null bila tidak ada — Peta 1 selalu null, peluang per peta
+      // 0/10/15/20/30%).
+      encounter: z
+        .object({
+          defenderName: z.string().nullable(),
+          isNpc: z.boolean(),
+          defensePower: z.number(),
+          expiresAt: z.string(),
+        })
+        .nullable(),
     }),
     async handler(_args, session) {
       const db = getDb();
@@ -2395,7 +2854,7 @@ export const gameActions = {
       const levels = await loadLevels(db, p.id);
       const fail = (error: string) => ({
         ok: false, error, kind: null as "scan" | "mine" | null, oreId: null as string | null, oreName: null as string | null, qty: 0, isRare: false, allMined: false,
-        jammed: false, hullHit: false, repairFeeKt: 0,
+        jammed: false, hullHit: false, repairFeeKt: 0, encounter: null as { defenderName: string | null; isNpc: boolean; defensePower: number; expiresAt: string } | null,
       });
       const exp = parseExpedition(p.expedition);
       if (!exp) return fail(S.errInvalidAsteroid);
@@ -2421,7 +2880,16 @@ export const gameActions = {
           .where(eq(schema.player.id, p.id));
         await logActivity(db, p.id, "scan", S.logScan(localizeExpeditionName(exp.name, lang), exp.veins.length), null);
         await recordCollectLatency(db, p, collectDelayMs, lang);
-        return { ok: true, error: null, kind: "scan" as const, oreId: null, oreName: null, qty: 0, isRare: false, allMined: false, jammed: false, hullHit: false, repairFeeKt: 0 };
+        // PvP: scan selesai = peluang bertemu penambang lain (Peta 1
+        // = 0%, tidak pernah; Peta 2–5 = 10/15/20/30%). Pertemuan
+        // adalah kejadian sampingan — tidak menambah progres sektor
+        // (sektor hanya naik di completeExpedition).
+        const encounter = await rollPvpEncounter(
+          db,
+          p,
+          expeditionZone(exp, p.currentZone),
+        );
+        return { ok: true, error: null, kind: "scan" as const, oreId: null, oreName: null, qty: 0, isRare: false, allMined: false, jammed: false, hullHit: false, repairFeeKt: 0, encounter: encounter ? toClientEncounter(encounter) : null };
       }
 
       // Mining job.
@@ -2448,7 +2916,7 @@ export const gameActions = {
           ok: true, error: null, kind: "mine" as const,
           oreId: vein.oreId, oreName: ore ? oreName(ore, lang) : null, qty: 0,
           isRare: false, allMined: allMinedJam,
-          jammed: true, hullHit: false, repairFeeKt: 0,
+          jammed: true, hullHit: false, repairFeeKt: 0, encounter: null,
         };
       }
 
@@ -2497,6 +2965,7 @@ export const gameActions = {
         jammed: false,
         hullHit: job.hullHit === true,
         repairFeeKt,
+        encounter: null,
       };
     },
   }),
@@ -2582,6 +3051,9 @@ export const gameActions = {
           asteroidsDone: p.asteroidsDone + 1,
           ktBalance: newBalance,
           totalKtEarned: roundKt(p.totalKtEarned + bonus),
+          // PvP: ekspedisi selesai = asteroid baru; penawaran dari
+          // scan lama tidak berlaku lagi.
+          pvpEncounter: null,
         })
         .where(eq(schema.player.id, p.id));
       await logActivity(
@@ -2610,6 +3082,317 @@ export const gameActions = {
     },
   }),
 
+  // --- PvP (2026-11-22) ----------------------------------------------
+  // Lab: beli + upgrade pasukan pakai KT yang sama dengan saldo WD.
+  buyTroop: defineGameAction({
+    description:
+      "Buys one more troop drone (Drone Serbu for attack or Drone Perisai for defense) with KT. Cost grows with the current count: 10 + 5×count KT. Max 20 drones per kind.",
+    request: z.object({ kind: z.enum(["attack", "defense"]) }),
+    response: resultShape.extend({
+      count: z.number(),
+      level: z.number(),
+      power: z.number(),
+      buyCost: z.number(),
+      ktBalance: z.number(),
+    }),
+    async handler(args, session) {
+      const db = getDb();
+      const lang = session.lang;
+      const S = serverStrings(lang);
+      const p = await loadPlayer(db, session);
+      const def = troopDef(args.kind);
+      const fail = (error: string) => ({ ok: false, error, count: 0, level: 1, power: 0, buyCost: 0, ktBalance: p.ktBalance });
+      const troops = await loadTroops(db, p.id);
+      const cur = troops[args.kind];
+      if (cur.count >= TROOP_MAX_COUNT) return fail(S.errPvpTroopMaxCount(troopName(def, lang)));
+      const cost = troopBuyCost(cur.count);
+      if (p.ktBalance < cost) return fail(S.errKtNotEnough(cost, p.ktBalance));
+      const newCount = cur.count + 1;
+      await db
+        .insert(schema.pvpTroops)
+        .values({ playerId: p.id, kind: args.kind, count: newCount, level: cur.level })
+        .onConflictDoUpdate({
+          target: [schema.pvpTroops.playerId, schema.pvpTroops.kind],
+          set: { count: newCount },
+        });
+      const newBalance = roundKt(p.ktBalance - cost);
+      await db
+        .update(schema.player)
+        .set({ ktBalance: newBalance })
+        .where(eq(schema.player.id, p.id));
+      await logActivity(db, p.id, "pvp_troop", S.logPvpTroopBuy(troopName(def, lang), newCount), -cost);
+      return { ok: true, error: null, count: newCount, level: cur.level, power: troopPower(newCount, cur.level), buyCost: troopBuyCost(newCount), ktBalance: newBalance };
+    },
+  }),
+
+  upgradeTroop: defineGameAction({
+    description:
+      "Upgrades one troop kind (Drone Serbu or Drone Perisai) one level with KT. Cost: 25×current level KT. Each drone's power is 6 + 4×level, so level 5 makes one drone worth 26 power. Max level 5.",
+    request: z.object({ kind: z.enum(["attack", "defense"]) }),
+    response: resultShape.extend({
+      count: z.number(),
+      level: z.number(),
+      power: z.number(),
+      upgradeCost: z.number().nullable(),
+      ktBalance: z.number(),
+    }),
+    async handler(args, session) {
+      const db = getDb();
+      const lang = session.lang;
+      const S = serverStrings(lang);
+      const p = await loadPlayer(db, session);
+      const def = troopDef(args.kind);
+      const fail = (error: string) => ({ ok: false, error, count: 0, level: 1, power: 0, upgradeCost: null as number | null, ktBalance: p.ktBalance });
+      const troops = await loadTroops(db, p.id);
+      const cur = troops[args.kind];
+      if (cur.count === 0) return fail(S.errPvpTroopNone(troopName(def, lang)));
+      if (cur.level >= TROOP_MAX_LEVEL) return fail(S.errPvpTroopMaxLevel(troopName(def, lang)));
+      const cost = troopUpgradeCost(cur.level);
+      if (p.ktBalance < cost) return fail(S.errKtNotEnough(cost, p.ktBalance));
+      const newLevel = cur.level + 1;
+      await db
+        .update(schema.pvpTroops)
+        .set({ level: newLevel })
+        .where(
+          and(
+            eq(schema.pvpTroops.playerId, p.id),
+            eq(schema.pvpTroops.kind, args.kind),
+          ),
+        );
+      const newBalance = roundKt(p.ktBalance - cost);
+      await db
+        .update(schema.player)
+        .set({ ktBalance: newBalance })
+        .where(eq(schema.player.id, p.id));
+      await logActivity(db, p.id, "pvp_troop", S.logPvpTroopUpgrade(troopName(def, lang), newLevel), -cost);
+      return {
+        ok: true,
+        error: null,
+        count: cur.count,
+        level: newLevel,
+        power: troopPower(cur.count, newLevel),
+        upgradeCost: newLevel >= TROOP_MAX_LEVEL ? null : troopUpgradeCost(newLevel),
+        ktBalance: newBalance,
+      };
+    },
+  }),
+
+  pvpAttack: defineGameAction({
+    description:
+      "Attacks the miner from the current PvP encounter offer. DETERMINISTIC: higher power wins, a tie goes to the defender. The winner steals 15% of the loser's unsold ore (per ore type, rounded down); an attacker who loses destroys 10% of their own unsold ore. After the battle the defender is immune for 1 hour and the attacker cannot attack again for 30 minutes. Fighting never advances sector progress.",
+    request: z.object({}),
+    response: resultShape.extend({
+      won: z.boolean(),
+      attackerPower: z.number(),
+      defenderPower: z.number(),
+      defenderName: z.string().nullable(),
+      isNpc: z.boolean(),
+      loot: z.array(z.object({ oreId: z.string(), qty: z.number() })),
+      lootKt: z.number(),
+    }),
+    async handler(_args, session) {
+      const db = getDb();
+      const lang = session.lang;
+      const S = serverStrings(lang);
+      const p = await loadPlayer(db, session);
+      const fail = (error: string) => ({
+        ok: false, error, won: false, attackerPower: 0, defenderPower: 0,
+        defenderName: null as string | null, isNpc: false,
+        loot: [] as { oreId: string; qty: number }[], lootKt: 0,
+      });
+      const enc = parseEncounter(p.pvpEncounter);
+      if (!enc) return fail(S.errPvpNoEncounter);
+      if (pvpEncounterExpired(enc)) {
+        await db
+          .update(schema.player)
+          .set({ pvpEncounter: null })
+          .where(eq(schema.player.id, p.id));
+        return fail(S.errPvpEncounterExpired);
+      }
+      const now = new Date();
+      if (
+        p.pvpLastAttackAt &&
+        p.pvpLastAttackAt.getTime() + PVP_ATTACK_COOLDOWN_MS > now.getTime()
+      ) {
+        const remainingSec = Math.ceil(
+          (p.pvpLastAttackAt.getTime() + PVP_ATTACK_COOLDOWN_MS - now.getTime()) / 1000,
+        );
+        return fail(S.errPvpAttackCooldown(remainingSec));
+      }
+      // Kekuatan penyerang dari pasukannya sendiri (saat ini).
+      const myTroops = await loadTroops(db, p.id);
+      const attackerPower = troopPower(myTroops.attack.count, myTroops.attack.level);
+      // Kekuatan bertahan lawan DIHITUNG ULANG dari pasukannya saat
+      // ini (bisa berubah sejak penawaran dibuat); untuk NPC
+      // nilainya tetap.
+      let defenderPower = enc.defensePower;
+      let defenderName = enc.defenderName;
+      let defenderRow: PlayerRow | null = null;
+      let defenderHaul: HaulItem[] = [];
+      if (enc.defenderPlayerId !== null) {
+        defenderRow = await loadPlayerRowOrNull(db, enc.defenderPlayerId);
+        if (!defenderRow) {
+          await db
+            .update(schema.player)
+            .set({ pvpEncounter: null })
+            .where(eq(schema.player.id, p.id));
+          return fail(S.errPvpDefenderGone);
+        }
+        if (
+          defenderRow.pvpShieldUntil &&
+          defenderRow.pvpShieldUntil.getTime() > now.getTime()
+        ) {
+          await db
+            .update(schema.player)
+            .set({ pvpEncounter: null })
+            .where(eq(schema.player.id, p.id));
+          return fail(S.errPvpDefenderShielded);
+        }
+        const defTroops = await loadTroops(db, defenderRow.id);
+        defenderPower = troopPower(defTroops.defense.count, defTroops.defense.level);
+        defenderName = defenderRow.username;
+        defenderHaul = await loadHaul(db, defenderRow.id);
+      } else {
+        defenderHaul = Object.entries(NPC_PIRATE_HAUL).map(([oreId, qty]) => ({
+          oreId,
+          qty,
+        }));
+      }
+      const isNpc = enc.defenderPlayerId === null;
+      const defenderLabel = isNpc ? S.pvpPirate : (defenderName ?? S.pvpUnknownMiner);
+      const attackerLabel = p.username ?? S.pvpUnknownMiner;
+      // Pertempuran DETERMINISTIK: kekuatan lebih besar menang; seri
+      // = bertahan menang (keuntungan kandang). Tanpa acak.
+      const won = attackerPower > defenderPower;
+      // Cooldown penyerang + perisai yang diserang mulai dari
+      // sekarang (menang maupun kalah).
+      await db
+        .update(schema.player)
+        .set({ pvpEncounter: null, pvpLastAttackAt: now })
+        .where(eq(schema.player.id, p.id));
+      if (defenderRow) {
+        await db
+          .update(schema.player)
+          .set({ pvpShieldUntil: new Date(now.getTime() + PVP_SHIELD_MS) })
+          .where(eq(schema.player.id, defenderRow.id));
+      }
+      let loot: HaulItem[] = [];
+      let lootKt = 0;
+      if (won) {
+        loot = takeFromHaul(defenderHaul, PVP_STEAL_PCT);
+        lootKt = haulKtValue(loot);
+        if (defenderRow) {
+          for (const item of loot) {
+            await adjustInventory(db, defenderRow.id, item.oreId, -item.qty);
+            await adjustInventory(db, p.id, item.oreId, item.qty);
+          }
+        } else {
+          // NPC: rampasan "muncul" dari harta perompak (faucet kecil
+          // — lihat komentar NPC_PIRATE_HAUL).
+          for (const item of loot) {
+            await adjustInventory(db, p.id, item.oreId, item.qty);
+          }
+        }
+        await logActivity(
+          db,
+          p.id,
+          "pvp_attack",
+          loot.length > 0
+            ? S.logPvpAttackWin(defenderLabel, lootKt)
+            : S.logPvpAttackWinEmpty(defenderLabel),
+          null,
+        );
+        if (loot.length > 0) {
+          await logActivity(db, p.id, "pvp_loot", S.logPvpLootGain(lootKt), lootKt);
+        }
+        if (defenderRow) {
+          await logActivity(
+            db,
+            defenderRow.id,
+            "pvp_defend",
+            loot.length > 0
+              ? S.logPvpDefendedLose(attackerLabel, lootKt)
+              : S.logPvpDefendedLoseEmpty(attackerLabel),
+            null,
+          );
+          if (loot.length > 0) {
+            await logActivity(db, defenderRow.id, "pvp_loot", S.logPvpLootStolen(lootKt), -lootKt);
+          }
+        }
+      } else {
+        // Penyerang kalah: 10% hasil tambangnya sendiri DIHANCURKAN
+        // (bukan dipindah) — KT sink.
+        const myHaul = await loadHaul(db, p.id);
+        const destroyed = takeFromHaul(myHaul, PVP_LOSER_LOSS_PCT);
+        const destroyedKt = haulKtValue(destroyed);
+        for (const item of destroyed) {
+          await adjustInventory(db, p.id, item.oreId, -item.qty);
+        }
+        await logActivity(
+          db,
+          p.id,
+          "pvp_attack",
+          S.logPvpAttackLose(defenderLabel),
+          null,
+        );
+        if (destroyed.length > 0) {
+          await logActivity(db, p.id, "pvp_loot", S.logPvpLootDestroyed(destroyedKt), -destroyedKt);
+        }
+        if (defenderRow) {
+          await logActivity(
+            db,
+            defenderRow.id,
+            "pvp_defend",
+            S.logPvpDefendedWin(attackerLabel),
+            null,
+          );
+        }
+      }
+      // Audit (tidak memengaruhi permainan): siapa vs siapa, siapa
+      // menang, berapa kekuatan, berapa KT rampasan.
+      try {
+        await db.insert(schema.pvpBattles).values({
+          attackerPlayerId: p.id,
+          defenderPlayerId: enc.defenderPlayerId,
+          isNpc,
+          winner: won ? "attacker" : "defender",
+          attackerPower,
+          defenderPower,
+          lootKt,
+        });
+      } catch {
+        // Audit gagal tidak boleh merusak hasil pertempuran.
+      }
+      return {
+        ok: true,
+        error: null,
+        won,
+        attackerPower,
+        defenderPower,
+        defenderName,
+        isNpc,
+        loot,
+        lootKt,
+      };
+    },
+  }),
+
+  pvpSkip: defineGameAction({
+    description:
+      "Skips the current PvP encounter offer (Lewati). The offer simply disappears — skipping never advances sector progress, and neither does fighting.",
+    request: z.object({}),
+    response: resultShape,
+    async handler(_args, session) {
+      const db = getDb();
+      const p = await loadPlayer(db, session);
+      await db
+        .update(schema.player)
+        .set({ pvpEncounter: null })
+        .where(eq(schema.player.id, p.id));
+      return { ok: true, error: null };
+    },
+  }),
+
   abandonAsteroid: defineGameAction({
     description:
       "Leaves the current asteroid without completing it (costs fuel energy, no bonus, no sector advance) and warps to a freshly generated asteroid in the same sector.",
@@ -2630,7 +3413,8 @@ export const gameActions = {
       const spend = energyAfterSpend(p, levels, ABANDON_ENERGY_COST);
       await db
         .update(schema.player)
-        .set({ ...spend, expedition: JSON.stringify(newExp) })
+        // PvP: pindah asteroid menghapus penawaran pertemuan lama.
+        .set({ ...spend, expedition: JSON.stringify(newExp), pvpEncounter: null })
         .where(eq(schema.player.id, p.id));
       await logActivity(db, p.id, "travel", S.logAbandon(localizeExpeditionName(newExp.name, lang)), null);
       return { ok: true, error: null, asteroidName: localizeExpeditionName(newExp.name, lang) };
@@ -2668,7 +3452,8 @@ export const gameActions = {
       const spend = cost > 0 ? energyAfterSpend(p, levels, cost) : { energy: p.energy, energyUpdatedAt: p.energyUpdatedAt };
       await db
         .update(schema.player)
-        .set({ ...spend, currentZone: args.zoneIndex, expedition: JSON.stringify(newExp) })
+        // PvP: pindah peta menghapus penawaran pertemuan lama.
+        .set({ ...spend, currentZone: args.zoneIndex, expedition: JSON.stringify(newExp), pvpEncounter: null })
         .where(eq(schema.player.id, p.id));
       await logActivity(db, p.id, "travel", S.logTravel(mapName(target, lang), localizeExpeditionName(newExp.name, lang)), null);
       return { ok: true, error: null, mapName: mapName(target, lang), asteroidName: localizeExpeditionName(newExp.name, lang) };

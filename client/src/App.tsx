@@ -264,6 +264,14 @@ export function WrenchIcon({ size = 18 }: { size?: number }) {
     </IconShell>
   );
 }
+export function GearIcon({ size = 18 }: { size?: number }) {
+  return (
+    <IconShell size={size}>
+      <circle cx="12" cy="12" r="3.2" />
+      <path d="M12 2.8v2.6M12 18.6v2.6M2.8 12h2.6M18.6 12h2.6M5.5 5.5l1.8 1.8M16.7 16.7l1.8 1.8M18.5 5.5l-1.8 1.8M7.3 16.7l-1.8 1.8" />
+    </IconShell>
+  );
+}
 export function GemIcon({ size = 18 }: { size?: number }) {
   return (
     <IconShell size={size}>
@@ -406,6 +414,16 @@ export function ShieldIcon({ size = 16 }: { size?: number }) {
     </IconShell>
   );
 }
+export function SwordsIcon({ size = 16 }: { size?: number }) {
+  return (
+    <IconShell size={size}>
+      <polyline points="14.5 17.5 3 6 3 3 6 3 17.5 14.5" />
+      <line x1="13" x2="19" y1="19" y2="13" />
+      <line x1="16" x2="20" y1="16" y2="20" />
+      <line x1="19" x2="21" y1="21" y2="19" />
+    </IconShell>
+  );
+}
 export function RadiationIcon({ size = 16 }: { size?: number }) {
   return (
     <IconShell size={size}>
@@ -534,7 +552,7 @@ function ConfettiLayer({ burst }: { burst: Burst }) {
   );
 }
 
-type Tab = "tambang" | "peta" | "pasar" | "upgrade" | "wd" | "komunitas" | "admin";
+type Tab = "tambang" | "peta" | "pasar" | "upgrade" | "wd" | "komunitas" | "lab" | "admin";
 
 /** Layar boot bermerek — tampil saat state awal game dimuat (bukan
  *  saat error). Judul + bar progres animasi + baris status yang
@@ -570,6 +588,7 @@ export function App() {
   const queryClient = useQueryClient();
   const [tab, setTab] = useState<Tab>("tambang");
   const [banner, setBanner] = useState<{ kind: "good" | "bad" | "info"; text: ReactNode } | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [bannerId, setBannerId] = useState(0);
   const showBanner = (kind: "good" | "bad" | "info", text: ReactNode) => { setBanner({ kind, text }); setBannerId((i) => i + 1); };
   const [burst, setBurst] = useState<Burst | null>(null);
@@ -816,6 +835,25 @@ export function App() {
   const sellAll = useMutation({ mutationFn: () => api.sellAllOre({}), onSuccess: (r) => { showResult(r.ok, r.error, t("sellAllDone", { kt: fmt(r.ktGained) })); refresh(); } });
   const sellOne = useMutation({ mutationFn: (args: { oreId: string; qty: number }) => api.sellOre(args), onSuccess: (r) => { showResult(r.ok, r.error, t("sellOneDone", { kt: fmt(r.ktGained) })); refresh(); } });
   const buy = useMutation({ mutationFn: (upgradeId: string) => api.buyUpgrade({ upgradeId }), onSuccess: (r) => { showResult(r.ok, r.error, t("upgradeBought", { level: r.newLevel ?? "?", cost: fmt(r.costPaid) })); refresh(); } });
+  // PvP (2026-11-22): beli/upgrade pasukan + serang/lewati pertemuan.
+  const buyTroop = useMutation({
+    mutationFn: (kind: "attack" | "defense") => api.buyTroop({ kind }),
+    onSuccess: (r, kind) => { showResult(r.ok, r.error, t("labBuyDone", { name: kind === "attack" ? t("labTroopAttackName") : t("labTroopDefenseName"), count: r.count })); refresh(); },
+  });
+  const upgradeTroop = useMutation({
+    mutationFn: (kind: "attack" | "defense") => api.upgradeTroop({ kind }),
+    onSuccess: (r, kind) => { showResult(r.ok, r.error, t("labUpgradeDone", { name: kind === "attack" ? t("labTroopAttackName") : t("labTroopDefenseName"), level: r.level })); refresh(); },
+  });
+  const pvpAttack = useMutation({
+    mutationFn: () => api.pvpAttack({}),
+    onSuccess: (r) => {
+      if (!r.ok) { showResult(false, r.error, ""); refresh(); return; }
+      showResult(true, null, r.won ? (r.loot.length > 0 ? t("pvpAttackWin", { kt: fmt(r.lootKt) }) : t("pvpAttackWinEmpty")) : t("pvpAttackLose"));
+      if (r.won && r.loot.length > 0) fireBurst("rare");
+      refresh();
+    },
+  });
+  const pvpSkip = useMutation({ mutationFn: () => api.pvpSkip({}), onSuccess: (r) => { showResult(r.ok, r.error, t("pvpSkipped")); refresh(); } });
   const cancelWd = useMutation({ mutationFn: (wdId: number) => api.cancelWithdrawal({ wdId }), onSuccess: (r) => { showResult(r.ok, r.error, t("wdCancelled")); refresh(); } });
 
   // Boot: begitu data pertama tiba, loader overlay memudar (500ms)
@@ -851,6 +889,7 @@ export function App() {
     { id: "upgrade", label: t("tabHangar"), icon: <WrenchIcon size={16} /> },
     { id: "wd", label: t("tabWd"), icon: <GemIcon size={16} /> },
     { id: "komunitas", label: t("tabCommunity"), icon: <UsersIcon size={16} /> },
+    { id: "lab", label: t("tabLab"), icon: <SwordsIcon size={16} /> },
   ];
   // Tab Kendali hanya untuk pemilik — pemain biasa tidak pernah
   // melihatnya (server tetap yang menegakkan: aksi Kendali ditolak
@@ -874,13 +913,22 @@ export function App() {
         <div className="absolute inset-0 bg-gradient-to-t from-[#050810] via-[#050810]/35 to-transparent" />
         <div className="absolute inset-x-0 bottom-0 mx-auto max-w-3xl px-4 pb-3">
           <p className="text-[11px] font-bold uppercase tracking-[0.3em] text-cyan-300">{t("heroEyebrow")}</p>
-          <div className="mt-1 flex flex-wrap items-center gap-2"><p className="text-[11px] text-[var(--dim)]">{sessionLabel}</p><LanguagePicker /></div>
+          <div className="mt-1 flex flex-wrap items-center gap-2"><p className="text-[11px] text-[var(--dim)]">{sessionLabel}</p><button type="button" onClick={() => setSettingsOpen((v) => !v)} aria-expanded={settingsOpen} aria-label={t("settingsTitle")} className="btn-press inline-flex items-center justify-center rounded-full border border-white/25 p-1.5 text-white/90"><GearIcon size={14} /></button></div>
           <h1 className="font-display title-shine mt-1 text-2xl font-black leading-none sm:text-3xl">ASTRA MINING</h1>
           <p className="mt-1 line-clamp-2 max-w-xl text-xs leading-snug text-slate-200">{trich("heroDesc")}</p>
         </div>
       </div>
 
       <main className="mx-auto max-w-3xl px-3 pb-8">
+        {settingsOpen && (
+          <section className="mb-3 rounded-2xl border border-[var(--border)] bg-[var(--surface)]/95 p-3 shadow-2xl backdrop-blur">
+            <p className="text-[11px] font-bold uppercase tracking-[0.25em] text-[var(--dim)]">{t("settingsTitle")}</p>
+            <div className="mt-2 flex items-center justify-between gap-3">
+              <span className="text-sm font-bold">{t("langLabel")}</span>
+              <LanguagePicker />
+            </div>
+          </section>
+        )}
         <section className="-mt-1 rounded-2xl border border-[var(--border)] bg-[var(--surface)]/95 p-3 shadow-2xl backdrop-blur">
           <div className="flex flex-wrap items-end justify-between gap-4">
             <div>
@@ -1016,6 +1064,34 @@ export function App() {
               </div>
             </div>
 
+            {data.pvp.encounter && (
+              <div className="rounded-2xl border border-red-500/40 bg-red-500/10 p-3">
+                <h3 className="font-display inline-flex items-center gap-2 text-sm text-red-200"><SwordsIcon size={16} /> {t("pvpEncounterTitle")}</h3>
+                <p className="mt-1 text-sm">
+                  {data.pvp.encounter.isNpc
+                    ? t("pvpEncounterPirate")
+                    : t("pvpEncounterMiner", { name: data.pvp.encounter.defenderName ?? t("pvpUnknownMiner") })}
+                </p>
+                <p className="mt-1 text-sm font-bold">
+                  {t("pvpEncounterPowers", { def: data.pvp.encounter.defensePower, atk: data.pvp.attackPower })}
+                </p>
+                <p className="mt-0.5 text-xs text-[var(--dim)]">
+                  {t("pvpEncounterExpires", { dur: fmtDur(Math.max(0, Math.floor((new Date(data.pvp.encounter.expiresAt).getTime() - Date.now()) / 1000))) })}
+                </p>
+                {data.pvp.attackReadyAt != null && new Date(data.pvp.attackReadyAt).getTime() > Date.now() && (
+                  <p className="mt-1 text-xs font-bold text-amber-300">{t("labCooldown", { dur: fmtDur(Math.max(0, Math.floor((new Date(data.pvp.attackReadyAt).getTime() - Date.now()) / 1000))) })}</p>
+                )}
+                <div className="mt-2 grid grid-cols-2 gap-2">
+                  <button type="button" onClick={() => pvpAttack.mutate()} disabled={pvpAttack.isPending || pvpSkip.isPending || (data.pvp.attackReadyAt != null && new Date(data.pvp.attackReadyAt).getTime() > Date.now())} className="btn-press rounded-xl bg-red-500 px-4 py-2.5 font-display text-sm text-white disabled:opacity-40">
+                    {t("pvpAttackBtn")}
+                  </button>
+                  <button type="button" onClick={() => pvpSkip.mutate()} disabled={pvpAttack.isPending || pvpSkip.isPending} className="btn-press rounded-xl border border-[var(--border)] px-4 py-2.5 text-sm font-bold disabled:opacity-40">
+                    {t("pvpSkipBtn")}
+                  </button>
+                </div>
+              </div>
+            )}
+
             <div className="grid grid-cols-3 gap-2 text-center">
               {[{ label: t("statDigs"), value: fmt(p.totalDigs) }, { label: t("statAsteroids"), value: fmt(p.asteroidsDone) }, { label: t("statUsdtPaid"), value: fmt(p.totalWdPaidUsdt) }].map((s, i) => (<div key={s.label} className="animate-float-slow rounded-xl bg-[var(--surface)] border border-[var(--border)] px-2 py-2" style={{ animationDelay: `${i * 0.9}s` }}><p className="font-display text-lg">{s.value}</p><p className="text-[11px] font-semibold text-[var(--dim)]">{s.label}</p></div>))}
             </div>
@@ -1040,6 +1116,7 @@ export function App() {
                 <li><ExpandableText>{trich("rule15")}</ExpandableText></li>
                 <li><ExpandableText>{trich("rule16")}</ExpandableText></li>
                 <li><ExpandableText>{trich("rule17")}</ExpandableText></li>
+                <li><ExpandableText>{trich("rule18")}</ExpandableText></li>
               </ol>
             </details>
 
@@ -1078,6 +1155,7 @@ export function App() {
 
         {tab === "wd" && (<WdTab data={data} onCancel={(id) => cancelWd.mutate(id)} cancelling={cancelWd.isPending} onDone={(ok, err, good) => { showResult(ok, err, good); refresh(); }} />)}
         {tab === "komunitas" && (<KomunitasTab userId={sessionInfo.userId} referrals={data.player.referrals} />)}
+        {tab === "lab" && (<LabTab data={data} onBuy={(kind) => buyTroop.mutate(kind)} onUpgrade={(kind) => upgradeTroop.mutate(kind)} buying={buyTroop.isPending} upgrading={upgradeTroop.isPending} />)}
         {tab === "admin" && p.isAdmin && (<AdminTab data={data} onDone={(ok, err, good) => { showResult(ok, err, good); refresh(); }} />)}
         </div>
       </main>
@@ -1501,6 +1579,65 @@ function openExternalLink(url: string) {
     // Jatuh ke window.open di bawah.
   }
   window.open(url, "_blank", "noopener");
+}
+
+// PvP (2026-11-22): Laboratorium Pasukan — dua jenis drone yang
+// dibeli/di-upgrade pakai KT yang sama dengan saldo WD. Kartu
+// ringkasan kekuatan (Serang / Bertahan) ada di ATAS tab ini.
+function LabTab({ data, onBuy, onUpgrade, buying, upgrading }: {
+  data: GameState;
+  onBuy: (kind: "attack" | "defense") => void;
+  onUpgrade: (kind: "attack" | "defense") => void;
+  buying: boolean;
+  upgrading: boolean;
+}) {
+  const pvp = data.pvp;
+  const shielded = pvp.shieldUntil != null && new Date(pvp.shieldUntil).getTime() > Date.now();
+  const attackOnCooldown = pvp.attackReadyAt != null && new Date(pvp.attackReadyAt).getTime() > Date.now();
+  const troops = [
+    { kind: "attack" as const, name: t("labTroopAttackName"), desc: t("labTroopAttackDesc"), state: pvp.troops.attack, icon: <SwordsIcon size={18} /> },
+    { kind: "defense" as const, name: t("labTroopDefenseName"), desc: t("labTroopDefenseDesc"), state: pvp.troops.defense, icon: <ShieldIcon size={18} /> },
+  ];
+  return (
+    <section className="mt-3 space-y-3">
+      <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3">
+        <h2 className="font-display text-lg">{t("labTitle")}</h2>
+        <ExpandableText className="mt-1 text-sm text-[var(--dim)]">{t("labDesc")}</ExpandableText>
+        <div className="mt-3 grid grid-cols-2 gap-2 text-center">
+          <div className="rounded-xl border border-red-500/40 bg-red-500/10 px-2 py-2">
+            <p className="font-display text-xl text-red-300">{fmt(pvp.attackPower)}</p>
+            <p className="text-[11px] font-semibold text-[var(--dim)]">{t("labAttackPower")}</p>
+          </div>
+          <div className="rounded-xl border border-sky-500/40 bg-sky-500/10 px-2 py-2">
+            <p className="font-display text-xl text-sky-300">{fmt(pvp.defensePower)}</p>
+            <p className="text-[11px] font-semibold text-[var(--dim)]">{t("labDefensePower")}</p>
+          </div>
+        </div>
+        {shielded && (<p className="mt-2 text-sm font-bold text-emerald-300">{t("labShielded", { date: fmtDate(pvp.shieldUntil!) })}</p>)}
+        {attackOnCooldown && (<p className="mt-1 text-sm text-[var(--dim)]">{t("labCooldown", { dur: fmtDur(Math.max(0, Math.floor((new Date(pvp.attackReadyAt!).getTime() - Date.now()) / 1000))) })}</p>)}
+        {pvp.attackPower === 0 && pvp.defensePower === 0 && (<p className="mt-2 text-sm text-[var(--dim)]">{t("labNoTroops")}</p>)}
+      </div>
+      {troops.map((tr) => (
+        <div key={tr.kind} className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3">
+          <h3 className="font-display inline-flex items-center gap-2 text-sm"><span className="text-cyan-300">{tr.icon}</span> {tr.name}</h3>
+          <ExpandableText className="mt-1 text-sm text-[var(--dim)]">{tr.desc}</ExpandableText>
+          <p className="mt-2 text-sm font-bold">{t("labOwned", { count: tr.state.count, level: tr.state.level, power: tr.state.power })}</p>
+          <div className="mt-2 grid grid-cols-2 gap-2">
+            <button type="button" onClick={() => onBuy(tr.kind)} disabled={buying || upgrading || tr.state.count >= tr.state.maxCount || data.player.ktBalance < tr.state.buyCost} className="btn-press rounded-xl bg-cyan-400 px-4 py-2 font-bold text-black disabled:opacity-40">
+              {tr.state.count >= tr.state.maxCount ? t("labMaxCount") : t("labBuyBtn", { cost: fmt(tr.state.buyCost) })}
+            </button>
+            <button type="button" onClick={() => onUpgrade(tr.kind)} disabled={buying || upgrading || tr.state.count === 0 || tr.state.upgradeCost == null || data.player.ktBalance < tr.state.upgradeCost} className="btn-press rounded-xl border border-amber-400/50 bg-amber-400/10 px-4 py-2 font-bold text-amber-200 disabled:opacity-40">
+              {tr.state.upgradeCost == null ? t("labMaxLevel") : t("labUpgradeBtn", { level: tr.state.level + 1, cost: fmt(tr.state.upgradeCost) })}
+            </button>
+          </div>
+        </div>
+      ))}
+      <details className="rounded-2xl bg-[var(--surface)] border border-[var(--border)] p-3">
+        <summary className="font-display inline-flex cursor-pointer items-center gap-2 text-sm"><BookIcon size={15} /> {t("labHowTitle")}</summary>
+        <ExpandableText className="mt-2 text-sm leading-relaxed">{t("labHowDesc")}</ExpandableText>
+      </details>
+    </section>
+  );
 }
 
 function KomunitasTab({ userId, referrals }: { userId: number | null; referrals: { invited: number; rewarded: number; earnedKt: number } }) {
