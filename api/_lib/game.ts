@@ -1462,9 +1462,11 @@ const PVP_MIN_LOOT_QTY = 7;
 // saldo WD (SATU mata uang — itu dilemanya).
 export const TROOP_MAX_COUNT = 20;
 export const TROOP_MAX_LEVEL = 5;
-const TROOP_BUY_BASE_KT = 10; // beli satu drone lagi: 10 + 5×jumlah sekarang
-const TROOP_BUY_PER_COUNT_KT = 5;
-const TROOP_UPGRADE_BASE_KT = 25; // upgrade L→L+1: 25×L KT
+// TAHAP UJI COBA (2026-11-23): beli DAN upgrade sama-sama 0,1 KT flat,
+// supaya semuanya bisa diuji walau saldo KT masih kecil. Bila uji coba
+// selesai, kembalikan harga asli: beli 10 + 5×jumlah sekarang KT,
+// upgrade 25×level KT. 0,1 aman di pembulatan 3 desimal (roundKt).
+export const TROOP_TEST_COST_KT = 0.1;
 const TROOP_POWER_BASE = 6; // kekuatan per drone: 6 + 4×level
 const TROOP_POWER_PER_LEVEL = 4;
 
@@ -1503,14 +1505,14 @@ function troopName(def: TroopDef, lang: Lang): string {
   return lang === "en" ? def.nameEn : def.name;
 }
 
-/** Biaya beli satu drone lagi (jumlah sekarang → +1). */
-export function troopBuyCost(count: number): number {
-  return TROOP_BUY_BASE_KT + TROOP_BUY_PER_COUNT_KT * count;
+/** Biaya beli satu drone lagi — 0,1 KT flat selama tahap uji coba. */
+export function troopBuyCost(_count: number): number {
+  return TROOP_TEST_COST_KT;
 }
 
-/** Biaya upgrade level L → L+1. */
-export function troopUpgradeCost(level: number): number {
-  return TROOP_UPGRADE_BASE_KT * level;
+/** Biaya upgrade level L → L+1 — 0,1 KT flat selama tahap uji coba. */
+export function troopUpgradeCost(_level: number): number {
+  return TROOP_TEST_COST_KT;
 }
 
 /** Kekuatan satu jenis pasukan: jumlah drone × (6 + 4×level). */
@@ -1739,8 +1741,8 @@ export async function findPvpDefender(
 }
 
 /** Lempar dadu pertemuan saat scan selesai (peta 1 = 0%, tidak
- *  pernah). Bila kena, cari lawan sungguhan; bila tidak ada, lawan
- *  adalah Perompak NPC. Penawaran disimpan di baris penyerang.
+ *  pernah). Bila kena, cari lawan sungguhan; bila tidak ada,
+ *  lawan adalah Perompak NPC. Penawaran disimpan di baris penyerang.
  *  `rand` bisa di-inject di tes supaya deterministik. */
 export async function rollPvpEncounter(
   db: Db,
@@ -3086,7 +3088,7 @@ export const gameActions = {
   // Lab: beli + upgrade pasukan pakai KT yang sama dengan saldo WD.
   buyTroop: defineGameAction({
     description:
-      "Buys one more troop drone (Drone Serbu for attack or Drone Perisai for defense) with KT. Cost grows with the current count: 10 + 5×count KT. Max 20 drones per kind.",
+      "Buys one more troop drone (Drone Serbu for attack or Drone Perisai for defense) with KT. Cost: 0.1 KT flat during the test phase. Max 20 drones per kind.",
     request: z.object({ kind: z.enum(["attack", "defense"]) }),
     response: resultShape.extend({
       count: z.number(),
@@ -3127,7 +3129,7 @@ export const gameActions = {
 
   upgradeTroop: defineGameAction({
     description:
-      "Upgrades one troop kind (Drone Serbu or Drone Perisai) one level with KT. Cost: 25×current level KT. Each drone's power is 6 + 4×level, so level 5 makes one drone worth 26 power. Max level 5.",
+      "Upgrades one troop kind (Drone Serbu or Drone Perisai) one level with KT. Cost: 0.1 KT flat during the test phase. Each drone's power is 6 + 4×level, so level 5 makes one drone worth 26 power. Max level 5.",
     request: z.object({ kind: z.enum(["attack", "defense"]) }),
     response: resultShape.extend({
       count: z.number(),

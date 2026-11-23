@@ -424,6 +424,27 @@ export function SwordsIcon({ size = 16 }: { size?: number }) {
     </IconShell>
   );
 }
+/** Drone Serbu — panah tajam dengan mata sensor, aksen merah. */
+export function AttackDroneIcon({ size = 16 }: { size?: number }) {
+  return (
+    <IconShell size={size}>
+      <path d="M12 2.5 18.5 15 12 12.5 5.5 15Z" strokeLinejoin="round" />
+      <circle cx="12" cy="8.5" r="1.3" fill="currentColor" stroke="none" />
+      <path d="M7.5 14.5 5 19M16.5 14.5 19 19" />
+    </IconShell>
+  );
+}
+/** Drone Perisai — bola pelindung dalam cincin, aksen biru. */
+export function DefenseDroneIcon({ size = 16 }: { size?: number }) {
+  return (
+    <IconShell size={size}>
+      <circle cx="12" cy="12" r="8.5" />
+      <circle cx="12" cy="12" r="3.5" />
+      <circle cx="12" cy="12" r="1.2" fill="currentColor" stroke="none" />
+      <path d="M12 3.5v5M12 15.5v5M3.5 12h5M15.5 12h5" />
+    </IconShell>
+  );
+}
 export function RadiationIcon({ size = 16 }: { size?: number }) {
   return (
     <IconShell size={size}>
@@ -1595,8 +1616,8 @@ function LabTab({ data, onBuy, onUpgrade, buying, upgrading }: {
   const shielded = pvp.shieldUntil != null && new Date(pvp.shieldUntil).getTime() > Date.now();
   const attackOnCooldown = pvp.attackReadyAt != null && new Date(pvp.attackReadyAt).getTime() > Date.now();
   const troops = [
-    { kind: "attack" as const, name: t("labTroopAttackName"), desc: t("labTroopAttackDesc"), state: pvp.troops.attack, icon: <SwordsIcon size={18} /> },
-    { kind: "defense" as const, name: t("labTroopDefenseName"), desc: t("labTroopDefenseDesc"), state: pvp.troops.defense, icon: <ShieldIcon size={18} /> },
+    { kind: "attack" as const, name: t("labTroopAttackName"), desc: t("labTroopAttackDesc"), state: pvp.troops.attack, icon: <AttackDroneIcon size={18} />, accent: "text-red-300" },
+    { kind: "defense" as const, name: t("labTroopDefenseName"), desc: t("labTroopDefenseDesc"), state: pvp.troops.defense, icon: <DefenseDroneIcon size={18} />, accent: "text-sky-300" },
   ];
   return (
     <section className="mt-3 space-y-3">
@@ -1619,7 +1640,7 @@ function LabTab({ data, onBuy, onUpgrade, buying, upgrading }: {
       </div>
       {troops.map((tr) => (
         <div key={tr.kind} className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3">
-          <h3 className="font-display inline-flex items-center gap-2 text-sm"><span className="text-cyan-300">{tr.icon}</span> {tr.name}</h3>
+          <h3 className="font-display inline-flex items-center gap-2 text-sm"><span className={tr.accent}>{tr.icon}</span> {tr.name}</h3>
           <ExpandableText className="mt-1 text-sm text-[var(--dim)]">{tr.desc}</ExpandableText>
           <p className="mt-2 text-sm font-bold">{t("labOwned", { count: tr.state.count, level: tr.state.level, power: tr.state.power })}</p>
           <div className="mt-2 grid grid-cols-2 gap-2">

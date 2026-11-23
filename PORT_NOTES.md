@@ -2574,7 +2574,7 @@ loader.
   ada di tab Hanggar, jadi harness harus mengklik tab dulu.
   Tampilan loader di Mini App asli masih harus dicek di HP.
 
-## Pintu peta diperberat + Statistik Pemain + Broadcast + Notifikasi WD + Pengingat tidak aktif (2026-11-21, implemented, BELUM di-push)
+## Pintu peta diperberat + Statistik Pemain + Broadcast + Notifikasi WD + Pengingat tidak aktif (2026-11-21, LIVE, commit 8b5689e8, bundle main-ZUPB5KA6.js)
 
 Perintah pemilik 2026-11-21 ("Ya, kerjakan semuanya"): Map 2 di Sektor 3
 terlalu cepat, plus 4 fitur admin/notifikasi. Lima perubahan, staging
@@ -2708,7 +2708,7 @@ DAN menyetel CRON_SECRET di Vercel (lihat bawah).
   (periksa log Vercel keesokan paginya + satu pemain tidak aktif
   menerima pesan).
 
-## Waktu bor digandakan (2026-11-22, perintah pemilik — BELUM di-push)
+## Waktu bor digandakan (2026-11-22, LIVE, commit a67fa9fd, tanpa bundle baru — server-only)
 
 Pemilik: waktu bor sekarang hampir tidak terasa, terutama untuk
 Premium (Standard ×0,75, Pro ×0,375 dari base) — minta waktu
@@ -2768,13 +2768,13 @@ ditambah lagi, daya dibiarkan begitu saja.
   pemain Premium Pro (apakah 2× lebih lama terasa pas, bukan
   membosankan).
 
-## Bahasa pindah ke Pengaturan (2026-11-22, BELUM di-push)
+## Bahasa pindah ke Pengaturan (2026-11-22, LIVE, commit fb594805, bundle main-HN4DIECY.js)
 
 - Owner: pemilih bahasa ID|EN di header mengganggu — pindahkan ke dalam Pengaturan.
 - Perubahan: tombol gir di header (menggantikan toggle ID|EN yang tadinya di samping baris "Sesi:") membuka panel Pengaturan kecil di atas kartu saldo, berisi pemilih bahasa (komponen LanguagePicker yang sama, dipindah). Key i18n baru `settingsTitle` ("Pengaturan"/"Settings"); `langLabel` dipakai ulang sebagai label baris. Tidak ada menu Pengaturan sebelumnya di game — panel ini yang pertama.
 - Verifikasi: typecheck 0 (strict + Vercel-style), build OK (bundle baru main-WAPITD26.js), suite 127/127 (3.044 expects), harness render 5/5 (tanpa Buffer). Panel tertutup secara default; klik gir untuk membuka.
 
-## PvP — Laboratorium Pasukan + pertemuan saat scan (2026-11-22, BELUM di-push)
+## PvP — Laboratorium Pasukan + pertemuan saat scan (2026-11-22, LIVE, commit fb594805, bundle main-HN4DIECY.js; migration-0010 sudah dijalankan owner di Neon sebelum push)
 
 - Owner (diskusi 2026-11-22, disetujui "bisa kita kerjakan sekarang"): pemain A bisa menyerang pemain B dan merampas hasil tambangnya; pertemuan terjadi KADANG saat scan selesai (bukan tiap scan); butuh pasukan, kalkulasi menang/kalah, dan power. Dibahas dulu, baru dibangun.
 - Keputusan owner yang TIDAK boleh diligitasi ulang:
@@ -2806,4 +2806,15 @@ ditambah lagi, daya dibiarkan begitu saja.
 - Verifikasi: typecheck 0 (strict + Vercel-style `--strictNullChecks false`), build OK (bundle baru **main-HN4DIECY.js**), suite **154/154 (3.367 expects)** — 27 tes PvP baru di `/tmp/smoke-test/pvp.test.ts` (juga di-mirror ke `~/workspace/smoke-test/`): formula pasukan, beli/upgrade pakai KT (+ gagal saat KT kurang / maks), lemparan pertemuan (Peta 1 = 0, miss/hit, pilih lawan sungguhan, lewati yang kebal/kosong), pertempuran deterministik (lebih kuat menang, seri → bertahan, lemah kalah, kekuatan dihitung ulang saat eksekusi), rampasan 15% (transfer tepat + nilai KT 0,85 + log dua sisi + baris audit), kehancuran 10% penyerang kalah, NPC (0,3 KT), perisai 1 jam, cooldown penyerang 30 menit, penawaran kedaluwarsa, skip/bertarung tidak mengubah progres sektor, collectJob Peta 1 tanpa encounter, collectJob Peta 2 bisa mengembalikan encounter, scan baru menghapus penawaran lama. **Satu run penuh sempat 153/154 — flake yang sudah dikenal (tes core paralel, hilang di re-run; dua re-run berikutnya 154/154).** Sim ekonomi + sim Premium di-run ulang — angka tidak berubah (lihat di atas). Harness render jsdom tanpa Buffer: **14/14 (fixture PvP) + 12/12 (fixture polos) lolos** — bundle mengevaluasi tanpa error dengan `window.Buffer` undefined, judul + tab Lab tampil, kartu pertemuan (Serang/Lewati + kekuatan lawan) tampil, isi tab Lab (kartu kekuatan, Drone Serbu, Drone Perisai, tombol Beli) tampil setelah klik tab, catatan "belum punya pasukan" tampil untuk pemain polos.
 - Catatan harness: harness render lama di `/tmp/harness/` hilang karena /tmp di-wipe lagi; dibangun ulang dengan jsdom 31 di `/tmp/harness/` (`render.mjs` + `make-fixture.ts` — fixture dibuat dari server baru lokal via `/tmp/smoke-test/make-fixture.ts`, karena server live masih build lama dan `getGameState`-nya belum punya blok `pvp`; salinan `render.mjs` + `make-fixture.ts` juga di-mirror ke `~/workspace/smoke-test/`). Harness menegaskan `window.Buffer` undefined (kondisi browser asli) dan bundle mengevaluasi tanpa error. Root element bundle adalah `[data-generated-space-root]`, bukan `#root`. Dua jebakan harness yang ditemukan saat membangun ulang: (1) stub fetch harus mengembalikan objek biasa `{ok, status, json}` — `new window.Response(...)` melempar karena jsdom tidak punya konstruktor Response, sehingga query gagal dan tampil layar "signal lost"; (2) jsdom `navigator.language` adalah en-US — UI render bahasa Inggris, jadi cek string harus memaksa `localStorage["astra-mining-lang"] = "id"` dulu.
 - Yang masih perlu dicek di HP (setelah push): satu siklus PvP penuh — scan di Peta 2+ sampai pertemuan muncul → Serang → rampasan masuk Log Ekonomi + hasil masuk Log Misi (di kedua akun); tab Lab di HP; tombol Lewati; perisai 1 jam terlihat di Lab pemain yang diserang.
-- Push ini (bila owner bilang "push") mengirim DUA perubahan sekaligus: PvP + panel Pengaturan (bundle main-WAPITD26.js yang belum di-push). Jangan push sebelum owner menjalankan migration-0010 di Neon.
+- Push ini (commit fb594805, 2026-11-22) mengirim DUA perubahan sekaligus: PvP + panel Pengaturan. Migration-0010 sudah dijalankan owner di Neon sebelum push.
+
+## PvP — perubahan fase uji coba (2026-11-23, BELUM di-push)
+
+- Owner (2026-11-23): (1) harga drone ditetapkan 0,1 KT dulu karena masih tahap uji coba; (2) harus ada NPC karena semua akun di game saat ini adalah akun uji coba owner; (3) drone harus ada gambarnya — diputuskan SVG (gaya rumah: semua ikon game inline SVG, tajam di ukuran 26px, tanpa bobot unduhan; gambar generate akan blur di ukuran ikon).
+- Harga 0,1 KT flat (`TROOP_TEST_COST_KT = 0.1` di `api/_lib/game.ts`): `troopBuyCost()` DAN `troopUpgradeCost()` sama-sama mengembalikan 0,1 — harga asli (beli 10 + 5×jumlah KT, upgrade 25×level KT) dihapus dari kode dan dicatat di sini untuk pengembalian nanti. 0,1 aman di pembulatan 3 desimal (`roundKt`). Maks jumlah (20/jenis) dan maks level (5) TIDAK berubah. Label biaya di tab Lab dirender dari server (`buyCost`/`upgradeCost` di getGameState), jadi otomatis ikut 0,1 — tampil "Beli Drone · 0,1 KT" (koma desimal id-ID). Deskripsi aksi `buyTroop`/`upgradeTroop` diperbarui ke harga flat. Tidak ada teks i18n yang menyebut harga lama (rule18/labHowDesc tidak menyebut angka), jadi tidak ada perubahan i18n.
+- Pencocokan CAMPURAN sejak hari pertama (koreksi owner 2026-11-23): `rollPvpEncounter` selalu mencoba lawan sungguhan dulu (pemain acak lain dengan haul ≥7 unit satu jenis bijih dan tidak kebal); bila tidak ada yang layak, lawan adalah Perompak NPC (bertahan 9, harta tetap). Flag `PVP_NPC_ONLY` + seam `setPvpNpcOnlyForTests` DIHAPUS seluruhnya — tidak ada yang perlu diubah nanti saat pemain sungguhan masuk; NPC mengisi selama jumlah pemain masih sedikit. Tidak ada perubahan skema — TIDAK perlu migrasi.
+- Ikon drone SVG (baru di `client/src/App.tsx`, pola IconShell, tanpa file aset baru): `AttackDroneIcon` — panah/dart tajam dengan mata sensor + sirip, aksen merah (`text-red-300`); `DefenseDroneIcon` — bola dalam cincin pelindung dengan 4 jari-jari, aksen biru (`text-sky-300`). Menggantikan `SwordsIcon`/`ShieldIcon` generik di kartu pasukan tab Lab; `SwordsIcon` tetap dipakai untuk ikon tab Lab + judul kartu pertemuan. Diverifikasi visual via render cairosvg: keduanya terbaca di ukuran 24px (ukuran game).
+- Verifikasi: typecheck 0 (strict + Vercel-style), build OK (bundle baru **main-7ALSH67I.js**), suite **156/156 (3.373 expects)** — tes PvP 29 (27 lama + 2 baru: flag NPC-only default true, roll selalu NPC saat flag menyala; tes "pilih lawan sungguhan" + "lewati yang kebal/kosong" kini mematikan flag via seam lalu mengembalikannya di `finally`). Harness render jsdom tanpa Buffer: **17/17 (fixture PvP) + 15/15 (fixture polos)** — termasuk cek baru "buy cost 0,1 KT", ikon dart (`18.5 15 12 12.5`) dan cincin (`r="8.5"`). Fixture dibuat dari server baru lokal (buyCost/upgradeCost 0.1 terkonfirmasi di getGameState).
+- Koreksi 2026-11-23 (owner: pencocokan harus CAMPURAN — pemain DAN NPC, supaya tidak perlu diubah nanti): flag `PVP_NPC_ONLY` + seam `setPvpNpcOnlyForTests` DIHAPUS; `rollPvpEncounter` kembali mencoba lawan sungguhan dulu, NPC hanya bila tidak ada yang layak. 2 tes NPC-only dihapus; tes "pilih lawan sungguhan" + "lewati yang kebal/kosong" tidak lagi memakai seam. Verifikasi ulang: typecheck 0 (strict + Vercel-style), build OK (bundle TETAP **main-7ALSH67I.js** — perubahan hanya server), suite **154/154 (3.368 expects)**, harness **17/17 + 15/15**.
+- Lingkungan: /tmp di-wipe lagi — `/tmp/smoke-test` dipulihkan dari mirror `~/workspace/smoke-test/`, node_modules di-link ulang, cluster Postgres 16 di-start, role astra_test dibuat ulang (password `astra_test_pw` sesuai harness — bukan `astra_test`), DB astra_test dibuat ulang + init.sql + migrasi 0001–0010 diterapkan, kepemilikan tabel dipindah ke astra_test (psql sebagai postgres tidak bisa baca file di bawah /home/hatch — salin SQL ke /tmp/neon-sql dengan chmod 755 dulu). Harness di /tmp/harness dibangun ulang (jsdom 31 + symlink node_modules); jebakan baru: `ln -sfn` pada direktori node_modules yang sudah ada TIDAK menggantinya (malah membuat symlink di dalamnya) — make-fixture.ts dijalankan dari /tmp/smoke-test (salinan) supaya drizzle-orm ter-resolve.
+- Yang masih perlu dicek di HP (setelah push): beli drone 0,1 KT di tab Lab (saldo berkurang 0,1), upgrade 0,1 KT, scan di Peta 2+ sampai ketemu Perompak NPC, tampilan ikon drone di HP.
