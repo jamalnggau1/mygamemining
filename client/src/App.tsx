@@ -932,9 +932,13 @@ export function App() {
       <div className="relative overflow-hidden">
         <img src={heroImg} alt={t("heroImgAlt")} className="animate-hero-zoom h-[180px] w-full object-cover sm:h-[240px]" />
         <div className="absolute inset-0 bg-gradient-to-t from-[#050810] via-[#050810]/35 to-transparent" />
+        {/* Tombol Pengaturan ala game mobile (Gardenscapes, idle game):
+            gir bulat kaca di pojok kanan atas hero — bukan lagi chip kecil
+            di samping baris "Sesi:". */}
+        <button type="button" onClick={() => setSettingsOpen((v) => !v)} aria-expanded={settingsOpen} aria-label={t("settingsTitle")} className="btn-press absolute right-3 top-3 z-10 inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/25 bg-black/40 text-white shadow-lg backdrop-blur-md"><GearIcon size={20} /></button>
         <div className="absolute inset-x-0 bottom-0 mx-auto max-w-3xl px-4 pb-3">
           <p className="text-[11px] font-bold uppercase tracking-[0.3em] text-cyan-300">{t("heroEyebrow")}</p>
-          <div className="mt-1 flex flex-wrap items-center gap-2"><p className="text-[11px] text-[var(--dim)]">{sessionLabel}</p><button type="button" onClick={() => setSettingsOpen((v) => !v)} aria-expanded={settingsOpen} aria-label={t("settingsTitle")} className="btn-press inline-flex items-center justify-center rounded-full border border-white/25 p-1.5 text-white/90"><GearIcon size={14} /></button></div>
+          <div className="mt-1 flex flex-wrap items-center gap-2"><p className="text-[11px] text-[var(--dim)]">{sessionLabel}</p></div>
           <h1 className="font-display title-shine mt-1 text-2xl font-black leading-none sm:text-3xl">ASTRA MINING</h1>
           <p className="mt-1 line-clamp-2 max-w-xl text-xs leading-snug text-slate-200">{trich("heroDesc")}</p>
         </div>
