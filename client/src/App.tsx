@@ -19,6 +19,8 @@ import moonImg from "./assets/map-moon.webp";
 import psycheImg from "./assets/map-psyche.webp";
 import kuiperImg from "./assets/map-kuiper.webp";
 import ktLogoImg from "./assets/kt-logo.webp";
+import droneAttackImg from "./assets/drone-serbu.webp";
+import droneDefenseImg from "./assets/drone-perisai.webp";
 
 const MAP_IMAGES: Record<string, string> = {
   hero: heroImg,
@@ -1692,8 +1694,8 @@ function LabTab({ data, onBuy, onUpgrade, buying, upgrading }: {
   const shielded = pvp.shieldUntil != null && new Date(pvp.shieldUntil).getTime() > Date.now();
   const attackOnCooldown = pvp.attackReadyAt != null && new Date(pvp.attackReadyAt).getTime() > Date.now();
   const troops = [
-    { kind: "attack" as const, name: t("labTroopAttackName"), desc: t("labTroopAttackDesc"), state: pvp.troops.attack, icon: <AttackDroneIcon size={18} />, accent: "text-red-300" },
-    { kind: "defense" as const, name: t("labTroopDefenseName"), desc: t("labTroopDefenseDesc"), state: pvp.troops.defense, icon: <DefenseDroneIcon size={18} />, accent: "text-sky-300" },
+    { kind: "attack" as const, name: t("labTroopAttackName"), desc: t("labTroopAttackDesc"), state: pvp.troops.attack, icon: <AttackDroneIcon size={18} />, accent: "text-red-300", img: droneAttackImg },
+    { kind: "defense" as const, name: t("labTroopDefenseName"), desc: t("labTroopDefenseDesc"), state: pvp.troops.defense, icon: <DefenseDroneIcon size={18} />, accent: "text-sky-300", img: droneDefenseImg },
   ];
   return (
     <section className="mt-3 space-y-3">
@@ -1715,17 +1717,20 @@ function LabTab({ data, onBuy, onUpgrade, buying, upgrading }: {
         {pvp.attackPower === 0 && pvp.defensePower === 0 && (<p className="mt-2 text-sm text-[var(--dim)]">{t("labNoTroops")}</p>)}
       </div>
       {troops.map((tr) => (
-        <div key={tr.kind} className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3">
-          <h3 className="font-display inline-flex items-center gap-2 text-sm"><span className={tr.accent}>{tr.icon}</span> {tr.name}</h3>
-          <ExpandableText className="mt-1 text-sm text-[var(--dim)]">{tr.desc}</ExpandableText>
-          <p className="mt-2 text-sm font-bold">{t("labOwned", { count: tr.state.count, level: tr.state.level, power: tr.state.power })}</p>
-          <div className="mt-2 grid grid-cols-2 gap-2">
-            <button type="button" onClick={() => onBuy(tr.kind)} disabled={buying || upgrading || tr.state.count >= tr.state.maxCount || data.player.ktBalance < tr.state.buyCost} className="btn-press rounded-xl bg-cyan-400 px-4 py-2 font-bold text-black disabled:opacity-40">
-              {tr.state.count >= tr.state.maxCount ? t("labMaxCount") : t("labBuyBtn", { cost: fmt(tr.state.buyCost) })}
-            </button>
-            <button type="button" onClick={() => onUpgrade(tr.kind)} disabled={buying || upgrading || tr.state.count === 0 || tr.state.upgradeCost == null || data.player.ktBalance < tr.state.upgradeCost} className="btn-press rounded-xl border border-amber-400/50 bg-amber-400/10 px-4 py-2 font-bold text-amber-200 disabled:opacity-40">
-              {tr.state.upgradeCost == null ? t("labMaxLevel") : t("labUpgradeBtn", { level: tr.state.level + 1, cost: fmt(tr.state.upgradeCost) })}
-            </button>
+        <div key={tr.kind} className="overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface)]">
+          <img src={tr.img} alt={tr.name} className="aspect-square w-full object-cover" />
+          <div className="p-3">
+            <h3 className="font-display inline-flex items-center gap-2 text-sm"><span className={tr.accent}>{tr.icon}</span> {tr.name}</h3>
+            <ExpandableText className="mt-1 text-sm text-[var(--dim)]">{tr.desc}</ExpandableText>
+            <p className="mt-2 text-sm font-bold">{t("labOwned", { count: tr.state.count, level: tr.state.level, power: tr.state.power })}</p>
+            <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
+              <button type="button" onClick={() => onBuy(tr.kind)} disabled={buying || upgrading || tr.state.count >= tr.state.maxCount || data.player.ktBalance < tr.state.buyCost} className="btn-press rounded-xl bg-cyan-400 px-5 py-2 text-sm font-bold text-black disabled:opacity-40">
+                {tr.state.count >= tr.state.maxCount ? t("labMaxCount") : t("labBuyBtn", { cost: fmt(tr.state.buyCost) })}
+              </button>
+              <button type="button" onClick={() => onUpgrade(tr.kind)} disabled={buying || upgrading || tr.state.count === 0 || tr.state.upgradeCost == null || data.player.ktBalance < tr.state.upgradeCost} className="btn-press rounded-xl border border-amber-400/50 bg-amber-400/10 px-5 py-2 text-sm font-bold text-amber-200 disabled:opacity-40">
+                {tr.state.upgradeCost == null ? t("labMaxLevel") : t("labUpgradeBtn", { level: tr.state.level + 1, cost: fmt(tr.state.upgradeCost) })}
+              </button>
+            </div>
           </div>
         </div>
       ))}
