@@ -288,6 +288,13 @@ export function SlidersIcon({ size = 18 }: { size?: number }) {
     </IconShell>
   );
 }
+export function ChevronLeftIcon({ size = 18 }: { size?: number }) {
+  return (
+    <IconShell size={size}>
+      <path d="M14.5 5.5 8 12l6.5 6.5" />
+    </IconShell>
+  );
+}
 export function GemIcon({ size = 18 }: { size?: number }) {
   return (
     <IconShell size={size}>
@@ -624,6 +631,7 @@ export function App() {
   useLang();
   const queryClient = useQueryClient();
   const [tab, setTab] = useState<Tab>("tambang");
+  const [prevTab, setPrevTab] = useState<Tab>("tambang");
   const [banner, setBanner] = useState<{ kind: "good" | "bad" | "info"; text: ReactNode } | null>(null);
   const [bannerId, setBannerId] = useState(0);
   const showBanner = (kind: "good" | "bad" | "info", text: ReactNode) => { setBanner({ kind, text }); setBannerId((i) => i + 1); if (kind === "bad") playError(); };
@@ -953,7 +961,7 @@ export function App() {
         {/* Tombol Pengaturan ala game mobile (Gardenscapes, idle game):
             ikon slider bulat kaca di pojok kanan atas hero — membuka
             tab Pengaturan penuh, bukan panel yang memanjang ke bawah. */}
-        <button type="button" onClick={() => setTab("pengaturan")} aria-label={t("settingsTitle")} className="btn-press absolute right-3 top-3 z-10 inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/25 bg-black/40 text-white shadow-lg backdrop-blur-md"><SlidersIcon size={20} /></button>
+        <button type="button" onClick={() => { setPrevTab(tab); setTab("pengaturan"); }} aria-label={t("settingsTitle")} className="btn-press absolute right-3 top-3 z-10 inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/25 bg-black/40 text-white shadow-lg backdrop-blur-md"><SlidersIcon size={20} /></button>
         <div className="absolute inset-x-0 bottom-0 mx-auto max-w-3xl px-4 pb-3">
           <p className="text-[11px] font-bold uppercase tracking-[0.3em] text-cyan-300">{t("heroEyebrow")}</p>
           <h1 className="font-display title-shine mt-1 text-2xl font-black leading-none sm:text-3xl">ASTRA MINING</h1>
@@ -1190,20 +1198,33 @@ export function App() {
         {tab === "komunitas" && (<KomunitasTab userId={sessionInfo.userId} referrals={data.player.referrals} />)}
         {tab === "lab" && (<LabTab data={data} onBuy={(kind) => buyTroop.mutate(kind)} onUpgrade={(kind) => upgradeTroop.mutate(kind)} buying={buyTroop.isPending} upgrading={upgradeTroop.isPending} />)}
         {tab === "admin" && p.isAdmin && (<AdminTab data={data} onDone={(ok, err, good) => { showResult(ok, err, good); refresh(); }} />)}
-        {tab === "pengaturan" && (<SettingsTab sessionLabel={sessionLabel} username={sessionInfo.username} />)}
         </div>
       </main>
+      {tab === "pengaturan" && (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-[#050810]">
+          <div className="pt-safe mx-auto max-w-3xl px-4 pb-6">
+            <div className="sticky top-0 z-10 -mx-4 flex items-center gap-2 border-b border-[var(--border)] bg-[#050810]/95 px-4 py-3 backdrop-blur">
+              <button type="button" onClick={() => setTab(prevTab)} aria-label={t("backLabel")} className="btn-press inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-white/25 bg-black/40 text-white"><ChevronLeftIcon size={20} /></button>
+              <h2 className="font-display text-lg">{t("settingsTitle")}</h2>
+            </div>
+            <SettingsTab sessionLabel={sessionLabel} username={sessionInfo.username} />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
 /** Tab Pengaturan (2026-11-23): dibuka HANYA lewat tombol slider
- *  di pojok kanan atas hero — bukan dari navigasi bawah. Isinya
+ *  di pojok kanan atas hero — bukan dari navigasi bawah — dan
+ *  tampil sebagai LAYAR PENUH (overlay fixed inset-0 dengan header
+ *  + tombol kembali, agar tidak mengganggu tampilan game). Isinya
  *  tiga kartu seperti tab lain: Bahasa (pemilih bahasa dengan
  *  bendera 🇮🇩/🇬🇧 — satu-satunya emoji di game, atas perintah
  *  owner), Suara (toggle on/off, tersimpan di localStorage
  *  "astra-mining-sound"), dan Info Akun (baris Sesi yang dulu di
- *  hero + nama pengguna Telegram bila ada). */
+ *  hero + nama pengguna Telegram bila ada). Judul ditampilkan di
+ *  header overlay, bukan di dalam komponen ini. */
 function SettingsTab({ sessionLabel, username }: { sessionLabel: string; username: string | null }) {
   const [on, setOn] = useState(() => soundEnabled());
   const toggle = () => {
@@ -1214,7 +1235,6 @@ function SettingsTab({ sessionLabel, username }: { sessionLabel: string; usernam
   };
   return (
     <section className="mt-3 space-y-3">
-      <h2 className="font-display px-1 text-lg">{t("settingsTitle")}</h2>
       <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3">
         <p className="text-sm font-bold">{t("langLabel")}</p>
         <div className="mt-2"><LanguagePicker /></div>
