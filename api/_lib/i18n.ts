@@ -502,9 +502,9 @@ const en: ServerStrings = {
   errAlreadyScanned:
     "This asteroid has already been scanned — its vein composition is revealed.",
   errEnergyScan: (cost, energy) =>
-    `Not enough energy — scanning needs ${cost} energy, you have ${energy}. Wait for energy to recover (recharging is deliberately slow), upgrade the Mini Fusion Reactor for faster recharge, or the O₂ Tank & Solar Battery for a larger energy capacity.`,
+    `Not enough energy — scanning needs ${cost} energy, you have ${energy}. Wait for energy to recover (recharging is slow), upgrade the Mini Fusion Reactor for faster recharge, or the O₂ Tank & Solar Battery for a larger energy capacity.`,
   errEnergyMine: (cost, energy) =>
-    `Not enough energy — drilling this vein needs ${cost} energy, you have ${energy}. Wait for energy to recover (recharging is deliberately slow), upgrade the Mini Fusion Reactor for faster recharge, or the O₂ Tank & Solar Battery for a larger energy capacity.`,
+    `Not enough energy — drilling this vein needs ${cost} energy, you have ${energy}. Wait for energy to recover (recharging is slow), upgrade the Mini Fusion Reactor for faster recharge, or the O₂ Tank & Solar Battery for a larger energy capacity.`,
   errScanFirst:
     "Scan this asteroid first — without a scan, its mineral veins are hidden.",
   errVeinNotFound: "That mineral vein doesn't exist on this asteroid.",
