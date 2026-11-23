@@ -1702,15 +1702,9 @@ function LabTab({ data, onBuy, onUpgrade, buying, upgrading }: {
       <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3">
         <h2 className="font-display text-lg">{t("labTitle")}</h2>
         <ExpandableText className="mt-1 text-sm text-[var(--dim)]">{t("labDesc")}</ExpandableText>
-        <div className="mt-3 grid grid-cols-2 gap-2 text-center">
-          <div className="rounded-xl border border-red-500/40 bg-red-500/10 px-2 py-2">
-            <p className="font-display text-xl text-red-300">{fmt(pvp.attackPower)}</p>
-            <p className="text-[11px] font-semibold text-[var(--dim)]">{t("labAttackPower")}</p>
-          </div>
-          <div className="rounded-xl border border-sky-500/40 bg-sky-500/10 px-2 py-2">
-            <p className="font-display text-xl text-sky-300">{fmt(pvp.defensePower)}</p>
-            <p className="text-[11px] font-semibold text-[var(--dim)]">{t("labDefensePower")}</p>
-          </div>
+        <div className="mt-3 flex divide-x divide-[var(--border)] rounded-xl border border-[var(--border)] bg-black/20">
+          <p className="flex flex-1 items-baseline justify-center gap-1.5 px-2 py-1.5 text-[11px] font-semibold text-[var(--dim)]">{t("labAttackPower")} <span className="font-display text-base text-red-300">{fmt(pvp.attackPower)}</span></p>
+          <p className="flex flex-1 items-baseline justify-center gap-1.5 px-2 py-1.5 text-[11px] font-semibold text-[var(--dim)]">{t("labDefensePower")} <span className="font-display text-base text-sky-300">{fmt(pvp.defensePower)}</span></p>
         </div>
         {shielded && (<p className="mt-2 text-sm font-bold text-emerald-300">{t("labShielded", { date: fmtDate(pvp.shieldUntil!) })}</p>)}
         {attackOnCooldown && (<p className="mt-1 text-sm text-[var(--dim)]">{t("labCooldown", { dur: fmtDur(Math.max(0, Math.floor((new Date(pvp.attackReadyAt!).getTime() - Date.now()) / 1000))) })}</p>)}
@@ -1718,7 +1712,9 @@ function LabTab({ data, onBuy, onUpgrade, buying, upgrading }: {
       </div>
       {troops.map((tr) => (
         <div key={tr.kind} className="overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface)]">
-          <img src={tr.img} alt={tr.name} className="aspect-square w-full object-cover" />
+          <div className="flex justify-center bg-[#151a48] py-2">
+            <img src={tr.img} alt={tr.name} className="aspect-square h-44 w-44 object-cover" />
+          </div>
           <div className="p-3">
             <h3 className="font-display inline-flex items-center gap-2 text-sm"><span className={tr.accent}>{tr.icon}</span> {tr.name}</h3>
             <ExpandableText className="mt-1 text-sm text-[var(--dim)]">{tr.desc}</ExpandableText>
