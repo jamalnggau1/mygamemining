@@ -318,7 +318,7 @@
 //   slot where the owner plugs in a real ad provider later. The
 //   reward is capped server-side: at most AD_DAILY_CAP (10) views per
 //   calendar day (= 3,75 KT/day max) and a
-//   AD_COOLDOWN_SECONDS (1h) gap between views, both recomputed in
+//   AD_COOLDOWN_SECONDS (5 menit) gap between views, both recomputed in
 //   watchAd from the ad_reward rows in the activity log. No new table
 //   or migration: the activity log IS the claim history, and ad_reward
 //   classifies as an economy event in the split log.
@@ -372,7 +372,7 @@ export const KT_PER_USDT = 1000;
 export const DAILY_BONUS_KT = 0.625;
 export const AD_REWARD_KT = 0.375;
 export const AD_DAILY_CAP = 10;
-const AD_COOLDOWN_SECONDS = 3600; // 1 jam antar-iklan (owner 2026-11-19: cegah farming iklan)
+const AD_COOLDOWN_SECONDS = 300; // 5 menit antar-iklan (owner 2026-11-23: dari 1 jam; kuota tetap 10/hari)
 
 // Hadiah referral (2026-11-20): 10 KT ke PENGUNDANG saat pemain yang
 // diundangnya menyelesaikan ekspedisi PERTAMANYA. Jumlah TETAP —
@@ -3912,7 +3912,7 @@ export const gameActions = {
 
   watchAd: defineGameAction({
     description:
-      "Claims the sponsored-ad reward: credits 0,375 KT for one ad view. Fully server-validated (anti-cheat): the daily cap of 10 views per calendar day and the 60-second cooldown between views are recomputed here from the ad_reward activity history in the database — a tampered client cannot exceed the cap, skip the cooldown, or change the reward amount. This is the placeholder slot where the owner will plug in a real ad provider later; the reward logic stays identical.",
+      "Claims the sponsored-ad reward: credits 0,375 KT for one ad view. Fully server-validated (anti-cheat): the daily cap of 10 views per calendar day and the 5-minute cooldown between views are recomputed here from the ad_reward activity history in the database — a tampered client cannot exceed the cap, skip the cooldown, or change the reward amount. This is the placeholder slot where the owner will plug in a real ad provider later; the reward logic stays identical.",
     request: z.object({}),
     response: resultShape.extend({
       rewardKt: z.number(),
