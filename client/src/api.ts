@@ -56,18 +56,21 @@ export function getTelegramSessionInfo(): {
   inTelegram: boolean;
   hasInitData: boolean;
   userId: number | null;
+  username: string | null;
 } {
   try {
     const wa = window.Telegram?.WebApp;
-    if (!wa) return { inTelegram: false, hasInitData: false, userId: null };
+    if (!wa) return { inTelegram: false, hasInitData: false, userId: null, username: null };
     const uid = wa.initDataUnsafe?.user?.id;
+    const uname = wa.initDataUnsafe?.user?.username;
     return {
       inTelegram: true,
       hasInitData: (wa.initData?.length ?? 0) > 0,
       userId: typeof uid === "number" ? uid : null,
+      username: typeof uname === "string" && uname.length > 0 ? uname : null,
     };
   } catch {
-    return { inTelegram: false, hasInitData: false, userId: null };
+    return { inTelegram: false, hasInitData: false, userId: null, username: null };
   }
 }
 

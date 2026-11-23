@@ -9,6 +9,7 @@ import {
   sendGramPayment,
 } from "./tonconnect";
 import { fmt, fmtDate, fmtDateLong, fmtDateTime, fmtDur, LanguagePicker, t, trich, useLang } from "./i18n.js";
+import { playClick, playError, playSuccess, setSoundEnabled, soundEnabled } from "./sound.js";
 import { ExpandableText } from "./ExpandableText";
 import heroImg from "./assets/hero.webp";
 import asteroidImg from "./assets/asteroid.webp";
@@ -269,6 +270,21 @@ export function GearIcon({ size = 18 }: { size?: number }) {
     <IconShell size={size}>
       <circle cx="12" cy="12" r="3.2" />
       <path d="M12 2.8v2.6M12 18.6v2.6M2.8 12h2.6M18.6 12h2.6M5.5 5.5l1.8 1.8M16.7 16.7l1.8 1.8M18.5 5.5l-1.8 1.8M7.3 16.7l-1.8 1.8" />
+    </IconShell>
+  );
+}
+/** Ikon slider untuk tombol Pengaturan (pilihan owner, 2026-11-23):
+    tiga garis horizontal dengan kenop bundar di tiap garis, kenop
+    bergeser di sepanjang garis (baris 1 kanan, baris 2 kiri, baris
+    3 kanan). Garis terputus di sekitar kenop ala Lucide
+    sliders-horizontal, jadi kenop tampak utuh tanpa garis menembus. */
+export function SlidersIcon({ size = 18 }: { size?: number }) {
+  return (
+    <IconShell size={size}>
+      <path d="M3 8h9.8M17.2 8H21M3 12h2.8M10.2 12H21M3 16h11.8M19.2 16H21" />
+      <circle cx="15" cy="8" r="2.2" />
+      <circle cx="8" cy="12" r="2.2" />
+      <circle cx="17" cy="16" r="2.2" />
     </IconShell>
   );
 }
@@ -573,7 +589,7 @@ function ConfettiLayer({ burst }: { burst: Burst }) {
   );
 }
 
-type Tab = "tambang" | "peta" | "pasar" | "upgrade" | "wd" | "komunitas" | "lab" | "admin";
+type Tab = "tambang" | "peta" | "pasar" | "upgrade" | "wd" | "komunitas" | "lab" | "admin" | "pengaturan";
 
 /** Layar boot bermerek — tampil saat state awal game dimuat (bukan
  *  saat error). Judul + bar progres animasi + baris status yang
@@ -609,9 +625,8 @@ export function App() {
   const queryClient = useQueryClient();
   const [tab, setTab] = useState<Tab>("tambang");
   const [banner, setBanner] = useState<{ kind: "good" | "bad" | "info"; text: ReactNode } | null>(null);
-  const [settingsOpen, setSettingsOpen] = useState(false);
   const [bannerId, setBannerId] = useState(0);
-  const showBanner = (kind: "good" | "bad" | "info", text: ReactNode) => { setBanner({ kind, text }); setBannerId((i) => i + 1); };
+  const showBanner = (kind: "good" | "bad" | "info", text: ReactNode) => { setBanner({ kind, text }); setBannerId((i) => i + 1); if (kind === "bad") playError(); };
   const [burst, setBurst] = useState<Burst | null>(null);
   const [balanceGlow, setBalanceGlow] = useState(false);
   // True while an AdsGram rewarded ad is playing — the "Tonton Iklan"
@@ -674,17 +689,20 @@ export function App() {
       if (r.kind === "scan") {
         showBanner("good", t("collectScanDone"));
         fireBurst("scan");
+        playSuccess();
       } else if (r.jammed) {
         showBanner("bad", (<span className="inline-flex items-center gap-1.5"><AlertIcon size={15} /> {t("collectJammed", { ore: r.oreName ?? t("oreFallback") })}</span>));
       } else if (r.isRare) {
         showBanner("good", (<span className="inline-flex items-center gap-1.5"><SparkleIcon size={15} /> {t("collectRare", { ore: r.oreName ?? t("oreFallback"), qty: r.qty })}{r.hullHit ? t("collectRareHull", { fee: fmt(r.repairFeeKt) }) : ""}</span>));
         fireBurst("rare");
+        if (!r.hullHit) playClick();
       } else if (r.hullHit) {
         showBanner("bad", t("collectHull", { ore: r.oreName ?? t("oreFallback"), qty: r.qty, fee: fmt(r.repairFeeKt) }));
         fireBurst("mine");
       } else {
         showBanner("info", t("collectOk", { ore: r.oreName ?? t("oreFallback"), qty: r.qty }));
         fireBurst("mine");
+        playClick();
       }
       refresh();
     },
@@ -700,7 +718,7 @@ export function App() {
         ? <>{t("expeditionDoneProgress", { bonus: fmt(r.bonusKt), current: r.sectorProgress.current, needed: r.sectorProgress.needed, next: r.layer + 1 })}</>
         : <>{t("expeditionDone", { bonus: fmt(r.bonusKt), layer: r.layer })}</>;
       showResult(r.ok, r.error, msg);
-      if (r.ok) fireBurst("expedition");
+      if (r.ok) { fireBurst("expedition"); playSuccess(); }
       refresh();
     },
   });
@@ -933,27 +951,17 @@ export function App() {
         <img src={heroImg} alt={t("heroImgAlt")} className="animate-hero-zoom h-[180px] w-full object-cover sm:h-[240px]" />
         <div className="absolute inset-0 bg-gradient-to-t from-[#050810] via-[#050810]/35 to-transparent" />
         {/* Tombol Pengaturan ala game mobile (Gardenscapes, idle game):
-            gir bulat kaca di pojok kanan atas hero — bukan lagi chip kecil
-            di samping baris "Sesi:". */}
-        <button type="button" onClick={() => setSettingsOpen((v) => !v)} aria-expanded={settingsOpen} aria-label={t("settingsTitle")} className="btn-press absolute right-3 top-3 z-10 inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/25 bg-black/40 text-white shadow-lg backdrop-blur-md"><GearIcon size={20} /></button>
+            ikon slider bulat kaca di pojok kanan atas hero — membuka
+            tab Pengaturan penuh, bukan panel yang memanjang ke bawah. */}
+        <button type="button" onClick={() => setTab("pengaturan")} aria-label={t("settingsTitle")} className="btn-press absolute right-3 top-3 z-10 inline-flex h-10 w-10 items-center justify-center rounded-full border border-white/25 bg-black/40 text-white shadow-lg backdrop-blur-md"><SlidersIcon size={20} /></button>
         <div className="absolute inset-x-0 bottom-0 mx-auto max-w-3xl px-4 pb-3">
           <p className="text-[11px] font-bold uppercase tracking-[0.3em] text-cyan-300">{t("heroEyebrow")}</p>
-          <div className="mt-1 flex flex-wrap items-center gap-2"><p className="text-[11px] text-[var(--dim)]">{sessionLabel}</p></div>
           <h1 className="font-display title-shine mt-1 text-2xl font-black leading-none sm:text-3xl">ASTRA MINING</h1>
           <p className="mt-1 line-clamp-2 max-w-xl text-xs leading-snug text-slate-200">{trich("heroDesc")}</p>
         </div>
       </div>
 
       <main className="mx-auto max-w-3xl px-3 pb-8">
-        {settingsOpen && (
-          <section className="mb-3 rounded-2xl border border-[var(--border)] bg-[var(--surface)]/95 p-3 shadow-2xl backdrop-blur">
-            <p className="text-[11px] font-bold uppercase tracking-[0.25em] text-[var(--dim)]">{t("settingsTitle")}</p>
-            <div className="mt-2 flex items-center justify-between gap-3">
-              <span className="text-sm font-bold">{t("langLabel")}</span>
-              <LanguagePicker />
-            </div>
-          </section>
-        )}
         <section className="-mt-1 rounded-2xl border border-[var(--border)] bg-[var(--surface)]/95 p-3 shadow-2xl backdrop-blur">
           <div className="flex flex-wrap items-end justify-between gap-4">
             <div>
@@ -1182,9 +1190,53 @@ export function App() {
         {tab === "komunitas" && (<KomunitasTab userId={sessionInfo.userId} referrals={data.player.referrals} />)}
         {tab === "lab" && (<LabTab data={data} onBuy={(kind) => buyTroop.mutate(kind)} onUpgrade={(kind) => upgradeTroop.mutate(kind)} buying={buyTroop.isPending} upgrading={upgradeTroop.isPending} />)}
         {tab === "admin" && p.isAdmin && (<AdminTab data={data} onDone={(ok, err, good) => { showResult(ok, err, good); refresh(); }} />)}
+        {tab === "pengaturan" && (<SettingsTab sessionLabel={sessionLabel} username={sessionInfo.username} />)}
         </div>
       </main>
     </div>
+  );
+}
+
+/** Tab Pengaturan (2026-11-23): dibuka HANYA lewat tombol slider
+ *  di pojok kanan atas hero — bukan dari navigasi bawah. Isinya
+ *  tiga kartu seperti tab lain: Bahasa (pemilih bahasa dengan
+ *  bendera 🇮🇩/🇬🇧 — satu-satunya emoji di game, atas perintah
+ *  owner), Suara (toggle on/off, tersimpan di localStorage
+ *  "astra-mining-sound"), dan Info Akun (baris Sesi yang dulu di
+ *  hero + nama pengguna Telegram bila ada). */
+function SettingsTab({ sessionLabel, username }: { sessionLabel: string; username: string | null }) {
+  const [on, setOn] = useState(() => soundEnabled());
+  const toggle = () => {
+    const next = !on;
+    setSoundEnabled(next);
+    setOn(next);
+    if (next) playClick();
+  };
+  return (
+    <section className="mt-3 space-y-3">
+      <h2 className="font-display px-1 text-lg">{t("settingsTitle")}</h2>
+      <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3">
+        <p className="text-sm font-bold">{t("langLabel")}</p>
+        <div className="mt-2"><LanguagePicker /></div>
+      </div>
+      <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <p className="text-sm font-bold">{t("soundTitle")}</p>
+            <p className="mt-0.5 text-xs text-[var(--dim)]">{t("soundHint")}</p>
+          </div>
+          <button type="button" role="switch" aria-checked={on} aria-label={t("soundTitle")} onClick={toggle} className={`btn-press relative h-7 w-12 shrink-0 rounded-full transition-colors ${on ? "bg-cyan-400" : "bg-[var(--surface2)]"}`}>
+            <span className={`absolute top-0.5 h-6 w-6 rounded-full bg-white shadow transition-all ${on ? "left-[22px]" : "left-0.5"}`} />
+          </button>
+        </div>
+        <p className="mt-2 text-xs font-bold text-[var(--dim)]">{on ? t("soundOn") : t("soundOff")}</p>
+      </div>
+      <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3">
+        <p className="text-sm font-bold">{t("accountTitle")}</p>
+        <p className="mt-2 text-sm text-[var(--dim)]">{sessionLabel}</p>
+        {username && (<p className="mt-1 text-sm text-[var(--dim)]">{t("accountName")}: @{username}</p>)}
+      </div>
+    </section>
   );
 }
 

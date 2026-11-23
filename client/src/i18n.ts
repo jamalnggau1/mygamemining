@@ -34,8 +34,8 @@ export type Lang = "id" | "en";
 
 /** Languages offered in the header picker (label = language code). */
 export const LANGS: { code: Lang; label: string }[] = [
-  { code: "id", label: "ID" },
-  { code: "en", label: "EN" },
+  { code: "id", label: "🇮🇩 Bahasa Indonesia" },
+  { code: "en", label: "🇬🇧 English" },
 ];
 
 const LANG_KEY = "astra-mining-lang";
@@ -435,6 +435,12 @@ const id: Dict = {
   wdRejected: "WD #{id} ditolak — KT pemain sudah dikembalikan.",
   langLabel: "Bahasa",
   settingsTitle: "Pengaturan",
+  soundTitle: "Suara",
+  soundHint: "Bunyi klik, scan, dan ekspedisi",
+  soundOn: "Aktif",
+  soundOff: "Mati",
+  accountTitle: "Info Akun",
+  accountName: "Nama pengguna",
   asteroidNew: "asteroid baru",
   oreFallback: "mineral",
   tierProParen: "Pro (bor ganda)",
@@ -900,6 +906,12 @@ const en: Dict = {
   wdRejected: "WD #{id} rejected — the player's KT has been refunded.",
   langLabel: "Language",
   settingsTitle: "Settings",
+  soundTitle: "Sound",
+  soundHint: "Click, scan, and expedition sounds",
+  soundOn: "On",
+  soundOff: "Off",
+  accountTitle: "Account Info",
+  accountName: "Username",
   asteroidNew: "a new asteroid",
   oreFallback: "ore",
   tierProParen: "Pro (dual drill)",
