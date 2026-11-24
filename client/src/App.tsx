@@ -860,7 +860,7 @@ export function App() {
     onSuccess: (r) => { showResult(r.ok, r.error, r.ok ? t("premiumOrderCancelled") : null); refresh(); },
   });
   const claimBonus = useMutation({ mutationFn: () => api.claimDailyBonus({}), onSuccess: (r) => { showResult(r.ok, r.error, t("dailyBonusClaimed", { bonus: fmt(r.bonusKt) })); refresh(); } });
-  const watchAd = useMutation({ mutationFn: () => api.watchAd({}), onSuccess: (r) => { showResult(r.ok, r.error, <>{t("adRewarded", { reward: fmt(r.rewardKt), remaining: r.remainingToday })}</>); if (r.ok) fireBurst("mine"); refresh(); } });
+  const watchAd = useMutation({ mutationFn: () => api.watchAd({}), onSuccess: (r) => { showResult(r.ok, r.error, <>{t("adRewarded", { reward: fmt(r.rewardEnergy), remaining: r.remainingToday })}</>); if (r.ok) fireBurst("mine"); refresh(); } });
   /** "Tonton Iklan": when a blockId is configured, a real AdsGram
    *  rewarded ad must be watched to the end FIRST — KT is granted
    *  only on success, via the unchanged server watchAd action. With
@@ -1011,7 +1011,7 @@ export function App() {
           </section>
           {p.canClaimDailyBonus && (<button type="button" onClick={() => claimBonus.mutate()} disabled={claimBonus.isPending} className="btn-press mt-2 inline-flex w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-cyan-400 bg-cyan-400/10 px-4 py-2 font-bold text-cyan-200"><GiftIcon size={17} /> {t("claimDaily", { kt: fmt(p.dailyBonusKt) })}</button>)}
           <div className="mt-2">
-            <button type="button" onClick={handleWatchAd} disabled={watchAd.isPending || adPlaying || !p.ads.canWatch} aria-label={t("adAriaFull", { reward: fmt(p.ads.rewardKt), remaining: p.ads.remainingToday, cap: p.ads.dailyCap })} className="ad-banner-gold btn-press inline-flex w-full items-center justify-center gap-2 px-4 py-2.5 text-sm font-bold disabled:opacity-40">
+            <button type="button" onClick={handleWatchAd} disabled={watchAd.isPending || adPlaying || !p.ads.canWatch} aria-label={t("adAriaFull", { reward: fmt(p.ads.rewardEnergy), remaining: p.ads.remainingToday, cap: p.ads.dailyCap })} className="ad-banner-gold btn-press inline-flex w-full items-center justify-center gap-2 px-4 py-2.5 text-sm font-bold disabled:opacity-40">
               <span aria-hidden="true">«</span>
               <PlayIcon size={18} />
               {adPlaying
@@ -1020,7 +1020,7 @@ export function App() {
                   ? t("adQuotaOut")
                   : p.ads.cooldownRemainingSec > 0
                     ? t("adNextIn", { s: p.ads.cooldownRemainingSec })
-                    : t("watchAdBtn", { kt: fmt(p.ads.rewardKt) })}
+                    : t("watchAdBtn", { energy: fmt(p.ads.rewardEnergy) })}
               <span aria-hidden="true">»</span>
             </button>
             <p className="mt-1.5 text-center text-xs text-[var(--dim)]">
@@ -1167,7 +1167,7 @@ export function App() {
                 <li><ExpandableText>{trich("rule10")}</ExpandableText></li>
                 <li><ExpandableText>{trich("rule11")}</ExpandableText></li>
                 <li><ExpandableText>{t("rule12", { dailyBonus: fmt(p.dailyBonusKt) })}</ExpandableText></li>
-                <li><ExpandableText>{trich("rule13", { adReward: fmt(p.ads.rewardKt), adCap: p.ads.dailyCap, adCooldown: fmtDur(p.ads.cooldownSeconds), adDailyMax: fmt(p.ads.rewardKt * p.ads.dailyCap) })}</ExpandableText></li>
+                <li><ExpandableText>{trich("rule13", { adReward: fmt(p.ads.rewardEnergy), adCap: p.ads.dailyCap, adCooldown: fmtDur(p.ads.cooldownSeconds), adDailyMax: fmt(p.ads.rewardEnergy * p.ads.dailyCap) })}</ExpandableText></li>
                 <li><ExpandableText>{trich("rule14", { travelNear: data.maps[0]?.travelCost ?? 4, travelFar: data.maps[4]?.travelCost ?? 12 })}</ExpandableText></li>
                 <li><ExpandableText>{trich("rule15")}</ExpandableText></li>
                 <li><ExpandableText>{trich("rule16")}</ExpandableText></li>

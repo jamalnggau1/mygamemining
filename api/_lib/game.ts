@@ -314,10 +314,10 @@
 // upgrades (was ~149 days at #7).
 //
 // Sponsored ads (owner monetization slot):
-//   A "Tonton Iklan" button pays AD_REWARD_KT (0,375 KT) per view — the
-//   slot where the owner plugs in a real ad provider later. The
-//   reward is capped server-side: at most AD_DAILY_CAP (10) views per
-//   calendar day (= 3,75 KT/day max) and a
+//   A "Tonton Iklan" button pays AD_REWARD_ENERGY (5 Daya Kapal)
+//   per view — the slot where the owner plugs in a real ad provider
+//   later. The reward is capped server-side: at most AD_DAILY_CAP
+//   (10) views per calendar day (= 50 Daya/hari max) and a
 //   AD_COOLDOWN_SECONDS (5 menit) gap between views, both recomputed in
 //   watchAd from the ad_reward rows in the activity log. No new table
 //   or migration: the activity log IS the claim history, and ad_reward
@@ -370,7 +370,7 @@ import {
 
 export const KT_PER_USDT = 1000;
 export const DAILY_BONUS_KT = 0.625;
-export const AD_REWARD_KT = 0.375;
+export const AD_REWARD_ENERGY = 5; // Daya Kapal per tontonan iklan (owner 2026-11-24: hadiah iklan bukan KT lagi — 5 = tepat 1x biaya scan, jadi 1 iklan = 1 scan)
 export const AD_DAILY_CAP = 10;
 const AD_COOLDOWN_SECONDS = 300; // 5 menit antar-iklan (owner 2026-11-23: dari 1 jam; kuota tetap 10/hari)
 
@@ -2184,7 +2184,7 @@ export const gameActions = {
         wdMaxUsdt: z.number(),
         isAdmin: z.boolean(),
         ads: z.object({
-          rewardKt: z.number(),
+          rewardEnergy: z.number(),
           dailyCap: z.number(),
           watchedToday: z.number(),
           remainingToday: z.number(),
@@ -2572,7 +2572,7 @@ export const gameActions = {
           wdMaxUsdt: WD_MAX_KT / KT_PER_USDT,
           isAdmin: session.isAdmin,
           ads: {
-            rewardKt: AD_REWARD_KT,
+            rewardEnergy: AD_REWARD_ENERGY,
             dailyCap: AD_DAILY_CAP,
             watchedToday: adStats.watchedToday,
             remainingToday: adStats.remainingToday,
@@ -3938,10 +3938,11 @@ export const gameActions = {
 
   watchAd: defineGameAction({
     description:
-      "Claims the sponsored-ad reward: credits 0,375 KT for one ad view. Fully server-validated (anti-cheat): the daily cap of 10 views per calendar day and the 5-minute cooldown between views are recomputed here from the ad_reward activity history in the database — a tampered client cannot exceed the cap, skip the cooldown, or change the reward amount. This is the placeholder slot where the owner will plug in a real ad provider later; the reward logic stays identical.",
+      "Claims the sponsored-ad reward: credits AD_REWARD_ENERGY (5) Ship Energy for one ad view — NOT KT (owner 2026-11-24). Fully server-validated (anti-cheat): the daily cap of 10 views per calendar day and the 5-minute cooldown between views are recomputed here from the ad_reward activity history in the database — a tampered client cannot exceed the cap, skip the cooldown, or change the reward amount. The credit is capped at maxEnergy (a full tank gets 0); the response reports the ACTUAL credited amount. This is the placeholder slot where the owner will plug in a real ad provider later; the reward logic stays identical.",
     request: z.object({}),
     response: resultShape.extend({
-      rewardKt: z.number(),
+      rewardEnergy: z.number(),
+      energy: z.number(),
       ktBalance: z.number(),
       watchedToday: z.number(),
       remainingToday: z.number(),
@@ -3957,7 +3958,8 @@ export const gameActions = {
       const fail = (error: string) => ({
         ok: false,
         error,
-        rewardKt: 0,
+        rewardEnergy: 0,
+        energy: p.energy,
         ktBalance: p.ktBalance,
         watchedToday: stats.watchedToday,
         remainingToday: stats.remainingToday,
@@ -3967,20 +3969,27 @@ export const gameActions = {
         return fail(S.errAdCapReached(AD_DAILY_CAP));
       if (stats.cooldownRemainingSec > 0)
         return fail(S.errAdCooldown(stats.cooldownRemainingSec, AD_COOLDOWN_SECONDS));
-      const newBalance = roundKt(p.ktBalance + AD_REWARD_KT);
+      // loadPlayer already applied pending regen; credit +5 Daya,
+      // capped at maxEnergy (Tangki O2 raises the cap). The actual
+      // credited amount is reported — a full tank gets 0.
+      const levels = await loadLevels(db, p.id);
+      const cap = maxEnergy(levels);
+      const credited = Math.min(AD_REWARD_ENERGY, Math.max(0, cap - p.energy));
+      const newEnergy = p.energy + credited;
       await db
         .update(schema.player)
         .set({
-          ktBalance: newBalance,
-          totalKtEarned: roundKt(p.totalKtEarned + AD_REWARD_KT),
+          energy: newEnergy,
+          energyUpdatedAt: newEnergy >= cap ? new Date() : p.energyUpdatedAt,
         })
         .where(eq(schema.player.id, p.id));
-      await logActivity(db, p.id, "ad_reward", S.logAd(AD_REWARD_KT), AD_REWARD_KT);
+      await logActivity(db, p.id, "ad_reward", S.logAd(credited), null);
       return {
         ok: true,
         error: null,
-        rewardKt: AD_REWARD_KT,
-        ktBalance: newBalance,
+        rewardEnergy: credited,
+        energy: newEnergy,
+        ktBalance: p.ktBalance,
         watchedToday: stats.watchedToday + 1,
         remainingToday: Math.max(0, stats.remainingToday - 1),
         cooldownRemainingSec: AD_COOLDOWN_SECONDS,

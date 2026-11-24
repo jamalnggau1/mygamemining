@@ -350,17 +350,18 @@
   transition: transform 0.12s ease, filter 0.12s ease;
 }
 
-/* Panel neon sudut terpangkas (redesain 2026-11-24, dari referensi
-   tampilan baru): border cyan dibuat dari gradasi border-box karena
-   clip-path memotong border biasa; glow dari drop-shadow yang
-   mengikuti bentuk terpangkas. */
+/* Panel neon (redesain 2026-11-24, dari referensi tampilan baru):
+   sudut NORMAL rounded (owner 2026-11-24: chamfer clip-path
+   memotong bingkai di sudutnya, kelihatan terpotong — diganti
+   rounded-2xl seperti kartu lain). Border cyan dari gradasi
+   border-box; glow dari drop-shadow. */
 .panel-neon {
   position: relative;
   background:
     linear-gradient(var(--surface), var(--surface)) padding-box,
     linear-gradient(135deg, rgba(34, 211, 238, 0.95), rgba(34, 211, 238, 0.25) 45%, rgba(34, 211, 238, 0.8)) border-box;
   border: 1.5px solid transparent;
-  clip-path: polygon(14px 0, 100% 0, 100% calc(100% - 14px), calc(100% - 14px) 100%, 0 100%, 0 14px);
+  border-radius: 1rem;
   filter: drop-shadow(0 0 10px rgba(34, 211, 238, 0.28));
 }
 

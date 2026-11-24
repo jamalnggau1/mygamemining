@@ -433,7 +433,7 @@ const id: ServerStrings = {
   logDailyBonus: (amount) =>
     `Bonus harian ${fmtNum(amount, "id")} KT diklaim.`,
   logAd: (amount) =>
-    `Menonton iklan sponsor — hadiah ${fmtNum(amount, "id")} KT masuk ke saldo.`,
+    `Menonton iklan sponsor — hadiah +${fmtNum(amount, "id")} Daya Kapal.`,
   logSell: (qty, oreName, gained) =>
     `Menjual ${qty} ${oreName} seharga ${fmtNum(gained, "id")} KT.`,
   logSellAll: (count, gained) =>
@@ -636,7 +636,7 @@ const en: ServerStrings = {
   logDailyBonus: (amount) =>
     `Daily bonus of ${fmtNum(amount, "en")} KT claimed.`,
   logAd: (amount) =>
-    `Watched a sponsored ad — reward of ${fmtNum(amount, "en")} KT added to balance.`,
+    `Watched a sponsored ad — reward of +${fmtNum(amount, "en")} Ship Energy.`,
   logSell: (qty, oreName, gained) =>
     `Sold ${qty} ${oreName} for ${fmtNum(gained, "en")} KT.`,
   logSellAll: (count, gained) =>
