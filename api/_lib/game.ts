@@ -374,16 +374,17 @@ export const AD_REWARD_KT = 0.375;
 export const AD_DAILY_CAP = 10;
 const AD_COOLDOWN_SECONDS = 300; // 5 menit antar-iklan (owner 2026-11-23: dari 1 jam; kuota tetap 10/hari)
 
-// Hadiah referral (2026-11-20): 10 KT ke PENGUNDANG saat pemain yang
+// Hadiah referral (2026-11-20; bonus yang diundang 2026-11-24): 10 KT
+// ke PENGUNDANG + 5 KT ke YANG DIUNDANG, dibayar saat pemain yang
 // diundangnya menyelesaikan ekspedisi PERTAMANYA. Jumlah TETAP —
 // pemilik mendelegasikan angkanya ke Muse: 10 KT ≈ 2–3 jam main
 // aktif gratis (~100 KT/hari), jadi 10 referral = satu WD pertama
 // (100 KT) — layak dibagikan, tidak layak di-farming (tiap akun
 // palsu butuh akun Telegram sendiri + main sungguhan, dan anti-cheat
-// menandai >3 akun/IP). Tidak ada bonus untuk yang diundang di fase
-// ini (hanya pengundang). Satu-satunya tempat angka ini dipakai:
+// menandai >3 akun/IP). Satu-satunya tempat angka ini dipakai:
 // payReferralRewardIfPending di bawah.
 export const REFERRAL_REWARD_KT = 10;
+export const REFERRAL_REFEREE_REWARD_KT = 5;
 export const BASE_MAX_ENERGY = 30;
 export const BASE_REGEN_SECONDS = 240; // 1 energy per 4 minutes — deliberately slow (see economy note above)
 const REGEN_MIN_SECONDS = 60; // hard floor for the Reaktor upgrade curve (pre-Premium)
@@ -1351,9 +1352,11 @@ async function getReferralStats(
 /** Membayar hadiah referral saat pemain yang diundang menyelesaikan
  *  ekspedisi PERTAMANYA: 10 KT masuk ke saldo PENGUNDANG (bukan ke
  *  yang diundang), baris referral berubah pending → rewarded, dan
- *  entri Log Ekonomi ditulis untuk pengundang. Hanya ekspedisi
- *  pertama yang membayar — setelah status "rewarded", ekspedisi
- *  berikutnya tidak menemukan baris pending lagi. Klaimnya atomik
+ *  entri Log Ekonomi ditulis untuk pengundang. Sejak 2026-11-24
+ *  YANG DIUNDANG juga dapat 5 KT di momen yang sama + entri Log
+ *  Ekonomi sendiri. Hanya ekspedisi pertama yang membayar — setelah
+ *  status "rewarded", ekspedisi berikutnya tidak menemukan baris
+ *  pending lagi. Klaimnya atomik
  *  (UPDATE ... WHERE status='pending' + cek baris yang kena), jadi
  *  dua penyelesaian bersamaan tidak bisa membayar ganda. Pesan log
  *  ditulis dalam bahasa pemain YANG DIUNDANG saat itu (bahasa
@@ -1405,6 +1408,29 @@ async function payReferralRewardIfPending(
       serverStrings(lang).logReferralReward(REFERRAL_REWARD_KT),
       REFERRAL_REWARD_KT,
     );
+    // Bonus untuk yang diundang (owner 2026-11-24): 5 KT di momen
+    // yang sama — saat ia menyelesaikan ekspedisi pertamanya.
+    const referred = await loadPlayerRowOrNull(db, referredPlayerId);
+    if (referred) {
+      await db
+        .update(schema.player)
+        .set({
+          ktBalance: roundKt(referred.ktBalance + REFERRAL_REFEREE_REWARD_KT),
+          totalKtEarned: roundKt(
+            referred.totalKtEarned + REFERRAL_REFEREE_REWARD_KT,
+          ),
+        })
+        .where(eq(schema.player.id, referred.id));
+      await logActivity(
+        db,
+        referred.id,
+        "referral_reward",
+        serverStrings(lang).logReferralRefereeBonus(
+          REFERRAL_REFEREE_REWARD_KT,
+        ),
+        REFERRAL_REFEREE_REWARD_KT,
+      );
+    }
   } catch {
     // Hadiah gagal = referral sekadar tidak terbayar kali ini;
     // ekspedisi si yang diundang tetap selesai seperti biasa.

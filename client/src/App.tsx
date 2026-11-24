@@ -1664,6 +1664,9 @@ function AdminWdCard({ wd, onDone }: { wd: Wd; onDone: (ok: boolean, error: stri
 const CHANNEL_URL = "https://t.me/astra_mining_gram";
 /** Hadiah referral per teman yang mulai bermain. */
 const REFERRAL_REWARD_KT = 10;
+/** Bonus referral untuk teman yang diundang (diterima saat ia
+ *  menyelesaikan ekspedisi pertamanya). */
+const REFERRAL_REFEREE_REWARD_KT = 5;
 
 /** Buka link t.me di dalam Telegram bila tersedia, kalau tidak di tab
  *  baru. openTelegramLink menjaga pemain tetap di dalam Telegram. */
@@ -1800,7 +1803,7 @@ function KomunitasTab({ userId, referrals }: { userId: number | null; referrals:
           <span aria-hidden="true" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-[var(--border)] bg-[var(--surface2)]"><GiftIcon size={20} /></span>
           <div>
             <h3 className="font-display text-sm">{t("commRefTitle")}</h3>
-            <ExpandableText className="mt-0.5 text-sm text-[var(--dim)]">{t("commRefDesc", { kt: fmt(REFERRAL_REWARD_KT) })}</ExpandableText>
+            <ExpandableText className="mt-0.5 text-sm text-[var(--dim)]">{t("commRefDesc", { kt: fmt(REFERRAL_REWARD_KT), refereeKt: fmt(REFERRAL_REFEREE_REWARD_KT) })}</ExpandableText>
           </div>
         </div>
         {refLink ? (

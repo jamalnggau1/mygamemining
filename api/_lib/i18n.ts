@@ -257,6 +257,8 @@ export interface ServerStrings {
   // Referral: hadiah 10 KT yang dibayar ke pengundang saat teman
   // yang diundangnya menyelesaikan ekspedisi pertama.
   logReferralReward: (amount: number) => string;
+  // Referral: bonus 5 KT untuk YANG DIUNDANG, di momen yang sama.
+  logReferralRefereeBonus: (amount: number) => string;
   // PvP (2026-11-22): hasil serang/bertahan (Log Misi) + rampasan
   // yang didapat/hilang (Log Ekonomi). Entri untuk pemain yang
   // diserang ditulis dalam bahasa penyerang (sama seperti log
@@ -449,6 +451,8 @@ const id: ServerStrings = {
     `WD #${id} ditolak — ${fmtNum(kt, "id")} KT dikembalikan ke saldo pemain.`,
   logReferralReward: (amount) =>
     `Teman yang kamu undang menyelesaikan ekspedisi pertamanya — hadiah referral ${fmtNum(amount, "id")} KT masuk ke saldo.`,
+  logReferralRefereeBonus: (amount) =>
+    `Kamu menyelesaikan ekspedisi pertamamu lewat undangan teman — bonus referral ${fmtNum(amount, "id")} KT masuk ke saldo.`,
   logPvpAttackWin: (defenderName, lootKt) =>
     `Kamu menyerang ${defenderName} dan MENANG — merampas hasil tambang senilai ${fmtNum(lootKt, "id")} KT.`,
   logPvpAttackWinEmpty: (defenderName) =>
@@ -650,6 +654,8 @@ const en: ServerStrings = {
     `WD #${id} rejected — ${fmtNum(kt, "en")} KT refunded to the player's balance.`,
   logReferralReward: (amount) =>
     `A friend you invited completed their first expedition — referral reward of ${fmtNum(amount, "en")} KT added to your balance.`,
+  logReferralRefereeBonus: (amount) =>
+    `You completed your first expedition via a friend's invite — referral bonus of ${fmtNum(amount, "en")} KT added to your balance.`,
   logPvpAttackWin: (defenderName, lootKt) =>
     `You attacked ${defenderName} and WON — looting ore worth ${fmtNum(lootKt, "en")} KT.`,
   logPvpAttackWinEmpty: (defenderName) =>
