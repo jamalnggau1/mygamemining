@@ -1618,6 +1618,8 @@ economy changes.
    userId (web/legacy player) the card shows "Buka lewat Telegram
    untuk mendapatkan link referralmu" instead of a link.
 
+### Daftar teman yang diundang (2026-11-24, DIBANGUN, BELUM push — bundle main-4RJ2VT66.js, migrasi-0012)
+Owner mengundang 3 orang, tidak dapat KT, dan tidak tahu siapa saja mereka — alasannya: hadiah baru masuk saat teman menyelesaikan ekspedisi PERTAMA, bukan saat bergabung; dan Komunitas hanya menampilkan hitungan. Sekarang getGameState mengembalikan `referrals.list` (terbaru dulu): nama + status + tanggal gabung. Status "pending" = teman sudah bergabung tapi belum menyelesaikan ekspedisi pertama (hadiah belum masuk); "rewarded" = Berhasil +10 KT. Nama dari `player.first_name` (migrasi-0012, disimpan loadPlayer dari initData tervalidasi — banyak pemain tidak punya username), mundur ke @username lalu "Pemain". `Session` di telegram.ts mendapat field `firstName` (diisi resolveSession dari identity). loadPlayer + query daftar dijaga try/catch sendiri: bila migrasi 0012 belum dijalankan, game tetap jalan dan daftar tampil kosong. Hadiah TETAP otomatis — daftar ini hanya menampilkan, belum ada tombol klaim (klaim masih diskusi terbuka). i18n baru: commRefListTitle/commRefEmpty/refPending/refRewarded (id+en+ru). Tes: suite 163/163 (4 tes baru di referral.test.ts: daftar pending + urutan terbaru dulu, berubah rewarded setelah ekspedisi pertama, fallback nama @username → Pemain, daftar kosong); harness 46/46 + 44/44 (2 cek baru: kartu referral + petunjuk kosong di Komunitas). makeInitData di harness.ts mendapat param ke-4 firstName (default "Test") untuk tes nama. MIGRASI HARUS DIJALANKAN OWNER DI NEON SEBELUM PUSH (file deploy/neon/migration-0012-player-first-name.sql).
 ### Referral link format (CHANGED 2026-11-20 — was `?start=`, see referral-logic section)
 - Link: `https://t.me/astra_mining_bot/astra_mining?startapp=ref_<telegramId>`,
   built from `getTelegramSessionInfo().userId`. The startapp link
@@ -2908,7 +2910,7 @@ ditambah lagi, daya dibiarkan begitu saja.
 
 ## Suara: efek baru + musik latar (2026-11-24, LIVE, commit 169821b, bundle main-7PLKTBZT.js)
 
-### Klik kayu E di semua tombol (2026-11-24, DIBANGUN, BELUM push — bundle main-I2YIMYPQ.js)
+### Klik kayu E di semua tombol (2026-11-24, LIVE, commit 7183395, bundle main-I2YIMYPQ.js)
 Owner pilih varian E dari 7 contoh klik (A 660 Hz, B berat 330 Hz, C tajam 1400 Hz, D pop, E kayu 220 Hz+noise, F kaca, G lembut). playClick() kini bunyi kayu (tone 220 Hz 0,12 dtk gain 0,1 + noise burst 0,03). Listener pointerdown global di App: setiap `<button>` berbunyi klik (playClick menghormati toggle Suara). playClick di onSuccess collect (rare + normal) dihapus supaya tidak dobel dengan klik saat tombol ditekan; toggle Suara tetap punya playClick sendiri — pointerdown terjadi SEBELUM onClick toggle, jadi tanpa itu menyalakan suara tidak berbunyi konfirmasi. Verifikasi: typecheck 0, build OK, suite 159/159, harness 44/44 + 42/42.
 - Owner suka contoh suara (musik ambien 30 dtk + efek scan/bor/koin/sukses) → diterapkan, keduanya (efek + musik), sintesis WebAudio tanpa file audio.
 - sound.ts baru: playScan (sapuan sinus 500→1600 Hz + gema), playDrill (gerigi sawtooth 55/58 Hz lewat lowpass 320 Hz + noise bandpass 300 Hz, 1 dtk), playCoin (E6→B6), playClaim (koin + arpeggio), playSuccess kini arpeggio 4 nada C5 E5 G5 C6 (dulu 2 nada — sesuai contoh yang disukai owner). Helper baru sweep() + noiseBuffer(). Semua no-op bila WebAudio tidak ada (jsdom).

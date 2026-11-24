@@ -1804,7 +1804,7 @@ function LabTab({ data, onBuy, onUpgrade, buying, upgrading }: {
   );
 }
 
-function KomunitasTab({ userId, referrals }: { userId: number | null; referrals: { invited: number; rewarded: number; earnedKt: number } }) {
+function KomunitasTab({ userId, referrals }: { userId: number | null; referrals: { invited: number; rewarded: number; earnedKt: number; list: Array<{ id: number; name: string; status: "pending" | "rewarded"; joinedAt: string }> } }) {
   const [copied, setCopied] = useState(false);
   // Link referral: Mini App + startapp payload ref_<telegramId>.
   // startapp membuka Mini App LANGSUNG dengan kode menempel
@@ -1881,6 +1881,24 @@ function KomunitasTab({ userId, referrals }: { userId: number | null; referrals:
           <p className="mt-3 text-sm text-[var(--dim)]">{t("commRefNoTelegram")}</p>
         )}
         <p className="mt-2 text-xs text-[var(--dim)]">{t("commRefStats", { invited: fmt(referrals.invited), earned: fmt(referrals.earnedKt) })}</p>
+        {referrals.list.length > 0 ? (
+          <div className="mt-2.5">
+            <p className="text-xs font-bold">{t("commRefListTitle")}</p>
+            <ul className="mt-1.5 space-y-1.5">
+              {referrals.list.map((f) => (
+                <li key={f.id} className="flex items-center justify-between gap-2 rounded-xl bg-[var(--surface2)] px-3 py-2">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-bold">{f.name}</p>
+                    <p className="text-xs text-[var(--dim)]">{fmtDate(f.joinedAt)}</p>
+                  </div>
+                  <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[11px] font-bold ${f.status === "rewarded" ? "border-emerald-400/50 bg-emerald-400/15 text-emerald-300" : "border-amber-400/50 bg-amber-400/15 text-amber-300"}`}>{f.status === "rewarded" ? t("refRewarded", { kt: fmt(REFERRAL_REWARD_KT) }) : t("refPending")}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : referrals.invited === 0 ? (
+          <p className="mt-2 text-xs text-[var(--dim)]">{t("commRefEmpty")}</p>
+        ) : null}
       </div>
     </section>
   );

@@ -55,6 +55,9 @@ export type TelegramIdentity = {
 export type Session = {
   telegramId: number | null;
   username: string | null;
+  /** Nama depan dari initData yang tervalidasi (untuk daftar teman
+   *  referral); null untuk pemain web lama. */
+  firstName: string | null;
   /** Boleh menjalankan aksi Kendali (admin): HANYA pemain Telegram
    *  yang id-nya sama dengan ADMIN_TELEGRAM_ID. Pemain web lama
    *  (tanpa initData) bukan admin. */
@@ -102,6 +105,7 @@ export function resolveSession(
       session: {
         telegramId: null,
         username: null,
+        firstName: null,
         isAdmin: false,
         lang: sessionLang,
         startParam: null,
@@ -121,6 +125,7 @@ export function resolveSession(
     session: {
       telegramId: validated.identity.id,
       username: validated.identity.username,
+      firstName: validated.identity.firstName,
       isAdmin:
         Number.isFinite(adminId) && adminId === validated.identity.id,
       lang: sessionLang,

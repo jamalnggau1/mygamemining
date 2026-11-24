@@ -1205,6 +1205,21 @@ async function loadPlayer(db: Db, session: Session): Promise<PlayerRow> {
       .where(eq(schema.player.id, playerId));
     p = { ...p, username: session.username };
   }
+  // Nama depan Telegram terakhir (untuk daftar teman referral —
+  // disimpan terpisah dari username karena banyak pemain tidak punya
+  // username). Dijaga try/catch: bila migrasi 0012 belum dijalankan,
+  // game tetap jalan (nama di daftar referral mundur ke @username).
+  if (session.firstName && session.firstName !== p.firstName) {
+    try {
+      await db
+        .update(schema.player)
+        .set({ firstName: session.firstName })
+        .where(eq(schema.player.id, playerId));
+      p = { ...p, firstName: session.firstName };
+    } catch {
+      // Kolom first_name belum ada — abaikan, bukan error game.
+    }
+  }
   // Bahasa pemain terakhir (2026-11-24): disimpan supaya pesan
   // otomatis (notifikasi WD, pengingat tidak aktif) bisa dikirim
   // dalam bahasa PENERIMA, bukan bahasa admin/pengirim. Diperbarui
@@ -1375,29 +1390,87 @@ async function recordReferralAttribution(
   }
 }
 
+/** Nama tampilan teman yang diundang: nama depan dulu ("Andi"),
+ *  lalu @username, terakhir "Pemain" bila keduanya kosong. */
+function referralDisplayName(row: {
+  firstName: string | null;
+  username: string | null;
+}): string {
+  if (row.firstName) return row.firstName;
+  if (row.username) return `@${row.username}`;
+  return "Pemain";
+}
+
+export type ReferralListItem = {
+  id: number;
+  name: string;
+  status: "pending" | "rewarded";
+  joinedAt: string;
+};
+
 /** Statistik referral untuk satu pemain (tab Komunitas): berapa
  *  teman yang bergabung lewat link-nya, berapa yang sudah memberi
- *  hadiah, dan total KT yang sudah diterima dari referral. */
+ *  hadiah, total KT yang sudah diterima dari referral, dan daftar
+ *  teman itu (nama + status pending/rewarded, terbaru dulu) supaya
+ *  pengundang bisa melihat siapa saja yang diundangnya dan siapa
+ *  yang hadiahnya masih menunggu ekspedisi pertama temannya. */
 async function getReferralStats(
   db: Db,
   playerId: number,
-): Promise<{ invited: number; rewarded: number; earnedKt: number }> {
+): Promise<{
+  invited: number;
+  rewarded: number;
+  earnedKt: number;
+  list: ReferralListItem[];
+}> {
+  let invited = 0;
+  let rewarded = 0;
   try {
     const rows = await db
       .select({ status: schema.referrals.status })
       .from(schema.referrals)
       .where(eq(schema.referrals.referrerPlayerId, playerId));
-    const rewarded = rows.filter((r) => r.status === "rewarded").length;
-    return {
-      invited: rows.length,
-      rewarded,
-      earnedKt: roundKt(rewarded * REFERRAL_REWARD_KT),
-    };
+    invited = rows.length;
+    rewarded = rows.filter((r) => r.status === "rewarded").length;
   } catch {
     // Tabel referrals belum ada (migrasi 0005 belum dijalankan):
     // statistik tampil 0, game tetap jalan.
-    return { invited: 0, rewarded: 0, earnedKt: 0 };
   }
+  // Daftar teman — try/catch sendiri supaya kolom first_name yang
+  // belum ada (migrasi 0012) tidak merusak hitungan di atas: daftar
+  // sekadar tampil kosong.
+  let list: ReferralListItem[] = [];
+  try {
+    const rows = await db
+      .select({
+        id: schema.referrals.id,
+        status: schema.referrals.status,
+        createdAt: schema.referrals.createdAt,
+        firstName: schema.player.firstName,
+        username: schema.player.username,
+      })
+      .from(schema.referrals)
+      .innerJoin(
+        schema.player,
+        eq(schema.player.id, schema.referrals.referredPlayerId),
+      )
+      .where(eq(schema.referrals.referrerPlayerId, playerId))
+      .orderBy(desc(schema.referrals.createdAt), desc(schema.referrals.id));
+    list = rows.map((r) => ({
+      id: r.id,
+      name: referralDisplayName(r),
+      status: r.status,
+      joinedAt: r.createdAt.toISOString(),
+    }));
+  } catch {
+    list = [];
+  }
+  return {
+    invited,
+    rewarded,
+    earnedKt: roundKt(rewarded * REFERRAL_REWARD_KT),
+    list,
+  };
 }
 
 /** Membayar hadiah referral saat pemain yang diundang menyelesaikan
@@ -2245,11 +2318,20 @@ export const gameActions = {
         }),
         // Referral: statistik pengundang untuk tab Komunitas — berapa
         // teman yang bergabung lewat link-nya, berapa yang sudah
-        // memberi hadiah, dan total KT yang sudah diterima.
+        // memberi hadiah, total KT yang sudah diterima, dan daftar
+        // teman itu (nama + status pending/rewarded).
         referrals: z.object({
           invited: z.number(),
           rewarded: z.number(),
           earnedKt: z.number(),
+          list: z.array(
+            z.object({
+              id: z.number(),
+              name: z.string(),
+              status: z.enum(["pending", "rewarded"]),
+              joinedAt: z.string(),
+            }),
+          ),
         }),
       }),
       maps: z.array(

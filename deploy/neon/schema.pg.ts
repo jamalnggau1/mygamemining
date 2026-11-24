@@ -67,6 +67,10 @@ export const player = pgTable("player", {
   // tervalidasi (hanya untuk dikenali admin di daftar pemain
   // mencurigakan — identitas tetap telegram_id, bukan username).
   username: text("username"),
+  // Nama depan Telegram terakhir (untuk daftar teman referral di tab
+  // Komunitas — "Andi" lebih dikenali daripada @username; banyak
+  // pemain tidak punya username). Diisi loadPlayer dari initData.
+  firstName: text("first_name"),
   ktBalance: doublePrecision("kt_balance").notNull().default(0),
   energy: integer("energy").notNull().default(20),
   energyUpdatedAt: timestamp("energy_updated_at", {

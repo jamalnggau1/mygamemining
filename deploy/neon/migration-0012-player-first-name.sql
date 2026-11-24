@@ -1,0 +1,23 @@
+-- =====================================================================
+-- ASTRA MINING — migrasi 0012: nama depan Telegram pemain
+-- =====================================================================
+-- Jalankan SEKALI pada database Neon yang SUDAH berisi tabel game
+-- (migrasi 0001–0011 sudah diterapkan):
+--   Neon Console → SQL Editor → paste seluruh file ini → Run.
+--
+--   ⚠️  JALANKAN MIGRASI INI SEBELUM DEPLOY KODE DAFTAR REFERRAL:
+--   getGameState menyimpan nama depan pemain ke kolom baru di setiap
+--   request; daftar teman yang diundang di tab Komunitas membaca kolom
+--   ini. Tanpa kolom, daftar tampil kosong (kode menahan errornya,
+--   game tetap jalan) — tapi nama tidak akan muncul.
+--
+-- Yang ditambah:
+--   1. player.first_name TEXT NULL — nama depan dari initData Telegram
+--      yang tervalidasi (mis. "Andi"), disimpan di tiap request bila
+--      berubah (seperti username). Pemain lama mendapat NULL sampai
+--      mereka membuka game lagi, lalu namanya terisi otomatis; yang
+--      belum terisi tampil sebagai @username, atau "Pemain" bila
+--      keduanya kosong. Dipakai HANYA untuk menampilkan nama di daftar
+--      teman referral — tidak pernah untuk logika game, harga, atau
+--      aturan.
+ALTER TABLE player ADD COLUMN IF NOT EXISTS first_name TEXT;
