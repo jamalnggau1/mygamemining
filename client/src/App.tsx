@@ -990,7 +990,7 @@ export function App() {
             <div className="text-right">
               <p className="text-[11px] font-bold uppercase tracking-[0.25em] text-[var(--dim)]">{t("missionPos")}</p>
               <p className="font-display text-xl leading-tight">{t("sector", { n: p.layer })}</p>
-              {p.sectorProgress && (<><p className="text-xs text-[var(--dim)]">{t("sectorProgress", { current: p.sectorProgress.current, needed: p.sectorProgress.needed, next: p.layer + 1 })}</p><p className="mt-0.5 text-[11px] leading-snug text-[var(--dim)]">{t("sectorHowTo")}</p></>)}
+              {p.sectorProgress && (<p className="text-xs text-[var(--dim)]">{t("sectorProgress", { current: p.sectorProgress.current, needed: p.sectorProgress.needed, next: p.layer + 1 })}</p>)}
               <p className="text-sm text-[var(--dim)]">{t("kmFromEarth", { km: fmt(p.depthMeters) })}</p>
             </div>
           </div>
@@ -1353,6 +1353,7 @@ function PetaTab({ data, onTravel, travelling, jobActive, onGoPremium }: { data:
       <div className="rounded-2xl bg-[var(--surface)] border border-[var(--border)] p-3">
         <h2 className="font-display text-base">{t("mapsTitle")}</h2>
         <ExpandableText className="mt-0.5 text-sm text-[var(--dim)]">{trich("mapsIntro", { layer: p.layer })}</ExpandableText>
+        <p className="mt-1.5 text-xs leading-snug text-[var(--dim)]">{t("sectorHowTo")}</p>
         {jobActive && (<p className="mt-2 flex items-start gap-2 rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm font-semibold text-amber-200"><span className="mt-0.5 shrink-0"><AlertIcon size={15} /></span> {t("mapsJobActive")}</p>)}
       </div>
       {data.maps.map((m) => {
