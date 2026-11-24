@@ -888,6 +888,7 @@ export function App() {
     onSuccess: (r) => { showResult(r.ok, r.error, r.ok ? t("premiumOrderCancelled") : null); refresh(); },
   });
   const claimBonus = useMutation({ mutationFn: () => api.claimDailyBonus({}), onSuccess: (r) => { if (r.ok) playClaim(); showResult(r.ok, r.error, t("dailyBonusClaimed", { bonus: fmt(r.bonusKt) })); refresh(); } });
+  const claimChannel = useMutation({ mutationFn: () => api.claimChannelBonus({}), onSuccess: (r) => { if (r.ok) playClaim(); showResult(r.ok, r.error, t("commChannelClaimOk", { kt: fmt(r.bonusKt) })); refresh(); } });
   const watchAd = useMutation({ mutationFn: () => api.watchAd({}), onSuccess: (r) => { showResult(r.ok, r.error, <>{t("adRewarded", { reward: fmt(r.rewardEnergy), remaining: r.remainingToday })}</>); if (r.ok) fireBurst("mine"); refresh(); } });
   /** "Tonton Iklan": when a blockId is configured, a real AdsGram
    *  rewarded ad must be watched to the end FIRST — KT is granted
@@ -1238,7 +1239,7 @@ export function App() {
         )}
 
         {tab === "wd" && (<WdTab data={data} onCancel={(id) => cancelWd.mutate(id)} cancelling={cancelWd.isPending} onDone={(ok, err, good) => { showResult(ok, err, good); refresh(); }} />)}
-        {tab === "komunitas" && (<KomunitasTab userId={sessionInfo.userId} referrals={data.player.referrals} />)}
+        {tab === "komunitas" && (<KomunitasTab userId={sessionInfo.userId} referrals={data.player.referrals} channelBonusClaimed={data.player.channelBonusClaimed} channelBonusKt={data.player.channelBonusKt} onClaimChannel={() => claimChannel.mutate()} claimingChannel={claimChannel.isPending} />)}
         {tab === "lab" && (<LabTab data={data} onBuy={(kind) => buyTroop.mutate(kind)} onUpgrade={(kind) => upgradeTroop.mutate(kind)} buying={buyTroop.isPending} upgrading={upgradeTroop.isPending} />)}
         {tab === "admin" && p.isAdmin && (<AdminTab data={data} onDone={(ok, err, good) => { showResult(ok, err, good); refresh(); }} />)}
         </div>
@@ -1804,7 +1805,7 @@ function LabTab({ data, onBuy, onUpgrade, buying, upgrading }: {
   );
 }
 
-function KomunitasTab({ userId, referrals }: { userId: number | null; referrals: { invited: number; rewarded: number; earnedKt: number; list: Array<{ id: number; name: string; status: "pending" | "rewarded"; joinedAt: string }> } }) {
+function KomunitasTab({ userId, referrals, channelBonusClaimed, channelBonusKt, onClaimChannel, claimingChannel }: { userId: number | null; referrals: { invited: number; rewarded: number; earnedKt: number; list: Array<{ id: number; name: string; status: "pending" | "rewarded"; joinedAt: string }> }; channelBonusClaimed: boolean; channelBonusKt: number; onClaimChannel: () => void; claimingChannel: boolean }) {
   const [copied, setCopied] = useState(false);
   // Link referral: Mini App + startapp payload ref_<telegramId>.
   // startapp membuka Mini App LANGSUNG dengan kode menempel
@@ -1850,6 +1851,11 @@ function KomunitasTab({ userId, referrals }: { userId: number | null; referrals:
           </div>
         </div>
         <button type="button" onClick={() => openExternalLink(CHANNEL_URL)} aria-label={t("commChannelAria")} className="btn-press mt-2.5 w-full rounded-xl bg-cyan-400 px-4 py-2 font-bold text-black">{t("commChannelBtn")}</button>
+        {userId != null && (channelBonusClaimed ? (
+          <p className="mt-2.5 text-center text-sm font-bold text-emerald-300">{t("commChannelClaimed")}</p>
+        ) : (
+          <button type="button" onClick={onClaimChannel} disabled={claimingChannel} aria-label={t("commChannelClaim", { kt: fmt(channelBonusKt) })} className="btn-press mt-2.5 w-full rounded-xl border-2 border-dashed border-amber-400 bg-amber-400/10 px-4 py-2 font-bold text-amber-200">{t("commChannelClaim", { kt: fmt(channelBonusKt) })}</button>
+        ))}
       </div>
       <div className="rounded-2xl bg-[var(--surface)] border border-[var(--border)] p-3">
         <div className="flex items-start gap-3">

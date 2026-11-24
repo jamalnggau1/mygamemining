@@ -226,6 +226,10 @@ export interface ServerStrings {
   pvpPirate: string;
   pvpUnknownMiner: string;
   errDailyBonusClaimed: string;
+  errChannelNoTelegram: string;
+  errChannelAlreadyClaimed: string;
+  errChannelCheckFailed: string;
+  errChannelNotJoined: string;
   errAdCapReached: (cap: number) => string;
   errAdCooldown: (seconds: number, cooldown: number) => string;
   errOreUnknown: string;
@@ -295,6 +299,7 @@ export interface ServerStrings {
   logPremiumCancelGram: (orderId: number, gram: number) => string;
   logPremiumGrant: (tierLabel: string, days: number, until: string) => string;
   logDailyBonus: (amount: number) => string;
+  logChannelBonus: (amount: number) => string;
   logAd: (amount: number) => string;
   logSell: (qty: number, oreName: string, gained: number) => string;
   logSellAll: (count: number, gained: number) => string;
@@ -422,6 +427,13 @@ const id: ServerStrings = {
   pvpUnknownMiner: "Penambang Lain",
   errDailyBonusClaimed:
     "Bonus harian sudah diklaim hari ini. Kembali lagi besok!",
+  errChannelNoTelegram:
+    "Buka lewat Telegram untuk mengklaim bonus channel.",
+  errChannelAlreadyClaimed: "Bonus channel sudah diklaim.",
+  errChannelCheckFailed:
+    "Bonus belum bisa diperiksa — coba lagi nanti.",
+  errChannelNotJoined:
+    "Kamu belum bergabung dengan channel. Gabung dulu, lalu klaim lagi.",
   errAdCapReached: (cap) =>
     `Batas iklan hari ini sudah tercapai (${cap}× sehari). Hadiah iklan direset besok — kembali lagi ya!`,
   errAdCooldown: (seconds, cooldown) =>
@@ -488,6 +500,8 @@ const id: ServerStrings = {
     `Pemilik mengaktifkan Premium ${tierLabel} ${days} hari (pembayaran di luar game) — aktif sampai ${until}.`,
   logDailyBonus: (amount) =>
     `Bonus harian ${fmtNum(amount, "id")} KT diklaim.`,
+  logChannelBonus: (amount) =>
+    `Bonus gabung channel ${fmtNum(amount, "id")} KT diklaim.`,
   logAd: (amount) =>
     `Menonton iklan sponsor — hadiah +${fmtNum(amount, "id")} Daya Kapal.`,
   logSell: (qty, oreName, gained) =>
@@ -631,6 +645,13 @@ const en: ServerStrings = {
   pvpUnknownMiner: "Another Miner",
   errDailyBonusClaimed:
     "The daily bonus has already been claimed today. Come back tomorrow!",
+  errChannelNoTelegram:
+    "Open via Telegram to claim the channel bonus.",
+  errChannelAlreadyClaimed: "Channel bonus already claimed.",
+  errChannelCheckFailed:
+    "The bonus couldn't be checked — try again later.",
+  errChannelNotJoined:
+    "You haven't joined the channel yet. Join first, then claim again.",
   errAdCapReached: (cap) =>
     `Today's ad limit is reached (${cap}× per day). Ad rewards reset tomorrow — come back then!`,
   errAdCooldown: (seconds, cooldown) =>
@@ -697,6 +718,8 @@ const en: ServerStrings = {
     `The owner activated Premium ${tierLabel} for ${days} days (payment outside the game) — active until ${until}.`,
   logDailyBonus: (amount) =>
     `Daily bonus of ${fmtNum(amount, "en")} KT claimed.`,
+  logChannelBonus: (amount) =>
+    `Channel join bonus ${fmtNum(amount, "en")} KT claimed.`,
   logAd: (amount) =>
     `Watched a sponsored ad — reward of +${fmtNum(amount, "en")} Ship Energy.`,
   logSell: (qty, oreName, gained) =>
@@ -841,6 +864,13 @@ const ru: ServerStrings = {
   pvpUnknownMiner: "Другой шахтёр",
   errDailyBonusClaimed:
     "Ежедневный бонус на сегодня уже получен. Возвращайся завтра!",
+  errChannelNoTelegram:
+    "Откройте через Telegram, чтобы получить награду канала.",
+  errChannelAlreadyClaimed: "Награда канала уже получена.",
+  errChannelCheckFailed:
+    "Не удалось проверить награду — попробуйте позже.",
+  errChannelNotJoined:
+    "Вы ещё не вступили в канал. Вступите, а потом заберите награду.",
   errAdCapReached: (cap) =>
     `Лимит рекламы на сегодня исчерпан (${cap}× в день). Награды за рекламу обновятся завтра — возвращайся!`,
   errAdCooldown: (seconds, cooldown) =>
@@ -907,6 +937,8 @@ const ru: ServerStrings = {
     `Владелец активировал Premium ${tierLabel} на ${days} дн. (оплата вне игры) — активен до ${until}.`,
   logDailyBonus: (amount) =>
     `Ежедневный бонус ${fmtNum(amount, "ru")} KT получен.`,
+  logChannelBonus: (amount) =>
+    `Награда за вступление в канал ${fmtNum(amount, "ru")} KT получена.`,
   logAd: (amount) =>
     `Просмотр спонсорской рекламы — награда +${fmtNum(amount, "ru")} энергии корабля.`,
   logSell: (qty, oreName, gained) =>

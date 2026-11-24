@@ -71,6 +71,12 @@ export const player = pgTable("player", {
   // Komunitas — "Andi" lebih dikenali daripada @username; banyak
   // pemain tidak punya username). Diisi loadPlayer dari initData.
   firstName: text("first_name"),
+  // Kapan pemain mengklaim bonus gabung channel (+5 KT, sekali saja).
+  // NULL = belum klaim. Diisi claimChannelBonus secara atomik.
+  channelClaimedAt: timestamp("channel_claimed_at", {
+    withTimezone: true,
+    mode: "date",
+  }),
   ktBalance: doublePrecision("kt_balance").notNull().default(0),
   energy: integer("energy").notNull().default(20),
   energyUpdatedAt: timestamp("energy_updated_at", {

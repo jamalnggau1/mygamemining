@@ -324,7 +324,7 @@
 //   classifies as an economy event in the split log.
 
 import { z } from "zod";
-import { and, desc, eq, gte, inArray, isNotNull, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 import * as schema from "../../deploy/neon/schema.pg.js";
 import { getDb, type Db } from "./store.js";
 import { resolveSession, type Session } from "./telegram.js";
@@ -350,6 +350,7 @@ import {
 } from "./anticheat.js";
 import {
   buildInvoicePayload,
+  callBotApi,
   createInvoiceLink,
   parseInvoicePayload,
   sendTelegramMessage,
@@ -388,6 +389,24 @@ const AD_COOLDOWN_SECONDS = 300; // 5 menit antar-iklan (owner 2026-11-23: dari 
 // payReferralRewardIfPending di bawah.
 export const REFERRAL_REWARD_KT = 10;
 export const REFERRAL_REFEREE_REWARD_KT = 5;
+
+// Bonus gabung channel (2026-11-24, owner): +5 KT SEKALI per pemain,
+// diklaim manual dari tab Komunitas. Server memverifikasi keanggotaan
+// channel @astra_mining_gram lewat Bot API (getChatMember) memakai id
+// Telegram yang tervalidasi — klien tidak bisa memalsukannya. Bot
+// HARUS jadi admin channel supaya Telegram menjawab pengecekan ini;
+// bila pengecekan gagal (bot belum admin, jaringan, token), klaim
+// ditolak TANPA menandai sudah diklaim, jadi pemain bisa mencoba lagi.
+export const CHANNEL_BONUS_KT = 5;
+const CHANNEL_CHAT_ID = "@astra_mining_gram";
+// Status getChatMember yang berarti "sudah bergabung": creator /
+// administrator / member / restricted (restricted tetap anggota).
+const CHANNEL_MEMBER_STATUSES = [
+  "creator",
+  "administrator",
+  "member",
+  "restricted",
+];
 export const BASE_MAX_ENERGY = 30;
 export const BASE_REGEN_SECONDS = 240; // 1 energy per 4 minutes — deliberately slow (see economy note above)
 const REGEN_MIN_SECONDS = 60; // hard floor for the Reaktor upgrade curve (pre-Premium)
@@ -2294,6 +2313,8 @@ export const gameActions = {
         totalWdPaidUsdt: z.number(),
         canClaimDailyBonus: z.boolean(),
         dailyBonusKt: z.number(),
+        channelBonusClaimed: z.boolean(),
+        channelBonusKt: z.number(),
         ktPerUsdt: z.number(),
         wdPaidCount: z.number(),
         wdMinKt: z.number(),
@@ -2695,6 +2716,8 @@ export const gameActions = {
           totalWdPaidUsdt: p.totalWdPaidUsdt,
           canClaimDailyBonus: await canClaimDailyBonus(db, p.id),
           dailyBonusKt: DAILY_BONUS_KT,
+          channelBonusClaimed: p.channelClaimedAt !== null,
+          channelBonusKt: CHANNEL_BONUS_KT,
           ktPerUsdt: KT_PER_USDT,
           wdPaidCount,
           wdMinKt,
@@ -4065,6 +4088,81 @@ export const gameActions = {
         error: null,
         bonusKt: DAILY_BONUS_KT,
         ktBalance: newBalance,
+      };
+    },
+  }),
+
+  claimChannelBonus: defineGameAction({
+    description:
+      "Claims the one-time +5 KT channel-join bonus. The server verifies membership of @astra_mining_gram via the Bot API (getChatMember) using the player's validated Telegram id — the client cannot fake it. If the check fails (bot not yet an admin of the channel, network, token), the claim is rejected WITHOUT marking it claimed, so the player can retry after the owner fixes it. The credit itself is atomic (UPDATE ... WHERE channel_claimed_at IS NULL) so a double-tap or race can never pay twice.",
+    request: z.object({}),
+    response: resultShape.extend({
+      bonusKt: z.number(),
+      ktBalance: z.number(),
+    }),
+    async handler(_args, session) {
+      const db = getDb();
+      // i18n: request language — user-facing strings only.
+      const lang = session.lang;
+      const S = serverStrings(lang);
+      if (session.telegramId === null) {
+        return {
+          ok: false,
+          error: S.errChannelNoTelegram,
+          bonusKt: 0,
+          ktBalance: 0,
+        };
+      }
+      const p = await loadPlayer(db, session);
+      const fail = (error: string) => ({
+        ok: false as const,
+        error,
+        bonusKt: 0,
+        ktBalance: p.ktBalance,
+      });
+      if (p.channelClaimedAt !== null) {
+        return fail(S.errChannelAlreadyClaimed);
+      }
+      // Verifikasi keanggotaan lewat Bot API — identitas dari initData
+      // tervalidasi, bukan dari kiriman klien.
+      const member = await callBotApi<{ status?: string }>("getChatMember", {
+        chat_id: CHANNEL_CHAT_ID,
+        user_id: session.telegramId,
+      });
+      if (member.ok === false) {
+        // Bot belum admin channel / jaringan / token: JANGAN tandai
+        // klaim — pemain bisa mencoba lagi setelah pemilik memperbaiki.
+        return fail(S.errChannelCheckFailed);
+      }
+      const status = member.data?.status;
+      if (typeof status !== "string" || !CHANNEL_MEMBER_STATUSES.includes(status)) {
+        return fail(S.errChannelNotJoined);
+      }
+      // Kredit atomik: hanya baris yang belum klaim yang berubah —
+      // ketukan ganda / balapan tidak pernah membayar dua kali.
+      const claimed = await db
+        .update(schema.player)
+        .set({
+          ktBalance: roundKt(p.ktBalance + CHANNEL_BONUS_KT),
+          totalKtEarned: roundKt(p.totalKtEarned + CHANNEL_BONUS_KT),
+          channelClaimedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(schema.player.id, p.id),
+            isNull(schema.player.channelClaimedAt),
+          ),
+        )
+        .returning({ id: schema.player.id });
+      if (!claimed[0]) {
+        return fail(S.errChannelAlreadyClaimed);
+      }
+      await logActivity(db, p.id, "channel_bonus", S.logChannelBonus(CHANNEL_BONUS_KT), CHANNEL_BONUS_KT);
+      return {
+        ok: true,
+        error: null,
+        bonusKt: CHANNEL_BONUS_KT,
+        ktBalance: roundKt(p.ktBalance + CHANNEL_BONUS_KT),
       };
     },
   }),

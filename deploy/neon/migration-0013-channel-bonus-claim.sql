@@ -1,0 +1,18 @@
+-- =====================================================================
+-- ASTRA MINING — migrasi 0013: klaim bonus gabung channel
+-- =====================================================================
+-- Jalankan SEKALI pada database Neon yang SUDAH berisi tabel game
+-- (migrasi 0001–0012 sudah diterapkan):
+--   Neon Console → SQL Editor → paste seluruh file ini → Run.
+--
+--   ⚠️  JALANKAN MIGRASI INI SEBELUM DEPLOY KODE KLAIM CHANNEL:
+--   claimChannelBonus menandai klaim di kolom baru; tanpa kolom,
+--   game TIDAK BISA DIBUKA (loadPlayer membaca semua kolom pemain).
+--   Sama seperti migrasi 0011 (language).
+--
+-- Yang ditambah:
+--   1. player.channel_claimed_at TIMESTAMPTZ NULL — kapan pemain
+--      mengklaim bonus gabung channel (+5 KT, sekali saja). NULL =
+--      belum klaim. Dipakai HANYA untuk menandai klaim sudah dipakai
+--      (anti klaim ganda) — tidak pernah untuk logika game lain.
+ALTER TABLE player ADD COLUMN IF NOT EXISTS channel_claimed_at TIMESTAMPTZ;

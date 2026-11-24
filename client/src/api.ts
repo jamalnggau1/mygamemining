@@ -144,6 +144,7 @@ export const api: Api = {
   rejectPremiumOrder: (args) => callAction("rejectPremiumOrder", args),
   grantPremium: (args) => callAction("grantPremium", args),
   claimDailyBonus: (args) => callAction("claimDailyBonus", args),
+  claimChannelBonus: (args) => callAction("claimChannelBonus", args),
   watchAd: (args) => callAction("watchAd", args),
   sellOre: (args) => callAction("sellOre", args),
   sellAllOre: (args) => callAction("sellAllOre", args),

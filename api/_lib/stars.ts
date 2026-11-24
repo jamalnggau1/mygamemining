@@ -118,7 +118,7 @@ type BotApiResult<T> =
   | { ok: true; data: T }
   | { ok: false; error: "no_bot_token" | "network" | "bad_response" | "api_error" };
 
-async function callBotApi<T>(
+export async function callBotApi<T>(
   method: string,
   body: Record<string, unknown>,
   fetchImpl?: typeof fetch,
