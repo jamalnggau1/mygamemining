@@ -9,7 +9,7 @@ import {
   sendGramPayment,
 } from "./tonconnect";
 import { fmt, fmtDate, fmtDateLong, fmtDateTime, fmtDur, LanguagePicker, t, trich, useLang } from "./i18n.js";
-import { playClick, playError, playSuccess, setSoundEnabled, soundEnabled } from "./sound.js";
+import { ensureMusic, musicEnabled, playClaim, playClick, playCoin, playDrill, playError, playScan, playSuccess, setMusicEnabled, setSoundEnabled, soundEnabled, stopMusic } from "./sound.js";
 import { ExpandableText } from "./ExpandableText";
 import heroImg from "./assets/hero.webp";
 import asteroidImg from "./assets/asteroid.webp";
@@ -685,13 +685,30 @@ export function App() {
     prevBalanceRef.current = ktBalance;
   }, [ktBalance]);
 
+  // Musik latar: mulai setelah gestur pertama (kebijakan autoplay
+  // browser), berhenti saat tab disembunyikan (hemat baterai),
+  // kembali saat tab terlihat lagi.
+  useEffect(() => {
+    const start = () => ensureMusic();
+    window.addEventListener("pointerdown", start, { once: true });
+    const onVis = () => {
+      if (document.hidden) stopMusic();
+      else ensureMusic();
+    };
+    document.addEventListener("visibilitychange", onVis);
+    return () => {
+      window.removeEventListener("pointerdown", start);
+      document.removeEventListener("visibilitychange", onVis);
+    };
+  }, []);
+
   const startScan = useMutation({
     mutationFn: () => api.startScan({}),
-    onSuccess: (r) => { showResult(r.ok, r.error, <>{t("scanStarted", { dur: fmtDur(r.durationSec) })}</>); refresh(); },
+    onSuccess: (r) => { if (r.ok) playScan(); showResult(r.ok, r.error, <>{t("scanStarted", { dur: fmtDur(r.durationSec) })}</>); refresh(); },
   });
   const startMine = useMutation({
     mutationFn: (veinIndex: number) => api.startMine({ veinIndex }),
-    onSuccess: (r) => { showResult(r.ok, r.error, <>{t("mineStarted", { ore: r.oreName ?? t("oreFallback"), dur: fmtDur(r.durationSec) })}</>); refresh(); },
+    onSuccess: (r) => { if (r.ok) playDrill(); showResult(r.ok, r.error, <>{t("mineStarted", { ore: r.oreName ?? t("oreFallback"), dur: fmtDur(r.durationSec) })}</>); refresh(); },
   });
   const collect = useMutation({
     mutationFn: () => api.collectJob({}),
@@ -859,7 +876,7 @@ export function App() {
     mutationFn: (orderId: number) => api.cancelPremiumOrder({ orderId }),
     onSuccess: (r) => { showResult(r.ok, r.error, r.ok ? t("premiumOrderCancelled") : null); refresh(); },
   });
-  const claimBonus = useMutation({ mutationFn: () => api.claimDailyBonus({}), onSuccess: (r) => { showResult(r.ok, r.error, t("dailyBonusClaimed", { bonus: fmt(r.bonusKt) })); refresh(); } });
+  const claimBonus = useMutation({ mutationFn: () => api.claimDailyBonus({}), onSuccess: (r) => { if (r.ok) playClaim(); showResult(r.ok, r.error, t("dailyBonusClaimed", { bonus: fmt(r.bonusKt) })); refresh(); } });
   const watchAd = useMutation({ mutationFn: () => api.watchAd({}), onSuccess: (r) => { showResult(r.ok, r.error, <>{t("adRewarded", { reward: fmt(r.rewardEnergy), remaining: r.remainingToday })}</>); if (r.ok) fireBurst("mine"); refresh(); } });
   /** "Tonton Iklan": when a blockId is configured, a real AdsGram
    *  rewarded ad must be watched to the end FIRST — KT is granted
@@ -882,17 +899,17 @@ export function App() {
     }
     watchAd.mutate();
   };
-  const sellAll = useMutation({ mutationFn: () => api.sellAllOre({}), onSuccess: (r) => { showResult(r.ok, r.error, t("sellAllDone", { kt: fmt(r.ktGained) })); refresh(); } });
-  const sellOne = useMutation({ mutationFn: (args: { oreId: string; qty: number }) => api.sellOre(args), onSuccess: (r) => { showResult(r.ok, r.error, t("sellOneDone", { kt: fmt(r.ktGained) })); refresh(); } });
+  const sellAll = useMutation({ mutationFn: () => api.sellAllOre({}), onSuccess: (r) => { if (r.ok) playCoin(); showResult(r.ok, r.error, t("sellAllDone", { kt: fmt(r.ktGained) })); refresh(); } });
+  const sellOne = useMutation({ mutationFn: (args: { oreId: string; qty: number }) => api.sellOre(args), onSuccess: (r) => { if (r.ok) playCoin(); showResult(r.ok, r.error, t("sellOneDone", { kt: fmt(r.ktGained) })); refresh(); } });
   const buy = useMutation({ mutationFn: (upgradeId: string) => api.buyUpgrade({ upgradeId }), onSuccess: (r) => { showResult(r.ok, r.error, t("upgradeBought", { level: r.newLevel ?? "?", cost: fmt(r.costPaid) })); refresh(); } });
   // PvP (2026-11-22): beli/upgrade pasukan + serang/lewati pertemuan.
   const buyTroop = useMutation({
     mutationFn: (kind: "attack" | "defense") => api.buyTroop({ kind }),
-    onSuccess: (r, kind) => { showResult(r.ok, r.error, t("labBuyDone", { name: kind === "attack" ? t("labTroopAttackName") : t("labTroopDefenseName"), count: r.count })); refresh(); },
+    onSuccess: (r, kind) => { if (r.ok) playCoin(); showResult(r.ok, r.error, t("labBuyDone", { name: kind === "attack" ? t("labTroopAttackName") : t("labTroopDefenseName"), count: r.count })); refresh(); },
   });
   const upgradeTroop = useMutation({
     mutationFn: (kind: "attack" | "defense") => api.upgradeTroop({ kind }),
-    onSuccess: (r, kind) => { showResult(r.ok, r.error, t("labUpgradeDone", { name: kind === "attack" ? t("labTroopAttackName") : t("labTroopDefenseName"), level: r.level })); refresh(); },
+    onSuccess: (r, kind) => { if (r.ok) playCoin(); showResult(r.ok, r.error, t("labUpgradeDone", { name: kind === "attack" ? t("labTroopAttackName") : t("labTroopDefenseName"), level: r.level })); refresh(); },
   });
   const pvpAttack = useMutation({
     mutationFn: () => api.pvpAttack({}),
@@ -1234,10 +1251,11 @@ export function App() {
  *  di pojok kanan atas hero — bukan dari navigasi bawah — dan
  *  tampil sebagai LAYAR PENUH (overlay fixed inset-0 dengan header
  *  + tombol kembali, agar tidak mengganggu tampilan game). Isinya
- *  tiga kartu seperti tab lain: Bahasa (pemilih bahasa dengan
+ *  empat kartu seperti tab lain: Bahasa (pemilih bahasa dengan
  *  bendera 🇮🇩/🇬🇧 — satu-satunya emoji di game, atas perintah
  *  owner), Suara (toggle on/off, tersimpan di localStorage
- *  "astra-mining-sound"), dan Info Akun (baris Sesi yang dulu di
+ *  "astra-mining-sound"), Musik Latar (toggle sendiri, localStorage
+ *  "astra-mining-music"), dan Info Akun (baris Sesi yang dulu di
  *  hero + nama pengguna Telegram bila ada). Judul ditampilkan di
  *  header overlay, bukan di dalam komponen ini. */
 function SettingsTab({ sessionLabel, username }: { sessionLabel: string; username: string | null }) {
@@ -1247,6 +1265,14 @@ function SettingsTab({ sessionLabel, username }: { sessionLabel: string; usernam
     setSoundEnabled(next);
     setOn(next);
     if (next) playClick();
+  };
+  const [musicOn, setMusicOn] = useState(() => musicEnabled());
+  const toggleMusic = () => {
+    const next = !musicOn;
+    setMusicEnabled(next);
+    setMusicOn(next);
+    if (next) ensureMusic();
+    else stopMusic();
   };
   return (
     <section className="mt-3 space-y-3">
@@ -1265,6 +1291,18 @@ function SettingsTab({ sessionLabel, username }: { sessionLabel: string; usernam
           </button>
         </div>
         <p className="mt-2 text-xs font-bold text-[var(--dim)]">{on ? t("soundOn") : t("soundOff")}</p>
+      </div>
+      <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <p className="text-sm font-bold">{t("musicTitle")}</p>
+            <p className="mt-0.5 text-xs text-[var(--dim)]">{t("musicHint")}</p>
+          </div>
+          <button type="button" role="switch" aria-checked={musicOn} aria-label={t("musicTitle")} onClick={toggleMusic} className={`btn-press relative h-7 w-12 shrink-0 rounded-full transition-colors ${musicOn ? "bg-cyan-400" : "bg-[var(--surface2)]"}`}>
+            <span className={`absolute top-0.5 h-6 w-6 rounded-full bg-white shadow transition-all ${musicOn ? "left-[22px]" : "left-0.5"}`} />
+          </button>
+        </div>
+        <p className="mt-2 text-xs font-bold text-[var(--dim)]">{musicOn ? t("soundOn") : t("soundOff")}</p>
       </div>
       <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3">
         <p className="text-sm font-bold">{t("accountTitle")}</p>
@@ -1517,7 +1555,7 @@ function WdTab({ data, onCancel, cancelling, onDone }: { data: GameState; onCanc
   const ktCost = Math.round(usdt * p.ktPerUsdt); const enough = p.ktBalance >= ktCost;
   const belowMin = ktCost < p.wdMinKt; const offStep = ktCost % p.wdStepKt !== 0;
   const aboveMax = ktCost > p.wdMaxKt;
-  const request = useMutation({ mutationFn: () => api.requestWithdrawal({ walletAddress: wallet.trim(), amountKt: ktCost }), onSuccess: (r) => { if (r.ok) setWallet(""); onDone(r.ok, r.error, t("wdRequestSent", { id: r.wdId ?? "", kt: fmt(ktCost) })); } });
+  const request = useMutation({ mutationFn: () => api.requestWithdrawal({ walletAddress: wallet.trim(), amountKt: ktCost }), onSuccess: (r) => { if (r.ok) { playCoin(); setWallet(""); } onDone(r.ok, r.error, t("wdRequestSent", { id: r.wdId ?? "", kt: fmt(ktCost) })); } });
   return (
     <section className="mt-3 space-y-3">
       <div className="overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface)]"><img src={stationImg} alt={t("wdStationImgAlt")} className="h-24 w-full object-cover" /><div className="p-3">
