@@ -1,8 +1,8 @@
 // i18n — server-side user-facing strings (api/_lib/i18n.ts)
 //
-// The game is translated in two languages: Indonesian ("id") and
-// English ("en"). The client has the matching dictionary in
-// client/src/i18n.ts.
+// The game is translated in three languages: Indonesian ("id"),
+// English ("en") and Russian ("ru"). The client has the matching
+// dictionary in client/src/i18n.ts.
 //
 // Rules:
 // - The server uses this ONLY for user-facing strings (logActivity
@@ -13,32 +13,40 @@
 //   client sends nothing or an unsupported value.
 // - Numbers are formatted with the language's locale: Indonesian
 //   uses "5.000" / "0,025", English uses "5,000" / "0.025".
-// - To add a third language: add a third branch to serverStrings
+// - To add a fourth language: add a fourth branch to serverStrings
 //   (and to ASTEROID_CLASSES_EN / ASTEROID_NICKNAMES_EN /
 //   ANOMALIES_EN + the nameEn/descEn fields on the defs in game.ts),
 //   add "xx" to Lang, and add the picker entry in the client.
 
-export type Lang = "id" | "en";
+export type Lang = "id" | "en" | "ru";
 
 export function normalizeLang(v: unknown): Lang {
-  if (v === "en" || v === "id") return v;
+  if (v === "en" || v === "id" || v === "ru") return v;
   if (typeof v === "string") {
     const base = v.trim().toLowerCase().split("-")[0];
     if (base === "id") return "id";
     if (base === "en") return "en";
+    if (base === "ru") return "ru";
   }
   return "id";
 }
 
+/** BCP 47 locale for a language (numbers + dates). */
+function langLocale(lang: Lang): string {
+  return lang === "id" ? "id-ID" : lang === "ru" ? "ru-RU" : "en-US";
+}
+
 /** Locale-aware number formatting (max 3 decimals, KT values). */
 export function fmtNum(n: number, lang: Lang): string {
-  return n.toLocaleString(lang === "id" ? "id-ID" : "en-US", {
+  return n.toLocaleString(langLocale(lang), {
     maximumFractionDigits: 3,
   });
 }
 
 /** Duration in seconds → "1 jam 5 mnt" (id) / "1 hr 5 min" (en).
- *  Server-side twin of the client's fmtDur in client/src/i18n.ts. */
+ *  Server-side twin of the client's fmtDur in client/src/i18n.ts.
+ *  Russian uses abbreviations (ч/мин/сек) so no plural declension
+ *  is needed. */
 export function fmtDur(sec: number, lang: Lang): string {
   const s = Math.max(0, Math.ceil(sec));
   const h = Math.floor(s / 3600);
@@ -48,6 +56,11 @@ export function fmtDur(sec: number, lang: Lang): string {
     if (h > 0) return m > 0 ? `${h} hr ${m} min` : `${h} hr`;
     if (m > 0) return r > 0 ? `${m} min ${r} sec` : `${m} min`;
     return `${r} sec`;
+  }
+  if (lang === "ru") {
+    if (h > 0) return m > 0 ? `${h} ч ${m} мин` : `${h} ч`;
+    if (m > 0) return r > 0 ? `${m} мин ${r} сек` : `${m} мин`;
+    return `${r} сек`;
   }
   if (h > 0) return m > 0 ? `${h} jam ${m} mnt` : `${h} jam`;
   if (m > 0) return r > 0 ? `${m} mnt ${r} dtk` : `${m} mnt`;
@@ -59,15 +72,15 @@ export function fmtKtLang(n: number, lang: Lang): string {
   return fmtNum(n, lang);
 }
 
-/** Short date, e.g. "19/11/2026" (id) / "11/19/2026" (en). */
+/** Short date, e.g. "19/11/2026" (id) / "11/19/2026" (en) / "19.11.2026" (ru). */
 export function fmtDateLang(d: Date, lang: Lang): string {
-  return d.toLocaleDateString(lang === "id" ? "id-ID" : "en-US");
+  return d.toLocaleDateString(langLocale(lang));
 }
 
-// --- Asteroid content in English ---------------------------------------
+// --- Asteroid content in English + Russian ---------------------------
 // game.ts keeps the Indonesian originals (classes / nicknames /
 // anomalies) and the localize* helpers in game.ts pick the English
-// text from these lists when lang === "en".
+// or Russian text from these lists when lang is "en" / "ru".
 
 export const ASTEROID_CLASSES_EN: string[][] = [
   ["C-Type — Carbonaceous", "S-Type — Silicate"],
@@ -104,6 +117,43 @@ export const ANOMALIES_EN: string[] = [
   "Fragile rock structure — drilling is 20% faster on this asteroid.",
   "A strong magnetic field disturbs the drill arm — drilling is 25% slower on this asteroid.",
   "Strange sensor reflections from the asteroid's core — the technicians say it's just ordinary interference.",
+];
+
+export const ASTEROID_CLASSES_RU: string[][] = [
+  ["Тип C — углеродистый", "Тип S — силикатный"],
+  ["Тип S — силикатный", "Тип C — углеродистый", "Тип M — металлический"],
+  ["Плотный лунный силикат", "Тип S — силикатный"],
+  ["Тип M — чисто металлический"],
+  ["Тип D — тёмный лёд", "Объект Койпера — ледяное ядро"],
+];
+
+export const ASTEROID_NICKNAMES_RU: string[] = [
+  "Безмолвный кратер",
+  "Сумеречный столб",
+  "Холодный уголёк",
+  "Безмолвный свидетель",
+  "Далёкий фонарь",
+  "Углеродное эхо",
+  "Железный рог",
+  "Тихие джунгли",
+  "Треснувшее зеркало",
+  "Страж орбиты",
+  "Погасший фонарь",
+  "Никелевый холм",
+  "Пылевая река",
+  "Ледяная башня",
+  "Небесный якорь",
+  "Сад ржавчины",
+  "Далёкий голос",
+  "Треснувший купол",
+  "Коридор ветра",
+  "Тихая крепость",
+];
+
+export const ANOMALIES_RU: string[] = [
+  "Хрупкая структура пород — бурение на этом астероиде на 20% быстрее.",
+  "Сильное магнитное поле мешает буровому манипулятору — бурение на этом астероиде на 25% медленнее.",
+  "Странные отражения сигналов от ядра астероида — техники говорят, что это просто обычные помехи.",
 ];
 
 // --- Server message dictionary -----------------------------------------
@@ -710,6 +760,215 @@ const en: ServerStrings = {
 };
 
 /** Return the server string dictionary for a language. */
+const ru: ServerStrings = {
+  tgNoBotToken: "Вход через Telegram пока не настроен на сервере.",
+  tgNoInitData: "Данные входа Telegram не найдены.",
+  tgInvalid: "Данные входа Telegram недействительны.",
+  tgIncomplete: "Данные входа Telegram неполные.",
+  tgExpired:
+    "Сессия Telegram истекла — закрой и снова открой Mini App.",
+  routeInvalidJson: "Неверный JSON в теле запроса.",
+  routeInvalidInitData: "Неверное поле 'initData'.",
+  routeActionRequired: "Поле 'action' обязательно.",
+  routeInvalidArgs: "Неверные аргументы.",
+  routeServerError: "Произошла ошибка сервера.",
+  errInvalidAsteroid: "Неверные данные астероида, обнови страницу.",
+  errJobRunning:
+    "Операция уже выполняется. Заверши её или отмени.",
+  errAlreadyScanned:
+    "Этот астероид уже просканирован — состав жил уже открыт.",
+  errEnergyScan: (cost, energy) =>
+    `Не хватает энергии — сканирование требует ${cost} энергии, а у тебя ${energy}. Подожди, пока энергия восстановится (зарядка медленная), улучши Мини-реактор синтеза, чтобы заряжаться быстрее, или Бак O₂ и Солнечную батарею, чтобы увеличить запас энергии.`,
+  errEnergyMine: (cost, energy) =>
+    `Не хватает энергии — бурение этой жилы требует ${cost} энергии, а у тебя ${energy}. Подожди, пока энергия восстановится (зарядка медленная), улучши Мини-реактор синтеза, чтобы заряжаться быстрее, или Бак O₂ и Солнечную батарею, чтобы увеличить запас энергии.`,
+  errScanFirst:
+    "Сначала просканируй этот астероид — без скана жилы не видны.",
+  errVeinNotFound: "Такой жилы нет на этом астероиде.",
+  errVeinMined: "Эта жила уже выработана.",
+  errCompleteJobRunning: "Сначала заверши текущую операцию.",
+  errAbandonJobRunning:
+    "Сначала отмени текущую операцию, прежде чем переходить к другому астероиду.",
+  errTravelJobRunning:
+    "Сначала отмени текущую операцию, прежде чем лететь на другую карту.",
+  errWdOwnerNotFound: "Игрок, которому принадлежит этот вывод, не найден.",
+  errNoJob: "Нет операции, результат которой можно забрать.",
+  errJobNotReady: (remaining) =>
+    `Операция ещё не завершена — осталось ещё ${remaining} сек. Бур и спектрометр работают в реальном времени.`,
+  errVeinGone:
+    "Целевая жила этой операции больше недоступна — операция отменена.",
+  errNoJobRunning: "Сейчас нет выполняющейся операции.",
+  errCompleteNotAllMined:
+    "Сначала добудь все жилы на этом астероиде, прежде чем лететь к следующему.",
+  errAbandonEnergy: (cost, energy) =>
+    `Не хватает топлива — переход к другому астероиду требует ${cost} энергии, а у тебя ${energy}.`,
+  errMapNotFound: "Такой карты нет в навигационной схеме станции.",
+  errMapLocked: (minLayer, layer) =>
+    `Эта карта закрыта — нужен Сектор ${minLayer}, а у тебя только Сектор ${layer}. Завершай экспедиции, чтобы повысить сектор.`,
+  errAlreadyOnMap: "Ты уже добываешь на этой карте.",
+  errTravelEnergy: (cost, energy) =>
+    `Не хватает топлива — перелёт между картами требует ${cost} энергии, а у тебя ${energy}.`,
+  errPremiumOrderPending:
+    "У тебя ещё есть заказ Premium, ожидающий оплаты. Сначала оплати его в Stars или отмени заказ в карточке Premium.",
+  errPremiumOrderCreateFail: "Не удалось создать заказ Premium, попробуй ещё раз.",
+  errStarsNeedTelegram: "Premium за Stars можно купить только в Telegram — открой игру через Mini App в Telegram.",
+  errStarsInvoiceFail: "Не удалось создать оплату в Stars, попробуй ещё раз.",
+  errStarsWebhookFail: "Не удалось подключить webhook Stars, попробуй ещё раз.",
+  starsPrecheckoutInvalid: "Неверный заказ Premium.",
+  errGramNeedTelegram: "Premium за GRAM можно купить только в Telegram — открой игру через Mini App в Telegram.",
+  errGramOrderFail: "Не удалось создать заказ GRAM, попробуй ещё раз.",
+  errGramOrderInvalid: "Это не заказ GRAM.",
+  errGramTxNotFound: "Транзакция GRAM пока не найдена в блокчейне — она ещё обрабатывается, попробуй чуть позже.",
+  errGramTxWrongRecipient: "Эта транзакция отправлена не на кошелёк владельца — оплата не совпадает с заказом.",
+  errGramTxWrongAmount: "Отправленная сумма GRAM меньше цены пакета.",
+  errGramTxWrongSender: "Эта транзакция пришла не с подключённого кошелька.",
+  errGramTxReused: "Эта транзакция GRAM уже использована для другого заказа.",
+  errGramVerifyFail: "Не удалось проверить транзакцию GRAM, попробуй ещё раз.",
+  errPremiumOrderNotFound: "Заказ Premium не найден.",
+  errOrderAlreadyProcessed: "Этот заказ уже обработан.",
+  errOrderOwnerNotFound: "Игрок, которому принадлежит этот заказ, не найден.",
+  errPlayerNotFound: "Игрок не найден.",
+  errPvpNoEncounter: "Нет предложений PvP-встреч — заверши скан, чтобы встретить другого шахтёра.",
+  errPvpEncounterExpired: "Это предложение встречи истекло — заверши новый скан, чтобы встретить кого-нибудь снова.",
+  errPvpAttackCooldown: (seconds) =>
+    `Следующая атака будет доступна через ${fmtDur(seconds, "ru")} — перерыв между атаками 30 минут.`,
+  errPvpDefenderShielded: "Этот шахтёр сейчас неуязвим — его только что атаковали, попробуй другого игрока.",
+  errPvpDefenderGone: "Этого шахтёра больше нельзя атаковать — предложение отменено.",
+  errPvpTroopNone: (name) =>
+    `У тебя ещё нет: ${name} — сначала купи, потом улучшай.`,
+  errPvpTroopMaxCount: (name) => `${name} уже в максимальном количестве.`,
+  errPvpTroopMaxLevel: (name) => `${name} уже на максимальном уровне.`,
+  pvpPirate: "Пират",
+  pvpUnknownMiner: "Другой шахтёр",
+  errDailyBonusClaimed:
+    "Ежедневный бонус на сегодня уже получен. Возвращайся завтра!",
+  errAdCapReached: (cap) =>
+    `Лимит рекламы на сегодня исчерпан (${cap}× в день). Награды за рекламу обновятся завтра — возвращайся!`,
+  errAdCooldown: (seconds, cooldown) =>
+    `Подожди — следующая реклама будет доступна через ${fmtDur(seconds, "ru")} (перерыв ${fmtDur(cooldown, "ru")} между рекламой).`,
+  errOreUnknown: "Неизвестный тип минерала.",
+  errNotEnoughOre: (held, oreName) =>
+    `Не хватает руды — у тебя только ${held} ${oreName}.`,
+  errCargoEmpty: "Груз пуст — продавать пока нечего.",
+  errUpgradeUnknown: "Неизвестное улучшение.",
+  errUpgradeMax: (name) => `${name} уже на максимальном уровне.`,
+  errKtNotEnough: (cost, balance) =>
+    `Не хватает KT — нужно ${fmtNum(cost, "ru")} KT, а у тебя ${fmtNum(balance, "ru")} KT.`,
+  errWdStep: (step, stepUsdt, amountKt) =>
+    `Сумма вывода должна быть кратна ${fmtNum(step, "ru")} KT (${stepUsdt} USDT) — ${fmtNum(amountKt, "ru")} KT не подходит.`,
+  errWdMinFirst: (minKt, minUsdt, amountKt, missing) =>
+    `Минимальный первый вывод — ${fmtNum(minKt, "ru")} KT (${minUsdt} USDT), а ты запросил ${fmtNum(amountKt, "ru")} KT. Добудь ещё ${fmtNum(missing, "ru")} KT.`,
+  errWdMinRepeat: (paidCount, amountKt) =>
+    `После первого вывода минимум — ${fmtNum(5000, "ru")} KT (5 USDT). У тебя уже ${paidCount} оплаченных выводов, так что минимум остаётся ${fmtNum(5000, "ru")} KT, а ты запросил ${fmtNum(amountKt, "ru")} KT.`,
+  errWdMax: (maxKt, amountKt) =>
+    `Максимальный вывод — ${fmtNum(maxKt, "ru")} KT (5 USDT) за один вывод, а ты запросил ${fmtNum(amountKt, "ru")} KT. Запроси ${fmtNum(maxKt, "ru")} KT.`,
+  errWdBalance: (amountUsdt, amountKt, balance) =>
+    `Не хватает баланса KT — для вывода ${amountUsdt} USDT нужно ${fmtNum(amountKt, "ru")} KT, а у тебя ${fmtNum(balance, "ru")} KT.`,
+  errWdCreateFail: "Не удалось создать запрос на вывод, попробуй ещё раз.",
+  errWdNotFound: "Запрос на вывод не найден.",
+  errWdCancelNotPending: "Отменить можно только вывод в статусе «Ожидание».",
+  errWdApproveNotPending: "Одобрить можно только вывод в статусе «Ожидание».",
+  errWdPayNotApproved: "Вывод должен быть сначала одобрен, прежде чем его можно отметить оплаченным.",
+  errWdAlreadyDone: "Этот вывод уже обработан.",
+  errAdminOnly: "Это может делать только владелец.",
+  errUnknownAction: (action) => `Неизвестное действие: ${action}`,
+  logScan: (expName, veinCount) =>
+    `Скан ${expName} завершён — обнаружено жил: ${veinCount}.`,
+  logJam: (oreName, expName) =>
+    `Бур заклинило при бурении жилы ${oreName} на ${expName} — жила потеряна, бур нужно заменить.`,
+  logRare: (oreName, qty, expName) =>
+    `Добыто: ${oreName} ×${qty} с ${expName}!`,
+  logHull: (mapName, fee) =>
+    `Корпус корабля пострадал от обломков на ${mapName} — ремонт: ${fmtNum(fee, "ru")} KT.`,
+  logExpedition: (expName, bonus, layer, newExpName) =>
+    `Экспедиция ${expName} завершена. Бонус ${fmtNum(bonus, "ru")} KT, перелёт в Сектор ${layer}: ${newExpName}.`,
+  logExpeditionProgress: (expName, bonus, progress, needed, nextLayer, newExpName) =>
+    `Экспедиция ${expName} завершена. Бонус ${fmtNum(bonus, "ru")} KT, ${progress}/${needed} экспедиций до Сектора ${nextLayer}: ${newExpName}.`,
+  logAbandon: (newExpName) =>
+    `Покидаешь старый астероид, перелёт к ${newExpName}.`,
+  logTravel: (mapName, newExpName) =>
+    `Перелёт на другую карту: ${mapName}. Новый астероид: ${newExpName}.`,
+  logPremiumOrder: (label, stars) =>
+    `Заказ Premium ${label} создан (${stars} Telegram Stars) — ожидание оплаты и подтверждения владельца.`,
+  logPremiumConfirm: (stars, tierLabel, days, until) =>
+    `Оплата ${stars} Telegram Stars подтверждена — Premium ${tierLabel} активен ${days} дн. до ${until}.`,
+  logPremiumReject: (orderId, stars) =>
+    `Заказ Premium #${orderId} (${stars} Stars) отклонён владельцем — оплата не подтверждена.`,
+  logPremiumCancel: (orderId, stars) =>
+    `Заказ Premium #${orderId} (${stars} Stars) отменён игроком — оплаты не было, заказ удалён.`,
+  logPremiumOrderGram: (label, gram) =>
+    `Заказ Premium ${label} создан (${gram} GRAM) — ожидание оплаты и проверки в блокчейне.`,
+  logPremiumConfirmGram: (gram, tierLabel, days, until) =>
+    `Оплата ${gram} GRAM подтверждена в блокчейне — Premium ${tierLabel} активен ${days} дн. до ${until}.`,
+  logPremiumRejectGram: (orderId, gram) =>
+    `Заказ Premium #${orderId} (${gram} GRAM) отклонён владельцем — оплата не подтверждена.`,
+  logPremiumCancelGram: (orderId, gram) =>
+    `Заказ Premium #${orderId} (${gram} GRAM) отменён игроком — оплаты не было, заказ удалён.`,
+  logPremiumGrant: (tierLabel, days, until) =>
+    `Владелец активировал Premium ${tierLabel} на ${days} дн. (оплата вне игры) — активен до ${until}.`,
+  logDailyBonus: (amount) =>
+    `Ежедневный бонус ${fmtNum(amount, "ru")} KT получен.`,
+  logAd: (amount) =>
+    `Просмотр спонсорской рекламы — награда +${fmtNum(amount, "ru")} энергии корабля.`,
+  logSell: (qty, oreName, gained) =>
+    `Продано: ${qty} ${oreName} за ${fmtNum(gained, "ru")} KT.`,
+  logSellAll: (count, gained) =>
+    `Проданы все минералы (${count} шт.) за ${fmtNum(gained, "ru")} KT.`,
+  logUpgrade: (name, level) => `${name} улучшен до уровня ${level}.`,
+  logWdRequest: (usdt, kt) =>
+    `Запрос на вывод ${usdt} USDT (${fmtNum(kt, "ru")} KT) создан — ожидание обработки владельцем.`,
+  logWdCancel: (id, kt) =>
+    `Вывод #${id} отменён игроком — ${fmtNum(kt, "ru")} KT возвращены.`,
+  logWdApprove: (id, usdt) =>
+    `Вывод #${id} (${usdt} USDT) одобрен — готов к ручной отправке USDT.`,
+  logWdPaid: (id, usdt) =>
+    `Вывод #${id} завершён — ${usdt} USDT отправлены вручную на кошелёк игрока.`,
+  wdNotifyApproved: (usdt) =>
+    `Твой вывод на ${fmtNum(usdt, "ru")} USDT одобрен и обрабатывается.`,
+  wdNotifyPaid: (usdt) =>
+    `Твой вывод на ${fmtNum(usdt, "ru")} USDT оплачен. Проверь кошелёк!`,
+  nudgeText: (url) =>
+    `Ты не добывал в ASTRA MINING уже 3 дня — твой астероид ждёт тебя! Открой игру и продолжи экспедицию.\n${url}`,
+  logWdReject: (id, kt) =>
+    `Вывод #${id} отклонён — ${fmtNum(kt, "ru")} KT возвращены на баланс игрока.`,
+  logReferralReward: (amount) =>
+    `Приглашённый тобой друг завершил свою первую экспедицию — реферальная награда ${fmtNum(amount, "ru")} KT добавлена на баланс.`,
+  logReferralRefereeBonus: (amount) =>
+    `Ты завершил свою первую экспедицию по приглашению друга — реферальный бонус ${fmtNum(amount, "ru")} KT добавлен на баланс.`,
+  logPvpAttackWin: (defenderName, lootKt) =>
+    `Ты атаковал ${defenderName} и ПОБЕДИЛ, захватив добычу на ${fmtNum(lootKt, "ru")} KT.`,
+  logPvpAttackWinEmpty: (defenderName) =>
+    `Ты атаковал ${defenderName} и ПОБЕДИЛ, но добычи не было.`,
+  logPvpAttackLose: (defenderName) =>
+    `Ты атаковал ${defenderName} и ПРОИГРАЛ — его защита оказалась сильнее.`,
+  logPvpDefendedWin: (attackerName) =>
+    `${attackerName} атаковал тебя, но твоя защита победила — добыча в безопасности, у тебя защита на 1 час.`,
+  logPvpDefendedLose: (attackerName, lootKt) =>
+    `${attackerName} атаковал тебя и победил — у тебя отняли добычу на ${fmtNum(lootKt, "ru")} KT. У тебя защита на 1 час.`,
+  logPvpDefendedLoseEmpty: (attackerName) =>
+    `${attackerName} атаковал тебя и победил, но добычи не было. У тебя защита на 1 час.`,
+  logPvpTroopBuy: (name, count) =>
+    `${name} №${count} куплен.`,
+  logPvpTroopUpgrade: (name, level) => `${name} улучшен до уровня ${level}.`,
+  logPvpLootGain: (lootKt) =>
+    `Добыча PvP на ${fmtNum(lootKt, "ru")} KT добавлена в твой груз.`,
+  logPvpLootStolen: (lootKt) =>
+    `Добыча на ${fmtNum(lootKt, "ru")} KT отнята нападающим в PvP.`,
+  logPvpLootDestroyed: (lootKt) =>
+    `Добыча на ${fmtNum(lootKt, "ru")} KT уничтожена в бою PvP.`,
+  tamperScan: "начало скана во время выполнения операции",
+  tamperMine: "начало бурения во время выполнения операции",
+  tamperCollect: "забор результата до завершения операции",
+  flagNonstop: (hours) =>
+    `Играл в ${hours} разных часов за последние 24 часа — люди спят, боты нет.`,
+  flagMulti: (count, max) =>
+    `${count} разных аккаунтов Telegram с одного IP за последние 24 часа (лимит: ${max}).`,
+  flagInstant:
+    "10 сборов подряд в течение ≤10 секунд после завершения операций — точность метронома, как у бота; люди так не делают.",
+  flagTamper: (detail) =>
+    `5+ попыток невозможных действий за 24 часа (например: ${detail}) — действия уже отклонены сервером, но шаблон поведения записан.`,
+  flagCleared: "Флаг снят владельцем из Центра управления после проверки.",
+};
+
 export function serverStrings(lang: Lang): ServerStrings {
-  return lang === "en" ? en : id;
+  return lang === "ru" ? ru : lang === "en" ? en : id;
 }

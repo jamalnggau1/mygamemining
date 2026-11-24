@@ -330,8 +330,11 @@ import { getDb, type Db } from "./store.js";
 import { resolveSession, type Session } from "./telegram.js";
 import {
   ANOMALIES_EN,
+  ANOMALIES_RU,
   ASTEROID_CLASSES_EN,
+  ASTEROID_CLASSES_RU,
   ASTEROID_NICKNAMES_EN,
+  ASTEROID_NICKNAMES_RU,
   fmtDateLang,
   fmtNum,
   normalizeLang,
@@ -453,8 +456,8 @@ export const WD_MAX_KT = 5000;
 // 21-day hold, no 1.000 minimum).
 const PREMIUM_PLAN_USD = { standard: 4.08, pro: 13.26 } as const;
 const PREMIUM_PLANS = {
-  standard: { days: 7, stars: 300, tier: "standard" as const, label: "Standard · 7 hari", labelEn: "Standard · 7 days" },
-  pro: { days: 30, stars: 1000, tier: "pro" as const, label: "Pro · 30 hari", labelEn: "Pro · 30 days" },
+  standard: { days: 7, stars: 300, tier: "standard" as const, label: "Standard · 7 hari", labelEn: "Standard · 7 days", labelRu: "Standard · 7 дней" },
+  pro: { days: 30, stars: 1000, tier: "pro" as const, label: "Pro · 30 hari", labelEn: "Pro · 30 days", labelRu: "Pro · 30 дней" },
 } as const;
 type PremiumPlanId = keyof typeof PREMIUM_PLANS;
 type PremiumTier = "standard" | "pro";
@@ -468,6 +471,8 @@ type OreDef = {
   name: string;
   /** English display name (i18n) — same ore, same price. */
   nameEn: string;
+  /** Russian display name (i18n) — same ore, same price. */
+  nameRu: string;
   price: number; // base KT per unit
   color: string;
   icon: string; // client-side SVG icon id (matches the ore id)
@@ -477,25 +482,25 @@ type OreDef = {
 };
 
 export const ORES: OreDef[] = [
-  { id: "regolith", name: "Regolith Asteroid", nameEn: "Asteroid Regolith", price: 0.025, color: "#9a9186", icon: "regolith", hardness: 1, weights: [34, 20, 12, 8, 5] },
-  { id: "kondrit", name: "Kondrit Karbon", nameEn: "Carbonaceous Chondrite", price: 0.05, color: "#4b4f5e", icon: "kondrit", hardness: 1, weights: [26, 34, 18, 10, 6] },
-  { id: "besinikel", name: "Besi-Nikel", nameEn: "Iron-Nickel", price: 0.125, color: "#c97a3a", icon: "besinikel", hardness: 2, weights: [14, 16, 28, 15, 9] },
-  { id: "kobalt", name: "Kobalt Antariksa", nameEn: "Space Cobalt", price: 0.25, color: "#5b8cff", icon: "kobalt", hardness: 2, weights: [8, 8, 17, 17, 11] },
-  { id: "platinum", name: "Platinum", nameEn: "Platinum", price: 1.125, color: "#e6ebf2", icon: "platinum", hardness: 3, weights: [4, 3, 8, 18, 15] },
-  { id: "iridium", name: "Iridium", nameEn: "Iridium", price: 3.6, color: "#f2b705", icon: "iridium", hardness: 3, weights: [2, 1, 4, 12, 18] },
-  { id: "helium3", name: "Kristal Helium-3", nameEn: "Helium-3 Crystal", price: 9, color: "#6ee7ff", icon: "helium3", hardness: 4, weights: [0, 0, 1, 3, 9] },
+  { id: "regolith", name: "Regolith Asteroid", nameEn: "Asteroid Regolith", nameRu: "Астероидный реголит", price: 0.025, color: "#9a9186", icon: "regolith", hardness: 1, weights: [34, 20, 12, 8, 5] },
+  { id: "kondrit", name: "Kondrit Karbon", nameEn: "Carbonaceous Chondrite", nameRu: "Углеродистый хондрит", price: 0.05, color: "#4b4f5e", icon: "kondrit", hardness: 1, weights: [26, 34, 18, 10, 6] },
+  { id: "besinikel", name: "Besi-Nikel", nameEn: "Iron-Nickel", nameRu: "Железо-никель", price: 0.125, color: "#c97a3a", icon: "besinikel", hardness: 2, weights: [14, 16, 28, 15, 9] },
+  { id: "kobalt", name: "Kobalt Antariksa", nameEn: "Space Cobalt", nameRu: "Космический кобальт", price: 0.25, color: "#5b8cff", icon: "kobalt", hardness: 2, weights: [8, 8, 17, 17, 11] },
+  { id: "platinum", name: "Platinum", nameEn: "Platinum", nameRu: "Платина", price: 1.125, color: "#e6ebf2", icon: "platinum", hardness: 3, weights: [4, 3, 8, 18, 15] },
+  { id: "iridium", name: "Iridium", nameEn: "Iridium", nameRu: "Иридий", price: 3.6, color: "#f2b705", icon: "iridium", hardness: 3, weights: [2, 1, 4, 12, 18] },
+  { id: "helium3", name: "Kristal Helium-3", nameEn: "Helium-3 Crystal", nameRu: "Кристалл гелия-3", price: 9, color: "#6ee7ff", icon: "helium3", hardness: 4, weights: [0, 0, 1, 3, 9] },
   // Batu mulia khas tiap peta — dua permata unggulan per map, hanya
   // muncul di map-nya (weight di zone lain 0).
-  { id: "opal", name: "Opal Pelangi", nameEn: "Rainbow Opal", price: 0.975, color: "#f9a8d4", icon: "opal", hardness: 2, weights: [7, 0, 0, 0, 0] },
-  { id: "topaz", name: "Topaz Emas", nameEn: "Golden Topaz", price: 1.275, color: "#fbbf24", icon: "topaz", hardness: 2, weights: [5, 0, 0, 0, 0] },
-  { id: "turkuois", name: "Turkuois Orbit", nameEn: "Orbital Turquoise", price: 1.95, color: "#2dd4bf", icon: "turkuois", hardness: 2, weights: [0, 6, 0, 0, 0] },
-  { id: "ametis", name: "Ametis Sabuk", nameEn: "Belt Amethyst", price: 2.625, color: "#a78bfa", icon: "ametis", hardness: 3, weights: [0, 4, 0, 0, 0] },
-  { id: "zamrud", name: "Zamrud Bulan", nameEn: "Moon Emerald", price: 4.8, color: "#34d399", icon: "zamrud", hardness: 3, weights: [0, 0, 5, 0, 0] },
-  { id: "rubi", name: "Rubi Mare", nameEn: "Mare Ruby", price: 6.3, color: "#f87171", icon: "rubi", hardness: 3, weights: [0, 0, 3, 0, 0] },
-  { id: "safir", name: "Safir Bintang", nameEn: "Star Sapphire", price: 10.5, color: "#60a5fa", icon: "safir", hardness: 4, weights: [0, 0, 0, 5, 0] },
-  { id: "berlian", name: "Berlian Psyche", nameEn: "Psyche Diamond", price: 14.25, color: "#f8fafc", icon: "berlian", hardness: 4, weights: [0, 0, 0, 3, 0] },
-  { id: "opales", name: "Opal Es Hitam", nameEn: "Black Ice Opal", price: 22.5, color: "#c084fc", icon: "opales", hardness: 4, weights: [0, 0, 0, 0, 4] },
-  { id: "voidium", name: "Kristal Voidium", nameEn: "Voidium Crystal", price: 36, color: "#818cf8", icon: "voidium", hardness: 4, weights: [0, 0, 0, 0, 2] },
+  { id: "opal", name: "Opal Pelangi", nameEn: "Rainbow Opal", nameRu: "Радужный опал", price: 0.975, color: "#f9a8d4", icon: "opal", hardness: 2, weights: [7, 0, 0, 0, 0] },
+  { id: "topaz", name: "Topaz Emas", nameEn: "Golden Topaz", nameRu: "Золотой топаз", price: 1.275, color: "#fbbf24", icon: "topaz", hardness: 2, weights: [5, 0, 0, 0, 0] },
+  { id: "turkuois", name: "Turkuois Orbit", nameEn: "Orbital Turquoise", nameRu: "Орбитальная бирюза", price: 1.95, color: "#2dd4bf", icon: "turkuois", hardness: 2, weights: [0, 6, 0, 0, 0] },
+  { id: "ametis", name: "Ametis Sabuk", nameEn: "Belt Amethyst", nameRu: "Аметист пояса", price: 2.625, color: "#a78bfa", icon: "ametis", hardness: 3, weights: [0, 4, 0, 0, 0] },
+  { id: "zamrud", name: "Zamrud Bulan", nameEn: "Moon Emerald", nameRu: "Лунный изумруд", price: 4.8, color: "#34d399", icon: "zamrud", hardness: 3, weights: [0, 0, 5, 0, 0] },
+  { id: "rubi", name: "Rubi Mare", nameEn: "Mare Ruby", nameRu: "Рубин Моря", price: 6.3, color: "#f87171", icon: "rubi", hardness: 3, weights: [0, 0, 3, 0, 0] },
+  { id: "safir", name: "Safir Bintang", nameEn: "Star Sapphire", nameRu: "Звёздный сапфир", price: 10.5, color: "#60a5fa", icon: "safir", hardness: 4, weights: [0, 0, 0, 5, 0] },
+  { id: "berlian", name: "Berlian Psyche", nameEn: "Psyche Diamond", nameRu: "Алмаз Психеи", price: 14.25, color: "#f8fafc", icon: "berlian", hardness: 4, weights: [0, 0, 0, 3, 0] },
+  { id: "opales", name: "Opal Es Hitam", nameEn: "Black Ice Opal", nameRu: "Чёрный ледяной опал", price: 22.5, color: "#c084fc", icon: "opales", hardness: 4, weights: [0, 0, 0, 0, 4] },
+  { id: "voidium", name: "Kristal Voidium", nameEn: "Voidium Crystal", nameRu: "Кристалл войдиума", price: 36, color: "#818cf8", icon: "voidium", hardness: 4, weights: [0, 0, 0, 0, 2] },
 ];
 const RARE_IDS = new Set([
   "platinum", "iridium", "helium3",
@@ -510,10 +515,15 @@ type MapDef = {
   taglineEn: string;
   desc: string;
   descEn: string;
+  /** Russian display strings (i18n) — same map, same rules. */
+  nameRu: string;
+  taglineRu: string;
+  descRu: string;
   minLayer: number; // sector needed to unlock this map
   image: string; // client asset key
   distanceLabel: string; // how far this map is from Earth — farther = slower ops
   distanceLabelEn: string;
+  distanceLabelRu: string;
   // Challenge profile — map 1 is the gentle starter, map 5 the endgame.
   jamChance: number; // 0..1 — drill jams mid-job: vein lost, energy lost
   damageChance: number; // 0..1 — hull hit while mining: repair fee in KT
@@ -527,14 +537,18 @@ export const MAPS: MapDef[] = [
   {
     name: "Orbit Rendah — Pos Tambang LEO",
     nameEn: "Low Orbit — LEO Mining Post",
+    nameRu: "Низкая орбита — добывающая станция LEO",
     tagline: "Peta pemula · aman & ramah",
     taglineEn: "Starter map · safe & friendly",
+    taglineRu: "Карта для новичков · безопасно и просто",
     desc: "Asteroid kecil dekat Bumi, jauh dari bahaya. Regolith dan kondrit karbon mendominasi, dengan kilau Opal Pelangi dan Topaz Emas di sela batuan. Tempat belajar terbaik untuk penambang baru.",
     descEn: "Small asteroids near Earth, far from danger. Regolith and carbonaceous chondrite dominate, with flashes of Rainbow Opal and Golden Topaz between the rocks. The best place for new miners to learn.",
+    descRu: "Небольшие астероиды рядом с Землёй, вдали от опасностей. Здесь преобладают реголит и углеродистые хондриты, а среди камней сверкают Радужный опал и Золотой топаз. Лучшее место для обучения новых шахтёров.",
     minLayer: 1,
     image: "hero",
     distanceLabel: "±0,01 SA dari Bumi — halaman belakang stasiun",
     distanceLabelEn: "±0.01 AU from Earth — the station's backyard",
+    distanceLabelRu: "±0,01 а.е. от Земли — задний двор станции",
     jamChance: 0,
     damageChance: 0,
     damageFeeKt: 0,
@@ -545,14 +559,18 @@ export const MAPS: MapDef[] = [
   {
     name: "Sabuk Asteroid Utama",
     nameEn: "Main Asteroid Belt",
+    nameRu: "Главный пояс астероидов",
     tagline: "Peta menengah · serpihan beterbangan",
     taglineEn: "Mid map · flying debris",
+    taglineRu: "Средняя карта · летящие обломки",
     desc: "Di antara Mars dan Jupiter, jutaan serpihan batu beterbangan. Kondrit melimpah, besi-nikel mulai muncul dari inti asteroid purba — dan Turkuois Orbit serta Ametis Sabuk bersembunyi di kawah-kawah tua. Serpihan kadang menyumbat mata bor.",
     descEn: "Between Mars and Jupiter, millions of rock fragments fly around. Chondrite is abundant, iron-nickel starts showing up from the cores of ancient asteroids — and Orbital Turquoise and Belt Amethyst hide in old craters. Debris sometimes clogs the drill bit.",
+    descRu: "Между Марсом и Юпитером миллионы каменных обломков носятся в пространстве. Хондритов здесь в изобилии, железо-никель начинает встречаться в ядрах древних астероидов, а Орбитальная бирюза и Аметист пояса прячутся в старых кратерах. Обломки иногда забивают бур.",
     minLayer: 5,
     image: "asteroid",
     distanceLabel: "±2,8 SA dari Bumi — di antara Mars dan Jupiter",
     distanceLabelEn: "±2.8 AU from Earth — between Mars and Jupiter",
+    distanceLabelRu: "±2,8 а.е. от Земли — между Марсом и Юпитером",
     jamChance: 0.06,
     damageChance: 0,
     damageFeeKt: 0,
@@ -563,14 +581,18 @@ export const MAPS: MapDef[] = [
   {
     name: "Permukaan Bulan — Mare Tenang",
     nameEn: "Moon Surface — Mare Tranquillitatis",
+    nameRu: "Поверхность Луны — Море Спокойствия",
     tagline: "Peta lanjutan · radiasi & debu tajam",
     taglineEn: "Advanced map · radiation & sharp dust",
+    taglineRu: "Продвинутая карта · радиация и острая пыль",
     desc: "Regolith bulan yang keras dan berdebu tajam. Besi-nikel dan kobalt jadi buruan utama, Zamrud Bulan berkilau hijau dari singkapan batuan, dan Rubi Mare yang langka menunggu penambang tekun. Radiasi permukaan menguras daya setiap operasi, dan debu bulan sesekali membuat bor macet.",
     descEn: "Hard lunar regolith and sharp dust. Iron-nickel and cobalt are the main prize, Moon Emerald glints green from rock outcrops, and the rare Mare Ruby waits for patient miners. Surface radiation drains energy on every operation, and moon dust occasionally jams the drill.",
+    descRu: "Твёрдый лунный реголит и острая пыль. Железо-никель и кобальт — главная добыча, Лунный изумруд зеленеет в обнажениях пород, а редкий Рубин Моря ждёт терпеливых шахтёров. Поверхностная радиация отнимает энергию при каждой операции, а лунная пыль иногда заклинивает бур.",
     minLayer: 9,
     image: "moon",
     distanceLabel: "384 ribu km dari Bumi — tetangga terdekat, batuan kerasnya yang bikin lama",
     distanceLabelEn: "384 thousand km from Earth — the closest neighbour, its hard rock is what slows you down",
+    distanceLabelRu: "384 тысячи км от Земли — ближайший сосед, но именно твёрдые породы замедляют работу",
     jamChance: 0.08,
     damageChance: 0.05,
     damageFeeKt: 60,
@@ -581,14 +603,18 @@ export const MAPS: MapDef[] = [
   {
     name: "Asteroid Logam 16 Psyche",
     nameEn: "Metal Asteroid 16 Psyche",
+    nameRu: "Металлический астероид 16 Психея",
     tagline: "Peta sulit · inti logam raksasa",
     taglineEn: "Hard map · giant metal core",
+    taglineRu: "Сложная карта · гигантское металлическое ядро",
     desc: "Asteroid raksasa yang hampir seluruhnya logam padat. Platinum dan iridium jauh lebih sering terlihat, Safir Bintang dan Berlian Psyche tertanam di inti besinya. Batuan sekeras ini membuat bor sering macet, dan serpihan logam tajam bisa merobek lambung kapal — siapkan KT untuk biaya perbaikan.",
     descEn: "A giant asteroid made almost entirely of solid metal. Platinum and iridium show up far more often, Star Sapphire and Psyche Diamond are embedded in its iron core. Rock this hard jams drills often, and sharp metal shards can tear the hull — keep KT ready for repair fees.",
+    descRu: "Гигантский астероид, почти целиком состоящий из твёрдого металла. Платина и иридий встречаются здесь гораздо чаще, Звёздный сапфир и Алмаз Психеи вкраплены в его железное ядро. Такая твёрдая порода часто заклинивает буры, а острые металлические осколки могут разорвать корпус корабля — держите KT наготове для оплаты ремонта.",
     minLayer: 14,
     image: "psyche",
     distanceLabel: "±3,3 SA dari Bumi — jauh di sabuk utama luar",
     distanceLabelEn: "±3.3 AU from Earth — deep in the outer main belt",
+    distanceLabelRu: "±3,3 а.е. от Земли — глубоко во внешнем главном поясе",
     jamChance: 0.12,
     damageChance: 0.1,
     damageFeeKt: 150,
@@ -599,14 +625,18 @@ export const MAPS: MapDef[] = [
   {
     name: "Sabuk Kuiper — Inti Es Antariksa",
     nameEn: "Kuiper Belt — Deep-Space Ice Core",
+    nameRu: "Пояс Койпера — ледяное ядро дальнего космоса",
     tagline: "Peta tersulit · ujung tata surya",
     taglineEn: "Hardest map · edge of the solar system",
+    taglineRu: "Самая сложная карта · край Солнечной системы",
     desc: "Ujung tata surya: gelap, membeku, dan bermandikan radiasi kosmik. Iridium dan kristal Helium-3 menunggu di sini, bersama Opal Es Hitam dan Kristal Voidium — permata termahal yang dikenal stasiun. Bor membeku dan macet, lambung kapal rapuh diterpa puing es, dan setiap operasi menguras daya jauh lebih besar. Hanya penambang paling sabar yang pulang kaya dari sini.",
     descEn: "The edge of the solar system: dark, freezing, and bathed in cosmic radiation. Iridium and Helium-3 crystals wait here, along with Black Ice Opal and Voidium Crystal — the most expensive gems the station knows. Drills freeze and jam, the hull grows brittle under ice debris, and every operation drains far more energy. Only the most patient miners come home rich from here.",
+    descRu: "Край Солнечной системы: темно, морозно, под космической радиацией. Здесь ждут иридий и кристаллы гелия-3, а вместе с ними Чёрный ледяной опал и Кристалл войдиума — самые дорогие самоцветы, известные станции. Буры замерзают и заклинивают, корпус становится хрупким под ударами ледяных обломков, и каждая операция отнимает гораздо больше энергии. Только самые терпеливые шахтёры возвращаются отсюда богатыми.",
     minLayer: 20,
     image: "kuiper",
     distanceLabel: "±40 SA dari Bumi — ujung tata surya, sinyal saja butuh berjam-jam",
     distanceLabelEn: "±40 AU from Earth — the edge of the solar system, even a signal takes hours",
+    distanceLabelRu: "±40 а.е. от Земли — край Солнечной системы, даже сигналу нужны часы",
     jamChance: 0.16,
     damageChance: 0.14,
     damageFeeKt: 300,
@@ -642,18 +672,21 @@ type UpgradeDef = {
   nameEn: string;
   desc: string;
   descEn: string;
+  /** Russian display strings (i18n) — same upgrade, same cost. */
+  nameRu: string;
+  descRu: string;
   baseCost: number;
   growth: number;
   maxLevel: number;
 };
 
 export const UPGRADES: UpgradeDef[] = [
-  { id: "beliung", name: "Lengan Bor Laser", nameEn: "Laser Drill Arm", desc: "Pengeboran setiap urat mineral 6% lebih cepat per level — mata bor laser memotong batuan lebih efisien.", descEn: "Drilling each mineral vein is 6% faster per level — the laser bit cuts through rock more efficiently.", baseCost: 150, growth: 1.6, maxLevel: 10 },
-  { id: "tangki", name: "Tangki O₂ & Baterai Surya", nameEn: "O₂ Tank & Solar Battery", desc: "KAPASITAS daya: +6 daya maksimum per level (30 → 90). Tangki O₂ yang lebih besar memperpanjang napas misi di permukaan, dan baterai surya menyimpan cadangan daya lebih banyak — jadi kamu bisa menjalankan lebih banyak scan & bor dalam satu sesi, dan daya yang terisi saat kamu tidak bermain tidak terbuang karena tangki cepat penuh. Upgrade ini TIDAK mempercepat isi ulang; kecepatan isi ulang diatur Reaktor Fusi Mini.", descEn: "Energy CAPACITY: +6 max energy per level (30 → 90). A bigger O₂ tank stretches your mission breath on the surface, and the solar battery banks more reserve energy — so you can run more scans & drills in one session, and energy gained while you're away isn't wasted by a tank that fills up too fast. This upgrade does NOT speed up recharge; recharge speed is set by the Mini Fusion Reactor.", baseCost: 120, growth: 1.6, maxLevel: 10 },
-  { id: "bor", name: "Reaktor Fusi Mini", nameEn: "Mini Fusion Reactor", desc: "KECEPATAN isi ulang daya: waktu isi ulang berkurang 10% per level — dari 4 menit per daya di level 0 menjadi sekitar 1 menit 24 detik per daya di level 10. Inilah upgrade yang membuat daya kapal pulih lebih cepat; tanpa upgrade ini isi ulang lambat.", descEn: "Energy recharge SPEED: recharge time drops 10% per level — from 4 minutes per energy at level 0 to about 1 minute 24 seconds per energy at level 10. This is the upgrade that makes ship energy recover faster; without it, recharge is slow.", baseCost: 200, growth: 1.7, maxLevel: 10 },
-  { id: "ransel", name: "Drone Kargo Otomatis", nameEn: "Automated Cargo Drone", desc: "+7% peluang hasil ganda saat mengambil hasil tambang (drone mengangkut 2× lipat) per level.", descEn: "+7% chance of a double haul when collecting mining results (the drone carries 2× as much) per level.", baseCost: 180, growth: 1.6, maxLevel: 10 },
-  { id: "negosiator", name: "Negosiator Stasiun Orbital", nameEn: "Orbital Station Negotiator", desc: "+5% harga jual semua mineral di Stasiun Orbital per level.", descEn: "+5% sell price for all minerals at the Orbital Station per level.", baseCost: 250, growth: 1.65, maxLevel: 10 },
-  { id: "pemindai", name: "Spektrometer Inti", nameEn: "Core Spectrometer", desc: "Scan asteroid 7% lebih cepat per level, dan +25% peluang urat Iridium & Kristal Helium-3 muncul di asteroid berikutnya.", descEn: "Asteroid scans 7% faster per level, and +25% chance that Iridium & Helium-3 crystal veins appear on the next asteroid.", baseCost: 400, growth: 1.75, maxLevel: 8 },
+  { id: "beliung", name: "Lengan Bor Laser", nameEn: "Laser Drill Arm", nameRu: "Лазерный буровой манипулятор", desc: "Pengeboran setiap urat mineral 6% lebih cepat per level — mata bor laser memotong batuan lebih efisien.", descEn: "Drilling each mineral vein is 6% faster per level — the laser bit cuts through rock more efficiently.", descRu: "Бурение каждой минеральной жилы на 6% быстрее за уровень — лазерное долото режет породу эффективнее.", baseCost: 150, growth: 1.6, maxLevel: 10 },
+  { id: "tangki", name: "Tangki O₂ & Baterai Surya", nameEn: "O₂ Tank & Solar Battery", nameRu: "Бак O₂ и солнечная батарея", desc: "KAPASITAS daya: +6 daya maksimum per level (30 → 90). Tangki O₂ yang lebih besar memperpanjang napas misi di permukaan, dan baterai surya menyimpan cadangan daya lebih banyak — jadi kamu bisa menjalankan lebih banyak scan & bor dalam satu sesi, dan daya yang terisi saat kamu tidak bermain tidak terbuang karena tangki cepat penuh. Upgrade ini TIDAK mempercepat isi ulang; kecepatan isi ulang diatur Reaktor Fusi Mini.", descEn: "Energy CAPACITY: +6 max energy per level (30 → 90). A bigger O₂ tank stretches your mission breath on the surface, and the solar battery banks more reserve energy — so you can run more scans & drills in one session, and energy gained while you're away isn't wasted by a tank that fills up too fast. This upgrade does NOT speed up recharge; recharge speed is set by the Mini Fusion Reactor.", descRu: "ЁМКОСТЬ энергии: +6 к максимуму энергии за уровень (30 → 90). Более вместительный бак O₂ продлевает дыхание миссии на поверхности, а солнечная батарея запасает больше резервной энергии — так вы сможете выполнять больше сканирований и бурений за одну сессию, а энергия, накопленная пока вас нет, не пропадёт из-за быстро заполняющегося бака. Это улучшение НЕ ускоряет перезарядку; скорость перезарядки задаёт Мини-реактор синтеза.", baseCost: 120, growth: 1.6, maxLevel: 10 },
+  { id: "bor", name: "Reaktor Fusi Mini", nameEn: "Mini Fusion Reactor", nameRu: "Мини-реактор синтеза", desc: "KECEPATAN isi ulang daya: waktu isi ulang berkurang 10% per level — dari 4 menit per daya di level 0 menjadi sekitar 1 menit 24 detik per daya di level 10. Inilah upgrade yang membuat daya kapal pulih lebih cepat; tanpa upgrade ini isi ulang lambat.", descEn: "Energy recharge SPEED: recharge time drops 10% per level — from 4 minutes per energy at level 0 to about 1 minute 24 seconds per energy at level 10. This is the upgrade that makes ship energy recover faster; without it, recharge is slow.", descRu: "СКОРОСТЬ перезарядки энергии: время перезарядки сокращается на 10% за уровень — с 4 минут за единицу энергии на 0 уровне примерно до 1 минуты 24 секунд за единицу энергии на 10 уровне. Именно это улучшение заставляет энергию корабля восстанавливаться быстрее; без него перезарядка медленная.", baseCost: 200, growth: 1.7, maxLevel: 10 },
+  { id: "ransel", name: "Drone Kargo Otomatis", nameEn: "Automated Cargo Drone", nameRu: "Автоматический грузовой дрон", desc: "+7% peluang hasil ganda saat mengambil hasil tambang (drone mengangkut 2× lipat) per level.", descEn: "+7% chance of a double haul when collecting mining results (the drone carries 2× as much) per level.", descRu: "+7% к шансу двойной добычи при сборе результатов (дрон перевозит в 2 раза больше) за уровень.", baseCost: 180, growth: 1.6, maxLevel: 10 },
+  { id: "negosiator", name: "Negosiator Stasiun Orbital", nameEn: "Orbital Station Negotiator", nameRu: "Переговорщик орбитальной станции", desc: "+5% harga jual semua mineral di Stasiun Orbital per level.", descEn: "+5% sell price for all minerals at the Orbital Station per level.", descRu: "+5% к цене продажи всех минералов на орбитальной станции за уровень.", baseCost: 250, growth: 1.65, maxLevel: 10 },
+  { id: "pemindai", name: "Spektrometer Inti", nameEn: "Core Spectrometer", nameRu: "Ядерный спектрометр", desc: "Scan asteroid 7% lebih cepat per level, dan +25% peluang urat Iridium & Kristal Helium-3 muncul di asteroid berikutnya.", descEn: "Asteroid scans 7% faster per level, and +25% chance that Iridium & Helium-3 crystal veins appear on the next asteroid.", descRu: "Сканирование астероидов на 7% быстрее за уровень и +25% к шансу появления жил иридия и кристаллов гелия-3 на следующем астероиде.", baseCost: 400, growth: 1.75, maxLevel: 8 },
 ];
 
 function oreById(id: string): OreDef | undefined {
@@ -907,10 +940,11 @@ export function fmtKt(n: number, lang: Lang = "id"): string {
   return fmtNum(n, lang);
 }
 
-/** Localized display helpers — pick the English field when the
- *  player's session language is "en", else the Indonesian original. */
+/** Localized display helpers — pick the Russian field when the
+ *  player's session language is "ru", the English field when "en",
+ *  else the Indonesian original. */
 export function oreName(ore: OreDef, lang: Lang): string {
-  return lang === "en" ? ore.nameEn : ore.name;
+  return lang === "ru" ? ore.nameRu : lang === "en" ? ore.nameEn : ore.name;
 }
 /** Localized ore name by id (null when the ore id is unknown). */
 export function oreNameById(id: string, lang: Lang): string | null {
@@ -918,53 +952,56 @@ export function oreNameById(id: string, lang: Lang): string | null {
   return ore ? oreName(ore, lang) : null;
 }
 export function mapName(map: MapDef, lang: Lang): string {
-  return lang === "en" ? map.nameEn : map.name;
+  return lang === "ru" ? map.nameRu : lang === "en" ? map.nameEn : map.name;
 }
 export function mapTagline(map: MapDef, lang: Lang): string {
-  return lang === "en" ? map.taglineEn : map.tagline;
+  return lang === "ru" ? map.taglineRu : lang === "en" ? map.taglineEn : map.tagline;
 }
 export function mapDesc(map: MapDef, lang: Lang): string {
-  return lang === "en" ? map.descEn : map.desc;
+  return lang === "ru" ? map.descRu : lang === "en" ? map.descEn : map.desc;
 }
 export function mapDistanceLabel(map: MapDef, lang: Lang): string {
-  return lang === "en" ? map.distanceLabelEn : map.distanceLabel;
+  return lang === "ru" ? map.distanceLabelRu : lang === "en" ? map.distanceLabelEn : map.distanceLabel;
 }
 export function upgradeName(def: UpgradeDef, lang: Lang): string {
-  return lang === "en" ? def.nameEn : def.name;
+  return lang === "ru" ? def.nameRu : lang === "en" ? def.nameEn : def.name;
 }
 export function upgradeDesc(def: UpgradeDef, lang: Lang): string {
-  return lang === "en" ? def.descEn : def.desc;
+  return lang === "ru" ? def.descRu : lang === "en" ? def.descEn : def.desc;
 }
-export function premiumPlanLabel(plan: { label: string; labelEn: string }, lang: Lang): string {
-  return lang === "en" ? plan.labelEn : plan.label;
+export function premiumPlanLabel(plan: { label: string; labelEn: string; labelRu: string }, lang: Lang): string {
+  return lang === "ru" ? plan.labelRu : lang === "en" ? plan.labelEn : plan.label;
 }
 /** Expedition names are stored as "Asteroid CODE — Nickname" (see
  *  generateExpedition). Translate the nickname part by index; the
- *  code and the word "Asteroid" stay the same in both languages. */
+ *  code and the word "Asteroid" stay the same in all languages. */
 export function localizeExpeditionName(name: string, lang: Lang): string {
-  if (lang !== "en") return name;
+  if (lang === "id") return name;
   const parts = name.split(" — ");
   const nick = parts[parts.length - 1] ?? "";
   const idx = ASTEROID_NICKNAMES.indexOf(nick);
   if (idx === -1) return name;
-  parts[parts.length - 1] = ASTEROID_NICKNAMES_EN[idx] ?? nick;
+  const list = lang === "ru" ? ASTEROID_NICKNAMES_RU : ASTEROID_NICKNAMES_EN;
+  parts[parts.length - 1] = list[idx] ?? nick;
   return parts.join(" — ");
 }
 /** Asteroid class strings ("Tipe C — Karbonan") are stored in the
  *  expedition; translate by (zone, index) lookup. */
 export function localizeKlass(klass: string, zone: number, lang: Lang): string {
-  if (lang !== "en") return klass;
+  if (lang === "id") return klass;
   const classes = ASTEROID_CLASSES[zone] ?? [];
   const idx = classes.indexOf(klass);
   if (idx === -1) return klass;
-  return ASTEROID_CLASSES_EN[zone]?.[idx] ?? klass;
+  const list = lang === "ru" ? ASTEROID_CLASSES_RU : ASTEROID_CLASSES_EN;
+  return list[zone]?.[idx] ?? klass;
 }
 /** Anomaly text is stored in the expedition; translate by exact match. */
 export function localizeAnomaly(text: string | null, lang: Lang): string | null {
-  if (text == null || lang !== "en") return text;
+  if (text == null || lang === "id") return text;
   const idx = ANOMALIES.findIndex((a) => a.text === text);
   if (idx === -1) return text;
-  return ANOMALIES_EN[idx] ?? text;
+  const list = lang === "ru" ? ANOMALIES_RU : ANOMALIES_EN;
+  return list[idx] ?? text;
 }
 /** Energy to fly to a map: the base hop plus 2 per map step of distance. */
 function travelCostFor(zoneIdx: number, premium: boolean): number {
