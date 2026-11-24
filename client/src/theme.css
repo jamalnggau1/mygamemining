@@ -349,6 +349,29 @@
 .btn-press {
   transition: transform 0.12s ease, filter 0.12s ease;
 }
+
+/* Panel neon sudut terpangkas (redesain 2026-11-24, dari referensi
+   tampilan baru): border cyan dibuat dari gradasi border-box karena
+   clip-path memotong border biasa; glow dari drop-shadow yang
+   mengikuti bentuk terpangkas. */
+.panel-neon {
+  position: relative;
+  background:
+    linear-gradient(var(--surface), var(--surface)) padding-box,
+    linear-gradient(135deg, rgba(34, 211, 238, 0.95), rgba(34, 211, 238, 0.25) 45%, rgba(34, 211, 238, 0.8)) border-box;
+  border: 1.5px solid transparent;
+  clip-path: polygon(14px 0, 100% 0, 100% calc(100% - 14px), calc(100% - 14px) 100%, 0 100%, 0 14px);
+  filter: drop-shadow(0 0 10px rgba(34, 211, 238, 0.28));
+}
+
+/* Banner iklan emas (redesain 2026-11-24): bentuk chevron dengan
+   ujung runcing kiri-kanan, gradasi emas, teks gelap tebal. */
+.ad-banner-gold {
+  background: linear-gradient(90deg, #f59e0b, #fbbf24 30%, #fde68a 50%, #fbbf24 70%, #f59e0b);
+  color: #1c1005;
+  clip-path: polygon(14px 0, calc(100% - 14px) 0, 100% 50%, calc(100% - 14px) 100%, 14px 100%, 0 50%);
+  filter: drop-shadow(0 0 12px rgba(251, 191, 36, 0.35));
+}
 .btn-press:active {
   transform: scale(0.97);
   filter: brightness(1.12);

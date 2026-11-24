@@ -13,6 +13,7 @@ import { playClick, playError, playSuccess, setSoundEnabled, soundEnabled } from
 import { ExpandableText } from "./ExpandableText";
 import heroImg from "./assets/hero.webp";
 import asteroidImg from "./assets/asteroid.webp";
+import sectorRingsImg from "./assets/sector-rings.webp";
 import oresImg from "./assets/ores.webp";
 import stationImg from "./assets/station.webp";
 import moonImg from "./assets/map-moon.webp";
@@ -972,35 +973,46 @@ export function App() {
       </div>
 
       <main className="mx-auto max-w-3xl px-3 pb-8">
-        <section className="-mt-1 rounded-2xl border border-[var(--border)] bg-[var(--surface)]/95 p-3 shadow-2xl backdrop-blur">
-          <div className="flex flex-wrap items-end justify-between gap-4">
-            <div>
-              <p className="text-[11px] font-bold uppercase tracking-[0.25em] text-[var(--dim)]">{t("balTitle")}</p>
-              <div className="mt-1 flex items-center gap-3">
-                <img src={ktLogoImg} alt={t("ktLogoAlt")} className="h-10 w-10 shrink-0 rounded-2xl object-cover shadow-lg shadow-amber-500/20 ring-2 ring-amber-400/50" />
-                <p className="font-display text-3xl leading-tight text-cyan-300"><span className={balanceGlow ? "balance-glow" : undefined}>{fmt(p.ktBalance)}</span> <span className="text-xl">KT</span></p>
+        <div className="-mt-1 space-y-3">
+          {/* Panel saldo — panel neon (redesain 2026-11-24) */}
+          <section className="panel-neon p-3">
+            <p className="text-[11px] font-bold uppercase tracking-[0.25em] text-cyan-300">{t("balTitle")}</p>
+            <div className="mt-1 flex items-center gap-3">
+              <img src={ktLogoImg} alt={t("ktLogoAlt")} className="h-10 w-10 shrink-0 rounded-2xl object-cover shadow-lg shadow-amber-500/20 ring-2 ring-amber-400/50" />
+              <p className="font-display text-3xl leading-tight text-cyan-300"><span className={balanceGlow ? "balance-glow" : undefined}>{fmt(p.ktBalance)}</span> <span className="text-xl">KT</span></p>
+            </div>
+            <p className="text-sm text-[var(--dim)]">{ktToNextUsdt > 0 ? t("balNeed", { usdt: fmt(p.usdtEquivalent), kt: fmt(ktToNextUsdt) }) : (<span className="inline-flex items-center gap-1 font-bold text-emerald-300"><CheckIcon size={14} /> {t("balReady")}</span>)}</p>
+            {p.premium.active ? (
+              <p className="mt-1.5 inline-flex items-center gap-1.5 rounded-full border border-amber-400/50 bg-amber-400/15 px-2.5 py-0.5 text-xs font-bold text-amber-300"><CrownIcon size={13} /> {t("premiumActive", { tier: p.premium.tier === "pro" ? t("dualDrillTag") : t("standardTag") })}{p.premium.until ? t("premiumUntilShort", { date: fmtDate(p.premium.until) }) : ""}</p>
+            ) : (
+              <button type="button" onClick={() => setTab("upgrade")} className="btn-press mt-1.5 inline-flex items-center gap-1.5 rounded-full border border-amber-400/40 bg-amber-400/10 px-2.5 py-0.5 text-xs font-bold text-amber-200"><CrownIcon size={13} /> {t("activatePremium")}</button>
+            )}
+          </section>
+          {/* Panel Posisi Misi — latar cincin (redesain 2026-11-24) */}
+          <section className="panel-neon relative overflow-hidden p-3">
+            <img src={sectorRingsImg} alt="" aria-hidden="true" className="absolute inset-0 h-full w-full object-cover opacity-80" />
+            <div className="absolute inset-0 bg-[#050810]/50" />
+            <div className="relative flex items-start justify-between gap-4">
+              <div className="min-w-0">
+                <p className="text-[11px] font-bold uppercase tracking-[0.25em] text-cyan-300">{t("missionPos")}</p>
+                <p className="font-display mt-1 text-xl leading-tight">{t("sector", { n: p.layer })}</p>
+                {p.sectorProgress && (<p className="text-xs text-slate-200">{t("sectorProgress", { current: p.sectorProgress.current, needed: p.sectorProgress.needed, next: p.layer + 1 })}</p>)}
+                <p className="text-sm text-slate-200">{t("kmFromEarth", { km: fmt(p.depthMeters) })}</p>
               </div>
-              <p className="text-sm text-[var(--dim)]">{ktToNextUsdt > 0 ? t("balNeed", { usdt: fmt(p.usdtEquivalent), kt: fmt(ktToNextUsdt) }) : (<span className="inline-flex items-center gap-1 font-bold text-emerald-300"><CheckIcon size={14} /> {t("balReady")}</span>)}</p>
-              {p.premium.active ? (
-                <p className="mt-1.5 inline-flex items-center gap-1.5 rounded-full border border-amber-400/50 bg-amber-400/15 px-2.5 py-0.5 text-xs font-bold text-amber-300"><CrownIcon size={13} /> {t("premiumActive", { tier: p.premium.tier === "pro" ? t("dualDrillTag") : t("standardTag") })}{p.premium.until ? t("premiumUntilShort", { date: fmtDate(p.premium.until) }) : ""}</p>
-              ) : (
-                <button type="button" onClick={() => setTab("upgrade")} className="btn-press mt-1.5 inline-flex items-center gap-1.5 rounded-full border border-amber-400/40 bg-amber-400/10 px-2.5 py-0.5 text-xs font-bold text-amber-200"><CrownIcon size={13} /> {t("activatePremium")}</button>
-              )}
+              <div className="w-28 shrink-0 text-right sm:w-32">
+                <p className="inline-flex items-center justify-end gap-1 text-[11px] font-semibold text-[var(--dim)]"><ZapIcon size={13} /> {t("shipEnergyLabel")}</p>
+                <p className="text-xl font-bold leading-tight text-white">{p.energy}/{p.maxEnergy}</p>
+                <div className="energy-shimmer ml-auto mt-1 h-2 w-24 overflow-hidden rounded-full bg-black/50" role="progressbar" aria-valuenow={p.energy} aria-valuemin={0} aria-valuemax={p.maxEnergy} aria-label={t("energyAria")}><div className="h-full rounded-full bg-gradient-to-r from-cyan-400 to-sky-600 transition-all" style={{ width: `${p.maxEnergy ? (p.energy / p.maxEnergy) * 100 : 0}%` }} /></div>
+                <p className="mt-1.5 text-[11px] text-[var(--dim)]">{t("regenLabel")}</p>
+                <p className="text-sm font-bold leading-tight text-amber-300">{t("regenValue", { dur: fmtDur(p.regenSeconds) })}</p>
+                {p.energy < p.maxEnergy && (<p className="text-[11px] text-slate-200">{t("fullIn", { dur: fmtDur(p.regenSeconds * (p.maxEnergy - p.energy)) })}</p>)}
+              </div>
             </div>
-            <div className="text-right">
-              <p className="text-[11px] font-bold uppercase tracking-[0.25em] text-[var(--dim)]">{t("missionPos")}</p>
-              <p className="font-display text-xl leading-tight">{t("sector", { n: p.layer })}</p>
-              {p.sectorProgress && (<p className="text-xs text-[var(--dim)]">{t("sectorProgress", { current: p.sectorProgress.current, needed: p.sectorProgress.needed, next: p.layer + 1 })}</p>)}
-              <p className="text-sm text-[var(--dim)]">{t("kmFromEarth", { km: fmt(p.depthMeters) })}</p>
-            </div>
-          </div>
-          <div className="mt-3">
-            <div className="flex justify-between text-xs font-bold"><span className="inline-flex items-center gap-1"><ZapIcon size={13} /> {t("shipPower", { e: p.energy, m: p.maxEnergy })}</span><span className="text-[var(--dim)]">{t("regenOne", { dur: fmtDur(p.regenSeconds) })}{p.energy < p.maxEnergy ? t("fullIn", { dur: fmtDur(p.regenSeconds * (p.maxEnergy - p.energy)) }) : ""}</span></div>
-            <div className="energy-shimmer mt-1 h-3 overflow-hidden rounded-full bg-[var(--surface2)]" role="progressbar" aria-valuenow={p.energy} aria-valuemin={0} aria-valuemax={p.maxEnergy} aria-label={t("energyAria")}><div className="h-full rounded-full bg-gradient-to-r from-cyan-400 to-sky-600 transition-all" style={{ width: `${p.maxEnergy ? (p.energy / p.maxEnergy) * 100 : 0}%` }} /></div>
-          </div>
+          </section>
           {p.canClaimDailyBonus && (<button type="button" onClick={() => claimBonus.mutate()} disabled={claimBonus.isPending} className="btn-press mt-2 inline-flex w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-cyan-400 bg-cyan-400/10 px-4 py-2 font-bold text-cyan-200"><GiftIcon size={17} /> {t("claimDaily", { kt: fmt(p.dailyBonusKt) })}</button>)}
           <div className="mt-2">
-            <button type="button" onClick={handleWatchAd} disabled={watchAd.isPending || adPlaying || !p.ads.canWatch} aria-label={t("adAriaFull", { reward: fmt(p.ads.rewardKt), remaining: p.ads.remainingToday, cap: p.ads.dailyCap })} className="btn-press inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-amber-400 to-yellow-500 px-4 py-2.5 font-display text-sm text-black shadow-lg shadow-amber-500/20 disabled:opacity-40">
+            <button type="button" onClick={handleWatchAd} disabled={watchAd.isPending || adPlaying || !p.ads.canWatch} aria-label={t("adAriaFull", { reward: fmt(p.ads.rewardKt), remaining: p.ads.remainingToday, cap: p.ads.dailyCap })} className="ad-banner-gold btn-press inline-flex w-full items-center justify-center gap-2 px-4 py-2.5 text-sm font-bold disabled:opacity-40">
+              <span aria-hidden="true">«</span>
               <PlayIcon size={18} />
               {adPlaying
                 ? t("adPlaying")
@@ -1009,12 +1021,13 @@ export function App() {
                   : p.ads.cooldownRemainingSec > 0
                     ? t("adNextIn", { s: p.ads.cooldownRemainingSec })
                     : t("watchAdBtn", { kt: fmt(p.ads.rewardKt) })}
+              <span aria-hidden="true">»</span>
             </button>
             <p className="mt-1.5 text-center text-xs text-[var(--dim)]">
               {t("adNote", { watched: p.ads.watchedToday, cap: p.ads.dailyCap })}
             </p>
           </div>
-        </section>
+        </div>
 
         <nav aria-label={t("navLabel")} className="sticky top-0 z-20 mt-3 grid grid-cols-3 gap-1.5 bg-[var(--bg)]/95 py-1.5 backdrop-blur">
           {tabs.map((t) => (<button key={t.id} type="button" onClick={() => setTab(t.id)} aria-pressed={tab === t.id} className={`btn-press relative inline-flex min-h-9 w-full min-w-0 items-center justify-center gap-1.5 rounded-2xl px-2 py-1.5 text-center text-xs font-bold leading-tight ${tab === t.id ? "bg-cyan-400 text-black" : "bg-[var(--surface)] text-[var(--text)] border border-[var(--border)]"}`}><span className="shrink-0">{t.icon}</span><span className="min-w-0">{t.label}</span>{t.badge != null && (<span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-[11px] font-bold text-white">{t.badge}</span>)}</button>))}
