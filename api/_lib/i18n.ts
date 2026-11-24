@@ -253,6 +253,12 @@ export interface ServerStrings {
   logWdCancel: (id: number, kt: number) => string;
   logWdApprove: (id: number, usdt: number) => string;
   logWdPaid: (id: number, usdt: number) => string;
+  // Notifikasi Telegram ke pemilik WD (2026-11-24): dikirim dalam
+  // bahasa PENERIMA (dari player.language), bukan bahasa admin.
+  wdNotifyApproved: (usdt: number) => string;
+  wdNotifyPaid: (usdt: number) => string;
+  // Pengingat tidak aktif (2026-11-24): sama, per bahasa pemain.
+  nudgeText: (url: string) => string;
   logWdReject: (id: number, kt: number) => string;
   // Referral: hadiah 10 KT yang dibayar ke pengundang saat teman
   // yang diundangnya menyelesaikan ekspedisi pertama.
@@ -447,6 +453,12 @@ const id: ServerStrings = {
     `WD #${id} (${usdt} USDT) disetujui — siap kirim USDT manual.`,
   logWdPaid: (id, usdt) =>
     `WD #${id} selesai — ${usdt} USDT telah dikirim manual ke dompet pemain.`,
+  wdNotifyApproved: (usdt) =>
+    `WD kamu sebesar ${fmtNum(usdt, "id")} USDT sudah disetujui dan sedang diproses.`,
+  wdNotifyPaid: (usdt) =>
+    `WD kamu sebesar ${fmtNum(usdt, "id")} USDT sudah dibayar. Cek dompetmu!`,
+  nudgeText: (url) =>
+    `Sudah 3 hari kamu tidak menambang di ASTRA MINING — asteroidmu menunggumu! Buka game dan lanjutkan ekspedisimu.\n${url}`,
   logWdReject: (id, kt) =>
     `WD #${id} ditolak — ${fmtNum(kt, "id")} KT dikembalikan ke saldo pemain.`,
   logReferralReward: (amount) =>
@@ -650,6 +662,12 @@ const en: ServerStrings = {
     `WD #${id} (${usdt} USDT) approved — ready for manual USDT transfer.`,
   logWdPaid: (id, usdt) =>
     `WD #${id} complete — ${usdt} USDT has been sent manually to the player's wallet.`,
+  wdNotifyApproved: (usdt) =>
+    `Your withdrawal of ${fmtNum(usdt, "en")} USDT has been approved and is being processed.`,
+  wdNotifyPaid: (usdt) =>
+    `Your withdrawal of ${fmtNum(usdt, "en")} USDT has been paid. Check your wallet!`,
+  nudgeText: (url) =>
+    `You haven't mined in ASTRA MINING for 3 days — your asteroid is waiting for you! Open the game and continue your expedition.\n${url}`,
   logWdReject: (id, kt) =>
     `WD #${id} rejected — ${fmtNum(kt, "en")} KT refunded to the player's balance.`,
   logReferralReward: (amount) =>

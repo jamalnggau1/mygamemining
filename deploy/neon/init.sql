@@ -76,6 +76,11 @@ CREATE TABLE IF NOT EXISTS player (
   -- NULL = belum pernah. Cron mengisi ini tiap kali pengingat
   -- terkirim; jeda minimum antar pengingat 7 hari.
   last_inactive_nudge_at TIMESTAMPTZ,
+  -- Bahasa terakhir yang dipilih pemain (2026-11-24, migrasi
+  -- 0011): disimpan dari `lang` tiap request supaya pesan otomatis
+  -- (notifikasi WD, pengingat tidak aktif) dikirim dalam bahasa
+  -- PENERIMA. Default 'id'.
+  language TEXT NOT NULL DEFAULT 'id',
   -- PvP (2026-11-22, migrasi 0010): perisai 1 jam setelah diserang
   -- (menang/kalah), kapan terakhir menyerang (cooldown 30 menit
   -- antar serangan), dan penawaran pertemuan yang sedang aktif

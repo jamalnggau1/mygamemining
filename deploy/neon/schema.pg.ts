@@ -136,6 +136,11 @@ export const player = pgTable("player", {
     withTimezone: true,
     mode: "date",
   }),
+  // Bahasa terakhir yang dipilih pemain (2026-11-24, migrasi
+  // 0011): disimpan dari `lang` tiap request supaya pesan otomatis
+  // (notifikasi WD, pengingat tidak aktif) dikirim dalam bahasa
+  // PENERIMA, bukan bahasa admin/pengirim. Default "id".
+  language: text("language").notNull().default("id"),
   // PvP (2026-11-22, migrasi 0010): perisai 1 jam setelah diserang
   // (menang/kalah), kapan terakhir menyerang (cooldown 30 menit
   // antar serangan), dan penawaran pertemuan yang sedang aktif

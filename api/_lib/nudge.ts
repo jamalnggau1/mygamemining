@@ -13,13 +13,14 @@
 // (/api/cron/inactive-nudge.ts, dipanggil Vercel Cron 1×/hari)
 // tetap tipis (hanya auth CRON_SECRET + panggil runInactiveNudge)
 // dan supaya logikanya bisa dites langsung dari notify.test.ts
-// tanpa HTTP. Pesan selalu Bahasa Indonesia — bahasa per pemain
-// tidak disimpan server (keterbatasan yang sama seperti log yang
-// ditulis admin).
+// tanpa HTTP. Pesan dikirim dalam bahasa tiap pemain
+// (player.language, 2026-11-24) — bukan Bahasa Indonesia untuk
+// semua orang seperti sebelumnya.
 
 import { eq, isNotNull, sql } from "drizzle-orm";
 import * as schema from "../../deploy/neon/schema.pg.js";
 import { type Db } from "./store.js";
+import { normalizeLang, serverStrings, type Lang } from "./i18n.js";
 import { sendTelegramMessage } from "./stars.js";
 
 /** Pemain dianggap tidak aktif bila terakhir beraktivitas lebih
@@ -30,12 +31,18 @@ export const NUDGE_COOLDOWN_DAYS = 7;
 /** Tautan Mini App yang disertakan di pesan pengingat. */
 export const MINI_APP_URL = "https://t.me/astra_mining_bot/astra_mining";
 
-/** Teks pengingat (Bahasa Indonesia). */
-export function nudgeText(): string {
-  return `Sudah 3 hari kamu tidak menambang di ASTRA MINING — asteroidmu menunggumu! Buka game dan lanjutkan ekspedisimu.\n${MINI_APP_URL}`;
+/** Teks pengingat dalam bahasa pemain (default "id" bila bahasa
+ *  tidak dikenal — pemain lama yang belum pernah membuka game
+ *  sejak migrasi 0011). Tautan Mini App sama untuk semua bahasa. */
+export function nudgeText(lang: Lang = "id"): string {
+  return serverStrings(lang).nudgeText(MINI_APP_URL);
 }
 
-export type NudgeCandidate = { id: number; telegramId: number };
+export type NudgeCandidate = {
+  id: number;
+  telegramId: number;
+  language: Lang;
+};
 
 function asDate(v: unknown): Date | null {
   if (v instanceof Date) return v;
@@ -67,6 +74,7 @@ export async function selectNudgeCandidates(
       telegramId: schema.player.telegramId,
       createdAt: schema.player.createdAt,
       lastNudgeAt: schema.player.lastInactiveNudgeAt,
+      language: schema.player.language,
     })
     .from(schema.player)
     .where(isNotNull(schema.player.telegramId));
@@ -92,7 +100,11 @@ export async function selectNudgeCandidates(
     const nudged = asDate(p.lastNudgeAt);
     if (nudged !== null && nudged.getTime() >= cooldownCutoff.getTime())
       continue;
-    out.push({ id: p.id, telegramId: p.telegramId });
+    out.push({
+      id: p.id,
+      telegramId: p.telegramId,
+      language: normalizeLang(p.language),
+    });
   }
   return out;
 }
@@ -121,7 +133,7 @@ export async function runInactiveNudge(
   for (const c of candidates) {
     let ok = false;
     try {
-      ok = await send(c.telegramId, nudgeText());
+      ok = await send(c.telegramId, nudgeText(c.language));
     } catch {
       ok = false;
     }

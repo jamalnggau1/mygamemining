@@ -1168,6 +1168,20 @@ async function loadPlayer(db: Db, session: Session): Promise<PlayerRow> {
       .where(eq(schema.player.id, playerId));
     p = { ...p, username: session.username };
   }
+  // Bahasa pemain terakhir (2026-11-24): disimpan supaya pesan
+  // otomatis (notifikasi WD, pengingat tidak aktif) bisa dikirim
+  // dalam bahasa PENERIMA, bukan bahasa admin/pengirim. Diperbarui
+  // di tiap request bila berubah (getGameState dipanggil tiap buka
+  // aplikasi) — satu UPDATE tambahan hanya saat bahasanya memang
+  // berbeda, jadi request biasa tanpa ganti bahasa tidak menambah
+  // beban tulis.
+  if (session.lang !== p.language) {
+    await db
+      .update(schema.player)
+      .set({ language: session.lang })
+      .where(eq(schema.player.id, playerId));
+    p = { ...p, language: session.lang };
+  }
   // Anti-cheat otomatis: evaluasi berkala aturan nonstop +
   // multi-akun (max 1×/jam/pemain, di dalam fungsi). Tidak pernah
   // melempar — deteksi gagal = flag sekadar tidak naik, game tetap
@@ -4318,6 +4332,11 @@ export const gameActions = {
       // Saldo yang berubah adalah saldo PEMILIK WD, bukan saldo admin.
       const target = await loadPlayerRowOrNull(db, wd.playerId);
       if (!target) return { ok: false, error: S.errWdOwnerNotFound, status: wd.status };
+      // Bahasa PENERIMA WD (player.language, disimpan dari request
+      // terakhirnya) — dipakai notifikasi approve + pay, bukan
+      // bahasa admin yang memproses WD ini.
+      const targetLang = normalizeLang(target.language);
+      const T = serverStrings(targetLang);
 
       if (args.action === "approve") {
         if (wd.status !== "pending")
@@ -4331,7 +4350,7 @@ export const gameActions = {
         // tidak menggagalkan approve).
         await notifyWdPlayer(
           target.telegramId,
-          `WD kamu sebesar ${fmtNum(wd.amountUsdt, "id")} USDT sudah disetujui dan sedang diproses.`,
+          T.wdNotifyApproved(wd.amountUsdt),
         );
         return { ok: true, error: null, status: "approved" as const };
       }
@@ -4354,10 +4373,11 @@ export const gameActions = {
           .where(eq(schema.player.id, target.id));
         await logActivity(db, wd.playerId, "wd_paid", S.logWdPaid(wd.id, wd.amountUsdt), null);
         // Notifikasi Telegram ke pemain (best-effort — gagal kirim
-        // tidak menggagalkan penandaan dibayar).
+        // tidak menggagalkan penandaan dibayar). Bahasa = bahasa
+        // PENERIMA, seperti di approve.
         await notifyWdPlayer(
           target.telegramId,
-          `WD kamu sebesar ${fmtNum(wd.amountUsdt, "id")} USDT sudah dibayar. Cek dompetmu!`,
+          T.wdNotifyPaid(wd.amountUsdt),
         );
         return { ok: true, error: null, status: "paid" as const };
       }

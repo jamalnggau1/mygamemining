@@ -1,0 +1,22 @@
+-- =====================================================================
+-- ASTRA MINING — migrasi 0011: bahasa pemain (untuk pesan otomatis)
+-- =====================================================================
+-- Jalankan SEKALI pada database Neon yang SUDAH berisi tabel game
+-- (migrasi 0001–0010 sudah diterapkan):
+--   Neon Console → SQL Editor → paste seluruh file ini → Run.
+--
+--   ⚠️  JALANKAN MIGRASI INI SEBELUM DEPLOY KODE BAHASA PESAN:
+--   getGameState menyimpan bahasa pemain ke kolom baru di setiap
+--   request; notifikasi WD + pengingat tidak aktif membaca kolom
+--   ini — tanpa kolom, game tidak bisa dibuka. Sama seperti migrasi
+--   0006/0007/0008/0010.
+--
+-- Yang ditambah:
+--   1. player.language TEXT NOT NULL DEFAULT 'id' — bahasa terakhir
+--      yang dipilih pemain ("id" | "en"), disimpan dari `lang` yang
+--      dikirim klien di tiap request. Pemain lama mendapat 'id'
+--      (default) sampai mereka membuka game lagi, lalu bahasanya
+--      diperbarui otomatis. Dipakai HANYA untuk memilih bahasa pesan
+--      otomatis (notifikasi WD, pengingat tidak aktif) — tidak pernah
+--      untuk logika game, harga, atau aturan.
+ALTER TABLE player ADD COLUMN IF NOT EXISTS language TEXT NOT NULL DEFAULT 'id';
