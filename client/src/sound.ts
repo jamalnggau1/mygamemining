@@ -110,12 +110,28 @@ function noiseBuffer(c: AudioContext): AudioBuffer {
   return noiseBuf;
 }
 
-/** Klik pendek (urat terkumpul, toggle suara dinyalakan). */
+/** Klik kayu E (dipilih owner): dentuman 220 Hz + desis pendek.
+ *  Dipakai di semua tombol (listener pointerdown global di App)
+ *  dan saat urat terkumpul. */
 export function playClick(): void {
   if (!soundEnabled()) return;
   const c = ac();
   if (!c) return;
-  tone(c, 660, 0, 0.07, "sine", 0.07);
+  tone(c, 220, 0, 0.12, "sine", 0.1);
+  try {
+    const t0 = c.currentTime;
+    const noise = c.createBufferSource();
+    noise.buffer = noiseBuffer(c);
+    const ng = c.createGain();
+    ng.gain.setValueAtTime(0.03, t0);
+    ng.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.06);
+    noise.connect(ng);
+    ng.connect(c.destination);
+    noise.start(t0);
+    noise.stop(t0 + 0.08);
+  } catch {
+    // Noise gagal — dentuman saja cukup.
+  }
 }
 
 /** Sapuan radar naik + gema (scan dimulai). */

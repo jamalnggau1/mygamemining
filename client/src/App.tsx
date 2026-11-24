@@ -702,6 +702,19 @@ export function App() {
     };
   }, []);
 
+  // Bunyi klik kayu di semua tombol: satu listener pointerdown
+  // global — tombol apa pun yang ditekan berbunyi klik (playClick
+  // menghormati toggle Suara). Bunyi khusus aksi (scan/bor/koin/
+  // klaim/sukses) tetap bunyi saat aksinya berhasil, jadi pemakaian
+  // playClick di onSuccess collect dihapus supaya tidak dobel.
+  useEffect(() => {
+    const onTap = (e: PointerEvent) => {
+      if ((e.target as Element | null)?.closest?.("button")) playClick();
+    };
+    document.addEventListener("pointerdown", onTap);
+    return () => document.removeEventListener("pointerdown", onTap);
+  }, []);
+
   const startScan = useMutation({
     mutationFn: () => api.startScan({}),
     onSuccess: (r) => { if (r.ok) playScan(); showResult(r.ok, r.error, <>{t("scanStarted", { dur: fmtDur(r.durationSec) })}</>); refresh(); },
@@ -723,14 +736,12 @@ export function App() {
       } else if (r.isRare) {
         showBanner("good", (<span className="inline-flex items-center gap-1.5"><SparkleIcon size={15} /> {t("collectRare", { ore: r.oreName ?? t("oreFallback"), qty: r.qty })}{r.hullHit ? t("collectRareHull", { fee: fmt(r.repairFeeKt) }) : ""}</span>));
         fireBurst("rare");
-        if (!r.hullHit) playClick();
       } else if (r.hullHit) {
         showBanner("bad", t("collectHull", { ore: r.oreName ?? t("oreFallback"), qty: r.qty, fee: fmt(r.repairFeeKt) }));
         fireBurst("mine");
       } else {
         showBanner("info", t("collectOk", { ore: r.oreName ?? t("oreFallback"), qty: r.qty }));
         fireBurst("mine");
-        playClick();
       }
       refresh();
     },
