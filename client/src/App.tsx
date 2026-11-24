@@ -1850,7 +1850,9 @@ function KomunitasTab({ userId, referrals, channelBonusClaimed, channelBonusKt, 
             <ExpandableText className="mt-0.5 text-sm text-[var(--dim)]">{t("commChannelDesc")}</ExpandableText>
           </div>
         </div>
-        <button type="button" onClick={() => openExternalLink(CHANNEL_URL)} aria-label={t("commChannelAria")} className="btn-press mt-2.5 w-full rounded-xl bg-cyan-400 px-4 py-2 font-bold text-black">{t("commChannelBtn")}</button>
+        {!channelBonusClaimed && (
+          <button type="button" onClick={() => openExternalLink(CHANNEL_URL)} aria-label={t("commChannelAria")} className="btn-press mt-2.5 w-full rounded-xl bg-cyan-400 px-4 py-2 font-bold text-black">{t("commChannelBtn")}</button>
+        )}
         {userId != null && (channelBonusClaimed ? (
           <p className="mt-2.5 text-center text-sm font-bold text-emerald-300">{t("commChannelClaimed")}</p>
         ) : (
