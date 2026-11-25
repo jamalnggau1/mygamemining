@@ -1623,11 +1623,21 @@ function JobPanel({ job, dualDrill, onCollect, collecting, onCancel, cancelling,
   );
 }
 
+// Alamat TON (cermin isTonAddress di server — klien tidak bisa impor
+// kode server): friendly mainnet 48 karakter diawali EQ/UQ, atau
+// raw "0:" + 64 hex. Dipakai untuk menonaktifkan tombol WD + pesan
+// kesalahan langsung di form; server tetap memvalidasi ulang.
+const isTonAddress = (a: string) =>
+  /^[EU]Q[A-Za-z0-9_-]{46}$/.test(a) || /^0:[0-9a-fA-F]{64}$/.test(a);
+
 function WdTab({ data, onCancel, cancelling, onDone }: { data: GameState; onCancel: (id: number) => void; cancelling: boolean; onDone: (ok: boolean, error: string | null, good: string) => void }) {
   const p = data.player; const [wallet, setWallet] = useState(""); const [usdt, setUsdt] = useState(p.wdMinUsdt);
   const ktCost = Math.round(usdt * p.ktPerUsdt); const enough = p.ktBalance >= ktCost;
   const belowMin = ktCost < p.wdMinKt; const offStep = ktCost % p.wdStepKt !== 0;
   const aboveMax = ktCost > p.wdMaxKt;
+  // Alamat TON (sama seperti isTonAddress di server): friendly mainnet
+  // 48 karakter diawali EQ/UQ, atau raw "0:" + 64 hex.
+  const walletOk = isTonAddress(wallet.trim());
   const request = useMutation({ mutationFn: () => api.requestWithdrawal({ walletAddress: wallet.trim(), amountKt: ktCost }), onSuccess: (r) => { if (r.ok) { playCoin(); setWallet(""); } onDone(r.ok, r.error, t("wdRequestSent", { id: r.wdId ?? "", kt: fmt(ktCost) })); } });
   return (
     <section className="mt-3 space-y-3">
@@ -1642,10 +1652,10 @@ function WdTab({ data, onCancel, cancelling, onDone }: { data: GameState; onCanc
         <ol className="mt-2 list-decimal space-y-1 pl-5 text-sm leading-relaxed"><li><ExpandableText>{trich("wdRule1")}</ExpandableText></li><li><ExpandableText>{trich("wdRule2a", { min: fmt(p.wdMinUsdt), minkt: fmt(p.wdMinKt) })}{p.wdPaidCount > 0 ? trich("wdRule2b", { count: p.wdPaidCount }) : trich("wdRule2c")}{t("wdRule2d")}</ExpandableText></li><li><ExpandableText>{trich("wdRule3")}</ExpandableText></li><li><ExpandableText>{t("wdRule4")}</ExpandableText></li><li><ExpandableText>{trich("wdRule5")}</ExpandableText></li><li><ExpandableText>{t("wdRule6")}</ExpandableText></li></ol>
         <div className="mt-3"><div className="flex justify-between text-xs font-bold"><span>{t("wdProgress", { min: fmt(p.wdMinUsdt) })}</span><span className="text-[var(--dim)]">{t("wdProgressLine", { have: fmt(Math.min(p.ktBalance, p.wdMinKt)), need: fmt(p.wdMinKt) })}</span></div><div className="mt-1 h-3 overflow-hidden rounded-full bg-[var(--surface2)]"><div className="h-full rounded-full bg-cyan-400 transition-all" style={{ width: `${Math.min(100, (p.ktBalance / p.wdMinKt) * 100)}%` }} /></div></div>
         <form className="mt-3 space-y-2.5" onSubmit={(e) => { e.preventDefault(); request.mutate(); }}>
-          <div><label htmlFor="wallet" className="text-sm font-bold">{t("wdWalletLabel")}</label><input id="wallet" value={wallet} onChange={(e) => setWallet(e.target.value)} placeholder={t("wdWalletPlaceholder")} autoComplete="off" className="mt-1 w-full rounded-xl border border-[var(--border)] bg-[var(--bg)] px-3 py-2 font-mono text-sm" /></div>
+          <div><label htmlFor="wallet" className="text-sm font-bold">{t("wdWalletLabel")}</label><input id="wallet" value={wallet} onChange={(e) => setWallet(e.target.value)} placeholder={t("wdWalletPlaceholder")} autoComplete="off" className="mt-1 w-full rounded-xl border border-[var(--border)] bg-[var(--bg)] px-3 py-2 font-mono text-sm" /><p className="mt-1 text-xs text-[var(--dim)]">{t("wdTonNote")}</p></div>
           <div><label htmlFor="usdt" className="text-sm font-bold">{t("wdUsdtLabel")}</label><input id="usdt" type="number" min={p.wdMinUsdt} max={p.wdMaxUsdt} step={0.1} value={usdt} onChange={(e) => setUsdt(Math.max(0, Number(e.target.value) || 0))} className="mt-1 w-full rounded-xl border border-[var(--border)] bg-[var(--bg)] px-3 py-2" /><p className="mt-1 text-xs text-[var(--dim)]">{t("wdCostLine", { kt: fmt(ktCost), bal: fmt(p.ktBalance), min: fmt(p.wdMinUsdt), max: fmt(p.wdMaxUsdt) })}</p>{belowMin && (<p className="mt-1 text-xs font-bold text-red-300">{t("wdBelowMin", { min: fmt(p.wdMinUsdt), minkt: fmt(p.wdMinKt) })}</p>)}{!belowMin && offStep && (<p className="mt-1 text-xs font-bold text-red-300">{t("wdOffStep")}</p>)}{!belowMin && !offStep && aboveMax && (<p className="mt-1 text-xs font-bold text-red-300">{t("wdAboveMax", { max: fmt(p.wdMaxUsdt), maxkt: fmt(p.wdMaxKt) })}</p>)}</div>
-          <button type="submit" disabled={request.isPending || wallet.trim().length < 10 || !enough || belowMin || offStep || aboveMax} className="btn-press w-full rounded-xl bg-cyan-400 px-4 py-2.5 font-display text-sm text-black disabled:opacity-40">{belowMin || offStep || aboveMax ? t("wdSubmitCheck") : !enough ? t("wdNeedKt", { kt: fmt(ktCost - p.ktBalance) }) : t("wdSubmitGo", { usdt: fmt(usdt) })}</button>
-          {wallet.trim().length > 0 && wallet.trim().length < 10 && (<p className="text-xs font-bold text-red-300">{t("wdWalletShort")}</p>)}
+          <button type="submit" disabled={request.isPending || !walletOk || !enough || belowMin || offStep || aboveMax} className="btn-press w-full rounded-xl bg-cyan-400 px-4 py-2.5 font-display text-sm text-black disabled:opacity-40">{belowMin || offStep || aboveMax ? t("wdSubmitCheck") : !enough ? t("wdNeedKt", { kt: fmt(ktCost - p.ktBalance) }) : t("wdSubmitGo", { usdt: fmt(usdt) })}</button>
+          {wallet.trim().length > 0 && !walletOk && (<p className="text-xs font-bold text-red-300">{t("wdWalletInvalid")}</p>)}
         </form>
       </div></div>
       <div className="rounded-2xl bg-[var(--surface)] border border-[var(--border)] p-3"><h3 className="font-display text-sm">{t("wdHistory")}</h3>{data.withdrawals.length === 0 ? (<p className="mt-2 text-sm text-[var(--dim)]">{t("wdHistoryEmpty", { min: fmt(p.wdMinKt), usdt: fmt(p.wdMinUsdt) })}</p>) : (<ul className="mt-2 space-y-2">{data.withdrawals.map((w) => (<li key={w.id} className="rounded-xl bg-[var(--surface2)] p-3"><div className="flex items-center justify-between gap-2"><p className="font-display text-sm">#{w.id} · {fmt(w.amountUsdt)} USDT</p><span className={`rounded-full border px-2 py-0.5 text-[11px] font-bold ${statusClass(w.status)}`}>{statusLabel(w.status)}</span></div><p className="mt-1 break-all font-mono text-xs text-[var(--dim)]">{w.walletAddress}</p><p className="mt-1 text-xs text-[var(--dim)]">{t("wdHistoryLine", { kt: fmt(w.amountKt), created: fmtDateTime(w.createdAt), processed: w.processedAt ? t("wdProcessedAt", { date: fmtDateTime(w.processedAt) }) : "" })}</p>{w.adminNote && <p className="mt-1 text-xs">{t("wdOwnerNote", { note: w.adminNote })}</p>}{w.txRef && <p className="mt-1 break-all font-mono text-xs">{t("wdTxRefLabel", { ref: w.txRef })}</p>}{w.status === "pending" && (<button type="button" onClick={() => onCancel(w.id)} disabled={cancelling} aria-label={t("wdCancelAria", { id: w.id })} className="btn-press mt-2 rounded-lg border border-red-400 px-3 py-1.5 text-sm font-bold text-red-300">{t("wdCancelBtn")}</button>)}</li>))}</ul>)}</div>

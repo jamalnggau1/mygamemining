@@ -239,6 +239,7 @@ export interface ServerStrings {
   errUpgradeMax: (name: string) => string;
   errKtNotEnough: (cost: number, balance: number) => string;
   errWdStep: (step: number, stepUsdt: string, amountKt: number) => string;
+  errWalletNotTon: string;
   errWdMinFirst: (
     minKt: number,
     minUsdt: number,
@@ -448,6 +449,8 @@ const id: ServerStrings = {
     `KT tidak cukup — butuh ${fmtNum(cost, "id")} KT, saldo kamu ${fmtNum(balance, "id")} KT.`,
   errWdStep: (step, stepUsdt, amountKt) =>
     `Jumlah WD harus kelipatan ${fmtNum(step, "id")} KT (${stepUsdt} USDT) — ${fmtNum(amountKt, "id")} KT tidak valid.`,
+  errWalletNotTon:
+    "Alamat itu bukan alamat TON. USDT hanya dikirim lewat jaringan TON — pakai alamat yang diawali EQ atau UQ.",
   errWdMinFirst: (minKt, minUsdt, amountKt, missing) =>
     `Minimum WD pertama adalah ${fmtNum(minKt, "id")} KT (${minUsdt} USDT) — kamu mengajukan ${fmtNum(amountKt, "id")} KT. Kumpulkan ${fmtNum(missing, "id")} KT lagi.`,
   errWdMinRepeat: (paidCount, amountKt) =>
@@ -666,6 +669,8 @@ const en: ServerStrings = {
     `Not enough KT — need ${fmtNum(cost, "en")} KT, your balance is ${fmtNum(balance, "en")} KT.`,
   errWdStep: (step, stepUsdt, amountKt) =>
     `Withdrawal amounts must be multiples of ${fmtNum(step, "en")} KT (${stepUsdt} USDT) — ${fmtNum(amountKt, "en")} KT is not valid.`,
+  errWalletNotTon:
+    "That is not a TON address. USDT is only sent on the TON network — use an address starting with EQ or UQ.",
   errWdMinFirst: (minKt, minUsdt, amountKt, missing) =>
     `The first withdrawal minimum is ${fmtNum(minKt, "en")} KT (${minUsdt} USDT) — you requested ${fmtNum(amountKt, "en")} KT. Collect ${fmtNum(missing, "en")} more KT.`,
   errWdMinRepeat: (paidCount, amountKt) =>
@@ -885,6 +890,8 @@ const ru: ServerStrings = {
     `Не хватает KT — нужно ${fmtNum(cost, "ru")} KT, а у тебя ${fmtNum(balance, "ru")} KT.`,
   errWdStep: (step, stepUsdt, amountKt) =>
     `Сумма вывода должна быть кратна ${fmtNum(step, "ru")} KT (${stepUsdt} USDT) — ${fmtNum(amountKt, "ru")} KT не подходит.`,
+  errWalletNotTon:
+    "Это не адрес TON. USDT отправляется только в сети TON — используйте адрес, начинающийся с EQ или UQ.",
   errWdMinFirst: (minKt, minUsdt, amountKt, missing) =>
     `Минимальный первый вывод — ${fmtNum(minKt, "ru")} KT (${minUsdt} USDT), а ты запросил ${fmtNum(amountKt, "ru")} KT. Добудь ещё ${fmtNum(missing, "ru")} KT.`,
   errWdMinRepeat: (paidCount, amountKt) =>

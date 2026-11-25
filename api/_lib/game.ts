@@ -450,6 +450,19 @@ export function wdMinKtForPaidCount(paidCount: number): number {
 // kecepatan akumulasi KT (lihat rebalance #7 di PORT_NOTES.md).
 export const WD_MAX_KT = 5000;
 
+// Alamat dompet WD HARUS alamat TON (owner 2026-11-25): USDT hanya
+// dibayar lewat jaringan TON. Format yang diterima — friendly
+// mainnet: 48 karakter base64url diawali "EQ" (bounceable) atau
+// "UQ" (non-bounceable); raw: "0:" + 64 hex. Alamat jaringan lain
+// (TRC20 "T…", ERC20/BEP20 "0x…", nama .ton) DITOLAK di handler
+// requestWithdrawal — pemilik tidak bisa membayar ke jaringan lain.
+export function isTonAddress(address: string): boolean {
+  return (
+    /^[EU]Q[A-Za-z0-9_-]{46}$/.test(address) ||
+    /^0:[0-9a-fA-F]{64}$/.test(address)
+  );
+}
+
 // Premium Pass plans — priced in Telegram Stars AND in GRAM (TON),
 // two payment methods for the same pass. Stars: paid via a real
 // Stars invoice; Premium activates automatically on the webhook —
@@ -4414,7 +4427,7 @@ export const gameActions = {
 
   requestWithdrawal: defineGameAction({
     description:
-      "Creates a withdrawal request: locks the KT and puts the request in the owner's manual payout queue with the player's USDT wallet address. Anti-cheat: the amount arrives in KT and is fully re-validated server-side — it must be a multiple of 100 KT (0,1 USDT steps), must meet the two-tier minimum computed here from the player's paid-WD history (first WD: 100 KT, repeat WDs: 5.000 KT flat), and must not exceed the per-WD maximum of 5.000 KT (5 USDT). There is NO time limit between WDs — the cooldown was removed 2026-11-19 on the owner's instruction; how fast a player can WD depends only on how fast they accumulate KT. The client cannot lower the minimum or raise the maximum.",
+      "Creates a withdrawal request: locks the KT and puts the request in the owner's manual payout queue with the player's USDT wallet address. The wallet address must be a TON address (48-char EQ/UQ friendly format or 0:+64hex raw) — USDT is only paid on the TON network; other networks are rejected (owner 2026-11-25). Anti-cheat: the amount arrives in KT and is fully re-validated server-side — it must be a multiple of 100 KT (0,1 USDT steps), must meet the two-tier minimum computed here from the player's paid-WD history (first WD: 100 KT, repeat WDs: 5.000 KT flat), and must not exceed the per-WD maximum of 5.000 KT (5 USDT). There is NO time limit between WDs — the cooldown was removed 2026-11-19 on the owner's instruction; how fast a player can WD depends only on how fast they accumulate KT. The client cannot lower the minimum or raise the maximum.",
     request: z.object({
       walletAddress: z.string().trim().min(10).max(120),
       amountKt: z.number().int().min(WD_STEP_KT).max(10000000),
@@ -4432,6 +4445,10 @@ export const gameActions = {
       const amountKt = args.amountKt;
       const amountUsdt = amountKt / KT_PER_USDT;
       const fail = (error: string) => ({ ok: false, error, wdId: null as number | null, ktBalance: p.ktBalance });
+      // Alamat HARUS TON (owner 2026-11-25): USDT hanya dibayar
+      // lewat jaringan TON — alamat jaringan lain tidak bisa dibayar.
+      if (!isTonAddress(args.walletAddress))
+        return fail(S.errWalletNotTon);
       if (amountKt % WD_STEP_KT !== 0)
         return fail(S.errWdStep(WD_STEP_KT, fmtNum(WD_STEP_KT / KT_PER_USDT, lang), amountKt));
       const paidCount = await countPaidWithdrawals(db, p.id);
