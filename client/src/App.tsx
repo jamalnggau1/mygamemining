@@ -298,6 +298,13 @@ export function ChevronLeftIcon({ size = 18 }: { size?: number }) {
     </IconShell>
   );
 }
+export function ChevronRightIcon({ size = 18 }: { size?: number }) {
+  return (
+    <IconShell size={size}>
+      <path d="M9.5 5.5 16 12l-6.5 6.5" />
+    </IconShell>
+  );
+}
 export function GemIcon({ size = 18 }: { size?: number }) {
   return (
     <IconShell size={size}>
@@ -1895,18 +1902,18 @@ function HangarTab({ data, onTrain, onCollectTraining, onCancelTraining, trainin
         </div>
       )}
       {troops.map((tr) => (
-        <div key={tr.kind} className="overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface)]">
-          <div className="flex justify-center bg-[#151a48] py-1">
-            <img src={tr.img} alt={tr.name} className="aspect-square h-28 w-28 object-cover" />
+        <div key={tr.kind} className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-2.5">
+          <div className="flex items-start gap-2.5">
+            <img src={tr.img} alt={tr.name} className="aspect-square h-20 w-20 shrink-0 rounded-xl object-cover" />
+            <div className="min-w-0 flex-1">
+              <h3 className="inline-flex items-center gap-2 text-sm font-bold"><span className={tr.accent}>{tr.icon}</span> {tr.name}</h3>
+              <p className="mt-1 text-sm font-bold">{t("labOwned", { count: tr.state.count, level: tr.state.level, power: tr.state.power })}</p>
+              <ExpandableText className="mt-1 text-sm text-[var(--dim)]">{tr.desc}</ExpandableText>
+            </div>
           </div>
-          <div className="p-3">
-            <h3 className="inline-flex items-center gap-2 text-sm font-bold"><span className={tr.accent}>{tr.icon}</span> {tr.name}</h3>
-            <ExpandableText className="mt-1 text-sm text-[var(--dim)]">{tr.desc}</ExpandableText>
-            <p className="mt-2 text-sm font-bold">{t("labOwned", { count: tr.state.count, level: tr.state.level, power: tr.state.power })}</p>
-            <button type="button" onClick={() => onTrain(tr.kind)} disabled={trainingBusy || training != null || tr.state.count >= tr.state.maxCount || data.player.ktBalance < tr.state.trainCost} className="btn-press mt-3 w-full rounded-xl bg-cyan-400 px-4 py-1.5 text-sm font-bold text-black disabled:opacity-40">
-              {tr.state.count >= tr.state.maxCount ? t("hangarMaxCount") : t("hangarTrainBtn", { cost: fmt(tr.state.trainCost), dur: fmtDur(tr.state.trainDurationSec) })}
-            </button>
-          </div>
+          <button type="button" onClick={() => onTrain(tr.kind)} disabled={trainingBusy || training != null || tr.state.count >= tr.state.maxCount || data.player.ktBalance < tr.state.trainCost} className="btn-press mt-2 w-full rounded-xl bg-cyan-400 px-4 py-1.5 text-sm font-bold text-black disabled:opacity-40">
+            {tr.state.count >= tr.state.maxCount ? t("hangarMaxCount") : t("hangarTrainBtn", { cost: fmt(tr.state.trainCost), dur: fmtDur(tr.state.trainDurationSec) })}
+          </button>
         </div>
       ))}
       <details className="rounded-2xl bg-[var(--surface)] border border-[var(--border)] p-3">
@@ -1934,10 +1941,10 @@ function LabTab({ data, onResearch, onCollectResearch, onCancelResearch, researc
     ? research.troopKind === "attack" ? t("labTroopAttackName") : t("labTroopDefenseName")
     : research.kind === "camp" ? t("labResearchCamp") : t("labResearchSpeed");
   const tracks = [
-    { key: "level-attack", kind: "level" as const, troopKind: "attack" as const, name: t("labTroopAttackName"), desc: t("labTroopAttackDesc"), level: pvp.troops.attack.level, maxLevel: pvp.troops.attack.maxLevel, effect: t("labResearchLevelEffect", { power: 6 + 4 * (pvp.troops.attack.level + 1) }), blocked: pvp.troops.attack.count === 0, cost: pvp.researchCosts.levelAttack },
-    { key: "level-defense", kind: "level" as const, troopKind: "defense" as const, name: t("labTroopDefenseName"), desc: t("labTroopDefenseDesc"), level: pvp.troops.defense.level, maxLevel: pvp.troops.defense.maxLevel, effect: t("labResearchLevelEffect", { power: 6 + 4 * (pvp.troops.defense.level + 1) }), blocked: pvp.troops.defense.count === 0, cost: pvp.researchCosts.levelDefense },
-    { key: "camp", kind: "camp" as const, troopKind: null, name: t("labResearchCamp"), desc: t("labResearchCampDesc"), level: pvp.camp.campLevel, maxLevel: pvp.camp.maxResearchLevel, effect: t("labResearchCampEffect", { capacity: pvp.camp.capacity + 5 }), blocked: false, cost: pvp.researchCosts.camp },
-    { key: "speed", kind: "speed" as const, troopKind: null, name: t("labResearchSpeed"), desc: t("labResearchSpeedDesc"), level: pvp.camp.speedLevel, maxLevel: pvp.camp.maxResearchLevel, effect: t("labResearchSpeedEffect", { pct: Math.round(100 * (1 + 0.1 * (pvp.camp.speedLevel + 1)) - 100) }), blocked: false, cost: pvp.researchCosts.speed },
+    { key: "level-attack", kind: "level" as const, troopKind: "attack" as const, name: t("labTroopAttackName"), desc: t("labTroopAttackDesc"), level: pvp.troops.attack.level, maxLevel: pvp.troops.attack.maxLevel, effect: t("labResearchLevelEffect", { power: 6 + 4 * (pvp.troops.attack.level + 1) }), blocked: pvp.troops.attack.count === 0, cost: pvp.researchCosts.levelAttack, icon: <SwordsIcon size={24} />, accent: "text-red-300" },
+    { key: "level-defense", kind: "level" as const, troopKind: "defense" as const, name: t("labTroopDefenseName"), desc: t("labTroopDefenseDesc"), level: pvp.troops.defense.level, maxLevel: pvp.troops.defense.maxLevel, effect: t("labResearchLevelEffect", { power: 6 + 4 * (pvp.troops.defense.level + 1) }), blocked: pvp.troops.defense.count === 0, cost: pvp.researchCosts.levelDefense, icon: <ShieldIcon size={24} />, accent: "text-sky-300" },
+    { key: "camp", kind: "camp" as const, troopKind: null, name: t("labResearchCamp"), desc: t("labResearchCampDesc"), level: pvp.camp.campLevel, maxLevel: pvp.camp.maxResearchLevel, effect: t("labResearchCampEffect", { capacity: pvp.camp.capacity + 5 }), blocked: false, cost: pvp.researchCosts.camp, icon: <UsersIcon size={24} />, accent: "text-amber-300" },
+    { key: "speed", kind: "speed" as const, troopKind: null, name: t("labResearchSpeed"), desc: t("labResearchSpeedDesc"), level: pvp.camp.speedLevel, maxLevel: pvp.camp.maxResearchLevel, effect: t("labResearchSpeedEffect", { pct: Math.round(100 * (1 + 0.1 * (pvp.camp.speedLevel + 1)) - 100) }), blocked: false, cost: pvp.researchCosts.speed, icon: <ZapIcon size={24} />, accent: "text-emerald-300" },
   ];
   return (
     <section className="mt-3 space-y-3">
@@ -1966,14 +1973,22 @@ function LabTab({ data, onResearch, onCollectResearch, onCancelResearch, researc
         const nextLevel = tr.level + 1;
         return (
           <div key={tr.key} className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-2.5">
-            <h3 className="text-sm font-bold">{tr.name}</h3>
-            <ExpandableText className="mt-1 text-sm text-[var(--dim)]">{tr.desc}</ExpandableText>
-            <p className="mt-2 text-sm font-bold">{t("labResearchLevel", { level: tr.level, max: tr.maxLevel })} · {tr.effect}</p>
-            <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
-              <button type="button" onClick={() => onResearch({ kind: tr.kind, troopKind: tr.troopKind })} disabled={researchBusy || research != null || maxed || tr.blocked || data.player.ktBalance < tr.cost} className="btn-press rounded-xl bg-amber-400 px-4 py-1.5 text-sm font-bold text-black disabled:opacity-40">
-                {maxed ? t("labResearchMax") : tr.blocked ? t("labResearchNeedTroop") : t("labResearchBtn", { level: nextLevel, cost: fmt(tr.cost), dur: fmtDur(pvp.researchBaseSec * nextLevel) })}
-              </button>
+            <div className="flex items-start gap-2.5">
+              <span aria-hidden="true" className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-[var(--border)] bg-black/20"><span className={tr.accent}>{tr.icon}</span></span>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-baseline gap-2">
+                  <h3 className="min-w-0 flex-1 truncate text-sm font-bold">{tr.name}</h3>
+                  <span className="shrink-0 text-xs text-[var(--dim)]">{maxed ? `Lv.${tr.level}` : `Lv.${tr.level} → Lv.${nextLevel}`}</span>
+                </div>
+                <p className="mt-0.5 flex flex-wrap items-center gap-1.5 text-sm"><span className="font-bold text-emerald-300">{t("labResearchLevel", { level: tr.level, max: tr.maxLevel })}</span><img src={ktLogoImg} alt="" className="h-4 w-4 rounded-full object-cover" /><span className="font-bold">{fmt(tr.cost)} KT</span></p>
+                <ExpandableText className="mt-1 text-sm text-[var(--dim)]">{tr.desc}</ExpandableText>
+                {!maxed && (<p className="mt-1 text-sm font-bold text-emerald-300">{tr.effect}</p>)}
+                {!maxed && (<p className="mt-0.5 text-xs text-[var(--dim)]">{t("labResearchDur", { dur: fmtDur(pvp.researchBaseSec * nextLevel) })}</p>)}
+              </div>
             </div>
+            <button type="button" onClick={() => onResearch({ kind: tr.kind, troopKind: tr.troopKind })} disabled={researchBusy || research != null || maxed || tr.blocked || data.player.ktBalance < tr.cost} className="btn-press mt-2 flex w-full items-center justify-center gap-1 rounded-xl bg-amber-400 px-4 py-1.5 text-sm font-bold text-black disabled:opacity-40">
+              {maxed ? t("labResearchMax") : tr.blocked ? t("labResearchNeedTroop") : (<>{t("labResearchBtnShort")} <ChevronRightIcon size={14} /></>)}
+            </button>
           </div>
         );
       })}
