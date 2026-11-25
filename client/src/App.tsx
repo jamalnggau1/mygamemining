@@ -1934,10 +1934,10 @@ function LabTab({ data, onResearch, onCollectResearch, onCancelResearch, researc
     ? research.troopKind === "attack" ? t("labTroopAttackName") : t("labTroopDefenseName")
     : research.kind === "camp" ? t("labResearchCamp") : t("labResearchSpeed");
   const tracks = [
-    { key: "level-attack", kind: "level" as const, troopKind: "attack" as const, name: t("labTroopAttackName"), desc: t("labTroopAttackDesc"), level: pvp.troops.attack.level, maxLevel: pvp.troops.attack.maxLevel, effect: t("labResearchLevelEffect", { power: 6 + 4 * (pvp.troops.attack.level + 1) }), blocked: pvp.troops.attack.count === 0 },
-    { key: "level-defense", kind: "level" as const, troopKind: "defense" as const, name: t("labTroopDefenseName"), desc: t("labTroopDefenseDesc"), level: pvp.troops.defense.level, maxLevel: pvp.troops.defense.maxLevel, effect: t("labResearchLevelEffect", { power: 6 + 4 * (pvp.troops.defense.level + 1) }), blocked: pvp.troops.defense.count === 0 },
-    { key: "camp", kind: "camp" as const, troopKind: null, name: t("labResearchCamp"), desc: t("labResearchCampDesc"), level: pvp.camp.campLevel, maxLevel: pvp.camp.maxResearchLevel, effect: t("labResearchCampEffect", { capacity: pvp.camp.capacity + 5 }), blocked: false },
-    { key: "speed", kind: "speed" as const, troopKind: null, name: t("labResearchSpeed"), desc: t("labResearchSpeedDesc"), level: pvp.camp.speedLevel, maxLevel: pvp.camp.maxResearchLevel, effect: t("labResearchSpeedEffect", { pct: Math.round(100 * (1 + 0.1 * (pvp.camp.speedLevel + 1)) - 100) }), blocked: false },
+    { key: "level-attack", kind: "level" as const, troopKind: "attack" as const, name: t("labTroopAttackName"), desc: t("labTroopAttackDesc"), level: pvp.troops.attack.level, maxLevel: pvp.troops.attack.maxLevel, effect: t("labResearchLevelEffect", { power: 6 + 4 * (pvp.troops.attack.level + 1) }), blocked: pvp.troops.attack.count === 0, cost: pvp.researchCosts.levelAttack },
+    { key: "level-defense", kind: "level" as const, troopKind: "defense" as const, name: t("labTroopDefenseName"), desc: t("labTroopDefenseDesc"), level: pvp.troops.defense.level, maxLevel: pvp.troops.defense.maxLevel, effect: t("labResearchLevelEffect", { power: 6 + 4 * (pvp.troops.defense.level + 1) }), blocked: pvp.troops.defense.count === 0, cost: pvp.researchCosts.levelDefense },
+    { key: "camp", kind: "camp" as const, troopKind: null, name: t("labResearchCamp"), desc: t("labResearchCampDesc"), level: pvp.camp.campLevel, maxLevel: pvp.camp.maxResearchLevel, effect: t("labResearchCampEffect", { capacity: pvp.camp.capacity + 5 }), blocked: false, cost: pvp.researchCosts.camp },
+    { key: "speed", kind: "speed" as const, troopKind: null, name: t("labResearchSpeed"), desc: t("labResearchSpeedDesc"), level: pvp.camp.speedLevel, maxLevel: pvp.camp.maxResearchLevel, effect: t("labResearchSpeedEffect", { pct: Math.round(100 * (1 + 0.1 * (pvp.camp.speedLevel + 1)) - 100) }), blocked: false, cost: pvp.researchCosts.speed },
   ];
   return (
     <section className="mt-3 space-y-3">
@@ -1970,8 +1970,8 @@ function LabTab({ data, onResearch, onCollectResearch, onCancelResearch, researc
             <ExpandableText className="mt-1 text-sm text-[var(--dim)]">{tr.desc}</ExpandableText>
             <p className="mt-2 text-sm font-bold">{t("labResearchLevel", { level: tr.level, max: tr.maxLevel })} · {tr.effect}</p>
             <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
-              <button type="button" onClick={() => onResearch({ kind: tr.kind, troopKind: tr.troopKind })} disabled={researchBusy || research != null || maxed || tr.blocked || data.player.ktBalance < pvp.researchCost} className="btn-press rounded-xl bg-amber-400 px-4 py-1.5 text-sm font-bold text-black disabled:opacity-40">
-                {maxed ? t("labResearchMax") : tr.blocked ? t("labResearchNeedTroop") : t("labResearchBtn", { level: nextLevel, cost: fmt(pvp.researchCost), dur: fmtDur(pvp.researchBaseSec * nextLevel) })}
+              <button type="button" onClick={() => onResearch({ kind: tr.kind, troopKind: tr.troopKind })} disabled={researchBusy || research != null || maxed || tr.blocked || data.player.ktBalance < tr.cost} className="btn-press rounded-xl bg-amber-400 px-4 py-1.5 text-sm font-bold text-black disabled:opacity-40">
+                {maxed ? t("labResearchMax") : tr.blocked ? t("labResearchNeedTroop") : t("labResearchBtn", { level: nextLevel, cost: fmt(tr.cost), dur: fmtDur(pvp.researchBaseSec * nextLevel) })}
               </button>
             </div>
           </div>

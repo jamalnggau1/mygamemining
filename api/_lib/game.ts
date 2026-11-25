@@ -1647,10 +1647,10 @@ const PVP_MIN_LOOT_QTY = 7;
 export const TROOP_MAX_COUNT = 20;
 export const TROOP_MAX_LEVEL = 5;
 // TAHAP UJI COBA (2026-11-23): latih DAN riset sama-sama 0,1 KT flat,
-// supaya semuanya bisa diuji walau saldo KT masih kecil. Bila uji coba
-// selesai, kembalikan harga asli: beli 10 + 5×jumlah sekarang KT,
-// upgrade 25×level KT. 0,1 aman di pembulatan 3 desimal (roundKt).
-export const TROOP_TEST_COST_KT = 0.1;
+// Harga pasukan (keputusan owner 2026-11-25): 1 KT × level — latih
+// drone Lv5 = 5 KT, riset ke Lv5 = 5 KT. Sebelumnya 0,1 KT flat
+// selama tahap uji coba (2026-11-23 s.d. 2026-11-25).
+export const TROOP_BASE_COST_KT = 1;
 // Hangar + Lab (2026-11-25, pilihan B):
 //   - Latih: waktu 5 menit × level drone, jalan di server seperti
 //     bor, satu antrean (satu drone sekali waktu).
@@ -1732,10 +1732,10 @@ export function overCapacityMult(
   return totalTroops >= capacity ? totalTroops - capacity + 2 : 1;
 }
 
-/** Biaya latih satu drone — 0,1 KT flat (uji coba) × pengali kelebihan. */
-export function trainCostKt(totalTroops: number, capacity: number): number {
+/** Biaya latih satu drone — 1 KT × level drone × pengali kelebihan. */
+export function trainCostKt(totalTroops: number, capacity: number, level: number): number {
   return roundKt(
-    TROOP_TEST_COST_KT * overCapacityMult(totalTroops, capacity),
+    TROOP_BASE_COST_KT * Math.max(1, level) * overCapacityMult(totalTroops, capacity),
   );
 }
 
@@ -1756,9 +1756,9 @@ export function trainDurationSec(
   );
 }
 
-/** Biaya riset — 0,1 KT flat selama tahap uji coba. */
-export function researchCostKt(): number {
-  return TROOP_TEST_COST_KT;
+/** Biaya riset — 1 KT × level target. */
+export function researchCostKt(targetLevel: number): number {
+  return roundKt(TROOP_BASE_COST_KT * Math.max(1, targetLevel));
 }
 
 /** Waktu riset (detik): 10 menit × level target. */
@@ -2682,7 +2682,12 @@ export const gameActions = {
           speedLevel: z.number(),
           maxResearchLevel: z.number(),
         }),
-        researchCost: z.number(),
+        researchCosts: z.object({
+          levelAttack: z.number(),
+          levelDefense: z.number(),
+          camp: z.number(),
+          speed: z.number(),
+        }),
         researchBaseSec: z.number(),
         training: z
           .object({
@@ -3062,7 +3067,7 @@ export const gameActions = {
               count: troops.attack.count,
               level: troops.attack.level,
               power: troopPower(troops.attack.count, troops.attack.level),
-              trainCost: trainCostKt(pvpUsed, pvpCapacity),
+              trainCost: trainCostKt(pvpUsed, pvpCapacity, troops.attack.level),
               trainDurationSec: trainDurationSec(
                 troops.attack.level,
                 p.pvpSpeedLevel ?? 0,
@@ -3075,7 +3080,7 @@ export const gameActions = {
               count: troops.defense.count,
               level: troops.defense.level,
               power: troopPower(troops.defense.count, troops.defense.level),
-              trainCost: trainCostKt(pvpUsed, pvpCapacity),
+              trainCost: trainCostKt(pvpUsed, pvpCapacity, troops.defense.level),
               trainDurationSec: trainDurationSec(
                 troops.defense.level,
                 p.pvpSpeedLevel ?? 0,
@@ -3092,7 +3097,12 @@ export const gameActions = {
             speedLevel: p.pvpSpeedLevel ?? 0,
             maxResearchLevel: RESEARCH_MAX_LEVEL,
           },
-          researchCost: researchCostKt(),
+          researchCosts: {
+            levelAttack: researchCostKt(troops.attack.level + 1),
+            levelDefense: researchCostKt(troops.defense.level + 1),
+            camp: researchCostKt((p.pvpCampLevel ?? 0) + 1),
+            speed: researchCostKt((p.pvpSpeedLevel ?? 0) + 1),
+          },
           researchBaseSec: RESEARCH_BASE_SECONDS,
           training: pvpTraining ? toClientTraining(pvpTraining) : null,
           research: pvpResearch ? toClientResearch(pvpResearch) : null,
@@ -3520,7 +3530,7 @@ export const gameActions = {
       const capacity = campCapacity(p.pvpCampLevel ?? 0);
       const used = troops.attack.count + troops.defense.count;
       const overMult = overCapacityMult(used, capacity);
-      const cost = trainCostKt(used, capacity);
+      const cost = trainCostKt(used, capacity, cur.level);
       if (p.ktBalance < cost)
         return fail(S.errKtNotEnough(cost, p.ktBalance));
       const durationSec = trainDurationSec(
@@ -3699,9 +3709,6 @@ export const gameActions = {
         ktBalance: p.ktBalance,
       });
       if (parseResearch(p.research)) return fail(S.errPvpResearchBusy);
-      const cost = researchCostKt();
-      if (p.ktBalance < cost)
-        return fail(S.errKtNotEnough(cost, p.ktBalance));
       let targetLevel: number;
       let label: string;
       if (args.kind === "level") {
@@ -3729,6 +3736,9 @@ export const gameActions = {
         targetLevel = cur + 1;
         label = S.pvpResearchSpeedName;
       }
+      const cost = researchCostKt(targetLevel);
+      if (p.ktBalance < cost)
+        return fail(S.errKtNotEnough(cost, p.ktBalance));
       const durationSec = researchDurationSec(targetLevel);
       const research: PvpResearch = {
         kind: args.kind,
