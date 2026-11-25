@@ -1184,8 +1184,8 @@ export function App() {
             </div>
 
             {data.pvp.encounter && (
-              <div className="rounded-2xl border border-red-500/40 bg-red-500/10 p-3">
-                <h3 className="font-display inline-flex items-center gap-2 text-sm text-red-200"><SwordsIcon size={16} /> {t("pvpEncounterTitle")}</h3>
+              <div className="rounded-2xl border border-red-500/40 bg-red-500/10 p-2.5">
+                <h3 className="inline-flex items-center gap-2 text-sm font-bold text-red-200"><SwordsIcon size={16} /> {t("pvpEncounterTitle")}</h3>
                 <p className="mt-1 text-sm">
                   {data.pvp.encounter.isNpc
                     ? t("pvpEncounterPirate")
@@ -1201,10 +1201,10 @@ export function App() {
                   <p className="mt-1 text-xs font-bold text-amber-300">{t("labCooldown", { dur: fmtDur(Math.max(0, Math.floor((new Date(data.pvp.attackReadyAt).getTime() - Date.now()) / 1000))) })}</p>
                 )}
                 <div className="mt-2 grid grid-cols-2 gap-2">
-                  <button type="button" onClick={() => pvpAttack.mutate()} disabled={pvpAttack.isPending || pvpSkip.isPending || (data.pvp.attackReadyAt != null && new Date(data.pvp.attackReadyAt).getTime() > Date.now())} className="btn-press rounded-xl bg-red-500 px-4 py-2.5 font-display text-sm text-white disabled:opacity-40">
+                  <button type="button" onClick={() => pvpAttack.mutate()} disabled={pvpAttack.isPending || pvpSkip.isPending || (data.pvp.attackReadyAt != null && new Date(data.pvp.attackReadyAt).getTime() > Date.now())} className="btn-press rounded-xl bg-red-500 px-4 py-1.5 text-sm font-bold text-white disabled:opacity-40">
                     {t("pvpAttackBtn")}
                   </button>
-                  <button type="button" onClick={() => pvpSkip.mutate()} disabled={pvpAttack.isPending || pvpSkip.isPending} className="btn-press rounded-xl border border-[var(--border)] px-4 py-2.5 text-sm font-bold disabled:opacity-40">
+                  <button type="button" onClick={() => pvpSkip.mutate()} disabled={pvpAttack.isPending || pvpSkip.isPending} className="btn-press rounded-xl border border-[var(--border)] px-4 py-1.5 text-sm font-bold disabled:opacity-40">
                     {t("pvpSkipBtn")}
                   </button>
                 </div>
@@ -1879,8 +1879,8 @@ function HangarTab({ data, onTrain, onCollectTraining, onCancelTraining, trainin
         {pvp.attackPower === 0 && pvp.defensePower === 0 && (<p className="mt-2 text-sm text-[var(--dim)]">{t("labNoTroops")}</p>)}
       </div>
       {training != null && (
-        <div className="rounded-2xl border border-amber-400/50 bg-amber-400/10 p-3">
-          <h3 className="font-display text-sm">{t("hangarTraining", { name: trainName ?? "" })}</h3>
+        <div className="rounded-2xl border border-amber-400/50 bg-amber-400/10 p-2.5">
+          <h3 className="text-sm font-bold">{t("hangarTraining", { name: trainName ?? "" })}</h3>
           {trainReady ? (
             <p className="mt-1 text-sm font-bold text-emerald-300">{t("hangarTrainingReady")}</p>
           ) : (
@@ -1888,23 +1888,23 @@ function HangarTab({ data, onTrain, onCollectTraining, onCancelTraining, trainin
           )}
           <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
             {trainReady && (
-              <button type="button" onClick={onCollectTraining} disabled={trainingBusy} className="btn-press rounded-xl bg-emerald-400 px-5 py-2 text-sm font-bold text-black disabled:opacity-40">{t("hangarCollectBtn")}</button>
+              <button type="button" onClick={onCollectTraining} disabled={trainingBusy} className="btn-press rounded-xl bg-emerald-400 px-4 py-1.5 text-sm font-bold text-black disabled:opacity-40">{t("hangarCollectBtn")}</button>
             )}
-            <button type="button" onClick={onCancelTraining} disabled={trainingBusy} className="btn-press rounded-xl border border-[var(--border)] bg-[var(--surface2)] px-5 py-2 text-sm font-bold disabled:opacity-40">{t("hangarCancelBtn")}</button>
+            <button type="button" onClick={onCancelTraining} disabled={trainingBusy} className="btn-press rounded-xl border border-[var(--border)] bg-[var(--surface2)] px-4 py-1.5 text-sm font-bold disabled:opacity-40">{t("hangarCancelBtn")}</button>
           </div>
         </div>
       )}
       {troops.map((tr) => (
         <div key={tr.kind} className="overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface)]">
-          <div className="flex justify-center bg-[#151a48] py-2">
-            <img src={tr.img} alt={tr.name} className="aspect-square h-44 w-44 object-cover" />
+          <div className="flex justify-center bg-[#151a48] py-1">
+            <img src={tr.img} alt={tr.name} className="aspect-square h-28 w-28 object-cover" />
           </div>
           <div className="p-3">
-            <h3 className="font-display inline-flex items-center gap-2 text-sm"><span className={tr.accent}>{tr.icon}</span> {tr.name}</h3>
+            <h3 className="inline-flex items-center gap-2 text-sm font-bold"><span className={tr.accent}>{tr.icon}</span> {tr.name}</h3>
             <ExpandableText className="mt-1 text-sm text-[var(--dim)]">{tr.desc}</ExpandableText>
             <p className="mt-2 text-sm font-bold">{t("labOwned", { count: tr.state.count, level: tr.state.level, power: tr.state.power })}</p>
             <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
-              <button type="button" onClick={() => onTrain(tr.kind)} disabled={trainingBusy || training != null || tr.state.count >= tr.state.maxCount || data.player.ktBalance < tr.state.trainCost} className="btn-press rounded-xl bg-cyan-400 px-5 py-2 text-sm font-bold text-black disabled:opacity-40">
+              <button type="button" onClick={() => onTrain(tr.kind)} disabled={trainingBusy || training != null || tr.state.count >= tr.state.maxCount || data.player.ktBalance < tr.state.trainCost} className="btn-press rounded-xl bg-cyan-400 px-4 py-1.5 text-sm font-bold text-black disabled:opacity-40">
                 {tr.state.count >= tr.state.maxCount ? t("hangarMaxCount") : t("hangarTrainBtn", { cost: fmt(tr.state.trainCost), dur: fmtDur(tr.state.trainDurationSec) })}
               </button>
             </div>
@@ -1912,7 +1912,7 @@ function HangarTab({ data, onTrain, onCollectTraining, onCancelTraining, trainin
         </div>
       ))}
       <details className="rounded-2xl bg-[var(--surface)] border border-[var(--border)] p-3">
-        <summary className="font-display inline-flex cursor-pointer items-center gap-2 text-sm"><BookIcon size={15} /> {t("labHowTitle")}</summary>
+        <summary className="inline-flex cursor-pointer items-center gap-2 text-sm font-bold"><BookIcon size={15} /> {t("labHowTitle")}</summary>
         <ExpandableText className="mt-2 text-sm leading-relaxed">{t("labHowDesc")}</ExpandableText>
       </details>
     </section>
@@ -1948,8 +1948,8 @@ function LabTab({ data, onResearch, onCollectResearch, onCancelResearch, researc
         <ExpandableText className="mt-1 text-sm text-[var(--dim)]">{t("labDesc")}</ExpandableText>
       </div>
       {research != null && (
-        <div className="rounded-2xl border border-amber-400/50 bg-amber-400/10 p-3">
-          <h3 className="font-display text-sm">{t("labResearchRunning", { name: researchName ?? "", level: research.targetLevel })}</h3>
+        <div className="rounded-2xl border border-amber-400/50 bg-amber-400/10 p-2.5">
+          <h3 className="text-sm font-bold">{t("labResearchRunning", { name: researchName ?? "", level: research.targetLevel })}</h3>
           {researchReady ? (
             <p className="mt-1 text-sm font-bold text-emerald-300">{t("labResearchReady")}</p>
           ) : (
@@ -1957,9 +1957,9 @@ function LabTab({ data, onResearch, onCollectResearch, onCancelResearch, researc
           )}
           <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
             {researchReady && (
-              <button type="button" onClick={onCollectResearch} disabled={researchBusy} className="btn-press rounded-xl bg-emerald-400 px-5 py-2 text-sm font-bold text-black disabled:opacity-40">{t("labResearchCollectBtn")}</button>
+              <button type="button" onClick={onCollectResearch} disabled={researchBusy} className="btn-press rounded-xl bg-emerald-400 px-4 py-1.5 text-sm font-bold text-black disabled:opacity-40">{t("labResearchCollectBtn")}</button>
             )}
-            <button type="button" onClick={onCancelResearch} disabled={researchBusy} className="btn-press rounded-xl border border-[var(--border)] bg-[var(--surface2)] px-5 py-2 text-sm font-bold disabled:opacity-40">{t("labResearchCancelBtn")}</button>
+            <button type="button" onClick={onCancelResearch} disabled={researchBusy} className="btn-press rounded-xl border border-[var(--border)] bg-[var(--surface2)] px-4 py-1.5 text-sm font-bold disabled:opacity-40">{t("labResearchCancelBtn")}</button>
           </div>
         </div>
       )}
@@ -1967,12 +1967,12 @@ function LabTab({ data, onResearch, onCollectResearch, onCancelResearch, researc
         const maxed = tr.level >= tr.maxLevel;
         const nextLevel = tr.level + 1;
         return (
-          <div key={tr.key} className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3">
-            <h3 className="font-display text-sm">{tr.name}</h3>
+          <div key={tr.key} className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-2.5">
+            <h3 className="text-sm font-bold">{tr.name}</h3>
             <ExpandableText className="mt-1 text-sm text-[var(--dim)]">{tr.desc}</ExpandableText>
             <p className="mt-2 text-sm font-bold">{t("labResearchLevel", { level: tr.level, max: tr.maxLevel })} · {tr.effect}</p>
             <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
-              <button type="button" onClick={() => onResearch({ kind: tr.kind, troopKind: tr.troopKind })} disabled={researchBusy || research != null || maxed || tr.blocked || data.player.ktBalance < pvp.researchCost} className="btn-press rounded-xl bg-amber-400 px-5 py-2 text-sm font-bold text-black disabled:opacity-40">
+              <button type="button" onClick={() => onResearch({ kind: tr.kind, troopKind: tr.troopKind })} disabled={researchBusy || research != null || maxed || tr.blocked || data.player.ktBalance < pvp.researchCost} className="btn-press rounded-xl bg-amber-400 px-4 py-1.5 text-sm font-bold text-black disabled:opacity-40">
                 {maxed ? t("labResearchMax") : tr.blocked ? t("labResearchNeedTroop") : t("labResearchBtn", { level: nextLevel, cost: fmt(pvp.researchCost), dur: fmtDur(pvp.researchBaseSec * nextLevel) })}
               </button>
             </div>
