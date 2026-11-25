@@ -344,6 +344,7 @@ export interface ServerStrings {
   logPvpLootGain: (lootKt: number) => string;
   logPvpLootStolen: (lootKt: number) => string;
   logPvpLootDestroyed: (lootKt: number) => string;
+  logPvpTroopsLost: (count: number, name: string, left: number) => string;
   logPvpTrainStart: (name: string) => string;
   logPvpTrainDone: (name: string, count: number) => string;
   logPvpTrainCancel: (name: string) => string;
@@ -588,6 +589,8 @@ const id: ServerStrings = {
     `Hasil tambang senilai ${fmtNum(lootKt, "id")} KT dirampas penyerang dalam PvP.`,
   logPvpLootDestroyed: (lootKt) =>
     `Hasil tambang senilai ${fmtNum(lootKt, "id")} KT hancur dalam pertempuran PvP.`,
+  logPvpTroopsLost: (count, name, left) =>
+    `${count} × ${name} gugur dalam pertempuran PvP. Sisa ${left}.`,
   tamperScan: "memulai scan saat operasi masih berjalan",
   tamperMine: "memulai pengeboran saat operasi masih berjalan",
   tamperCollect: "ambil hasil sebelum operasi selesai",
@@ -829,6 +832,8 @@ const en: ServerStrings = {
     `Ore worth ${fmtNum(lootKt, "en")} KT was looted by an attacker in PvP.`,
   logPvpLootDestroyed: (lootKt) =>
     `Ore worth ${fmtNum(lootKt, "en")} KT was destroyed in a PvP battle.`,
+  logPvpTroopsLost: (count, name, left) =>
+    `${count} × ${name} fell in a PvP battle. ${left} left.`,
   tamperScan: "starting a scan while an operation was running",
   tamperMine: "starting a mining job while an operation was running",
   tamperCollect: "collecting before the operation finished",
@@ -1071,6 +1076,8 @@ const ru: ServerStrings = {
     `Добыча на ${fmtNum(lootKt, "ru")} KT отнята нападающим в PvP.`,
   logPvpLootDestroyed: (lootKt) =>
     `Добыча на ${fmtNum(lootKt, "ru")} KT уничтожена в бою PvP.`,
+  logPvpTroopsLost: (count, name, left) =>
+    `${count} × ${name} погибли в бою PvP. Осталось: ${left}.`,
   tamperScan: "начало скана во время выполнения операции",
   tamperMine: "начало бурения во время выполнения операции",
   tamperCollect: "забор результата до завершения операции",

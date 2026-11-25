@@ -1781,6 +1781,17 @@ export function troopPower(count: number, level: number): number {
   return count * (TROOP_POWER_BASE + TROOP_POWER_PER_LEVEL * Math.max(1, level));
 }
 
+/** Korban pasukan yang kalah: 20% ÷ level (Lv1 20%, Lv2 10%,
+ *  Lv5 4%), minimal 1 bila punya pasukan — level tinggi lebih
+ *  tahan hancur, jadi menaikkan level selalu sepadan. */
+export function pvpCasualties(count: number, level: number): number {
+  if (count <= 0) return 0;
+  return Math.min(
+    count,
+    Math.max(1, Math.floor((count * 0.2) / Math.max(1, level))),
+  );
+}
+
 // Perompak NPC — lawan cadangan bila tidak ada pemain lain yang
 // layak diserang (jumlah pemain masih sedikit). Kekuatan bertahan
 // 9: satu Drone Serbu level 1 (kekuatan 10) sudah bisa menang —
@@ -4055,6 +4066,44 @@ export const gameActions = {
             defenderRow.id,
             "pvp_defend",
             S.logPvpDefendedWin(attackerLabel),
+            null,
+          );
+        }
+      }
+      // Korban pasukan (2026-11-25): yang kalah kehilangan sebagian
+      // drone jenis yang dipakainya — makin tinggi level, makin
+      // sedikit yang gugur (20% ÷ level, minimal 1). NPC tidak
+      // punya pasukan, jadi tidak ada korban di pihaknya. Log korban
+      // ditulis dalam bahasa si kalah.
+      const loserId = won ? defenderRow?.id ?? null : p.id;
+      const loserKind: TroopKind = won ? "defense" : "attack";
+      if (loserId !== null) {
+        const loserTroops = await loadTroops(db, loserId);
+        const cur = loserTroops[loserKind];
+        const dead = pvpCasualties(cur.count, cur.level);
+        if (dead > 0) {
+          const newCount = cur.count - dead;
+          await db
+            .update(schema.pvpTroops)
+            .set({ count: newCount })
+            .where(
+              and(
+                eq(schema.pvpTroops.playerId, loserId),
+                eq(schema.pvpTroops.kind, loserKind),
+              ),
+            );
+          const loserLang = won
+            ? normalizeLang(defenderRow?.language ?? "id")
+            : lang;
+          await logActivity(
+            db,
+            loserId,
+            won ? "pvp_defend" : "pvp_attack",
+            serverStrings(loserLang).logPvpTroopsLost(
+              dead,
+              troopName(troopDef(loserKind), loserLang),
+              newCount,
+            ),
             null,
           );
         }
