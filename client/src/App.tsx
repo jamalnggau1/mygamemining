@@ -635,6 +635,23 @@ export function App() {
   const queryClient = useQueryClient();
   const [tab, setTab] = useState<Tab>("tambang");
   const [prevTab, setPrevTab] = useState<Tab>("tambang");
+  // Tutorial sambutan (2026-11-25): muncul sekali saat pemain pertama
+  // buka game (localStorage "astra-mining-tutorial-seen", pola yang
+  // sama seperti toggle suara/musik), bisa dibuka lagi dari
+  // Pengaturan ("Cara Main").
+  const [showTutorial, setShowTutorial] = useState(() => {
+    try {
+      return window.localStorage.getItem("astra-mining-tutorial-seen") !== "1";
+    } catch {
+      return true;
+    }
+  });
+  const dismissTutorial = () => {
+    try {
+      window.localStorage.setItem("astra-mining-tutorial-seen", "1");
+    } catch {}
+    setShowTutorial(false);
+  };
   const [banner, setBanner] = useState<{ kind: "good" | "bad" | "info"; text: ReactNode } | null>(null);
   const [bannerId, setBannerId] = useState(0);
   const showBanner = (kind: "good" | "bad" | "info", text: ReactNode) => { setBanner({ kind, text }); setBannerId((i) => i + 1); if (kind === "bad") playError(); };
@@ -1251,10 +1268,48 @@ export function App() {
               <button type="button" onClick={() => setTab(prevTab)} aria-label={t("backLabel")} className="btn-press inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-white/25 bg-black/40 text-white"><ChevronLeftIcon size={20} /></button>
               <h2 className="font-display text-lg">{t("settingsTitle")}</h2>
             </div>
-            <SettingsTab sessionLabel={sessionLabel} username={sessionInfo.username} />
+            <SettingsTab sessionLabel={sessionLabel} username={sessionInfo.username} onOpenTutorial={() => setShowTutorial(true)} />
           </div>
         </div>
       )}
+      {showTutorial && (<TutorialOverlay onClose={dismissTutorial} />)}
+    </div>
+  );
+}
+
+/** Kartu sambutan 3 langkah (2026-11-25, owner: disetujui 2026-11-24
+ *  "terapkan nanti", diterapkan 2026-11-25): overlay layar penuh di
+ *  atas layar home yang meredup (z-60, di atas Pengaturan z-50),
+ *  muncul sekali saat pemain pertama buka game. Bukan tur interaktif
+ *  (menyototi tombol satu per satu susah + rawan bug) — hanya kartu
+ *  statis + tombol "Mulai Menambang". Desain persis pratinjau yang
+ *  disetujui owner (~/workspace/hero-redesign/preview-tutorial.html):
+ *  kartu 360px, bingkai cyan, nomor langkah emas, tombol emas. */
+function TutorialOverlay({ onClose }: { onClose: () => void }) {
+  const steps = [
+    { title: t("tutStep1Title"), desc: t("tutStep1Desc") },
+    { title: t("tutStep2Title"), desc: t("tutStep2Desc") },
+    { title: t("tutStep3Title"), desc: t("tutStep3Desc") },
+  ];
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-[#030610]/[.82] p-4">
+      <div className="w-full max-w-[360px] rounded-2xl border-[1.5px] border-cyan-400/55 bg-gradient-to-b from-[#0a1128] to-[#0b1220] p-5 shadow-[0_0_24px_rgba(34,211,238,0.25)]">
+        <div className="mb-4 text-center">
+          <div className="text-xl font-extrabold leading-tight tracking-wide text-white">{t("tutWelcome")}<br />ASTRA MINING</div>
+          <div className="mt-1 text-[13px] text-slate-400">{t("tutSub")}</div>
+        </div>
+        {steps.map((s, i) => (
+          <div key={s.title} className="mb-3.5 flex gap-3">
+            <div className="flex h-7 w-7 flex-none items-center justify-center rounded-full bg-gradient-to-br from-amber-300 to-amber-500 text-sm font-extrabold text-[#1a1005]">{i + 1}</div>
+            <div>
+              <div className="text-sm font-bold text-white">{s.title}</div>
+              <div className="text-[12.5px] leading-snug text-slate-400">{s.desc}</div>
+            </div>
+          </div>
+        ))}
+        <button type="button" onClick={onClose} aria-label={t("tutStart")} className="btn-press mt-1 w-full rounded-xl bg-gradient-to-br from-amber-300 to-amber-500 px-4 py-3 text-[15px] font-extrabold text-[#1a1005]">{t("tutStart")}</button>
+        <div className="mt-2.5 text-center text-[11px] text-slate-500">{t("tutNote")}</div>
+      </div>
     </div>
   );
 }
@@ -1263,14 +1318,15 @@ export function App() {
  *  di pojok kanan atas hero — bukan dari navigasi bawah — dan
  *  tampil sebagai LAYAR PENUH (overlay fixed inset-0 dengan header
  *  + tombol kembali, agar tidak mengganggu tampilan game). Isinya
- *  empat kartu seperti tab lain: Bahasa (pemilih bahasa dengan
+ *  lima kartu seperti tab lain: Bahasa (pemilih bahasa dengan
  *  bendera 🇮🇩/🇬🇧 — satu-satunya emoji di game, atas perintah
  *  owner), Suara (toggle on/off, tersimpan di localStorage
  *  "astra-mining-sound"), Musik Latar (toggle sendiri, localStorage
- *  "astra-mining-music"), dan Info Akun (baris Sesi yang dulu di
+ *  "astra-mining-music"), Cara Main (tombol membuka lagi kartu
+ *  tutorial sambutan), dan Info Akun (baris Sesi yang dulu di
  *  hero + nama pengguna Telegram bila ada). Judul ditampilkan di
  *  header overlay, bukan di dalam komponen ini. */
-function SettingsTab({ sessionLabel, username }: { sessionLabel: string; username: string | null }) {
+function SettingsTab({ sessionLabel, username, onOpenTutorial }: { sessionLabel: string; username: string | null; onOpenTutorial: () => void }) {
   const [on, setOn] = useState(() => soundEnabled());
   const toggle = () => {
     const next = !on;
@@ -1315,6 +1371,11 @@ function SettingsTab({ sessionLabel, username }: { sessionLabel: string; usernam
           </button>
         </div>
         <p className="mt-2 text-xs font-bold text-[var(--dim)]">{musicOn ? t("soundOn") : t("soundOff")}</p>
+      </div>
+      <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3">
+        <p className="text-sm font-bold">{t("tutOpenBtn")}</p>
+        <p className="mt-0.5 text-xs text-[var(--dim)]">{t("tutSub")}</p>
+        <button type="button" onClick={onOpenTutorial} aria-label={t("tutOpenBtn")} className="btn-press mt-2.5 w-full rounded-xl bg-cyan-400 px-4 py-2 font-bold text-black">{t("tutOpenBtn")}</button>
       </div>
       <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3">
         <p className="text-sm font-bold">{t("accountTitle")}</p>
