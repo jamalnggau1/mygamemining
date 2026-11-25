@@ -164,6 +164,12 @@ export const player = pgTable("player", {
     mode: "date",
   }),
   pvpEncounter: text("pvp_encounter"),
+  // Hangar/Lab (migrasi 0014): antrean latih + riset sebagai JSON
+  // (pola yang sama dengan job) + level riset camp/kecepatan.
+  training: text("training"),
+  research: text("research"),
+  pvpCampLevel: integer("pvp_camp_level").notNull().default(0),
+  pvpSpeedLevel: integer("pvp_speed_level").notNull().default(0),
 });
 
 export const inventory = pgTable(

@@ -1640,15 +1640,34 @@ export const PVP_LOSER_LOSS_PCT = 0.1;
 // ≥7 unit — 15% dari 7 baru menghasilkan ≥1 unit rampasan.
 const PVP_MIN_LOOT_QTY = 7;
 
-// Pasukan: dua jenis, dibeli + di-upgrade pakai KT yang sama dengan
-// saldo WD (SATU mata uang — itu dilemanya).
+// Pasukan: dua jenis, dibayar pakai KT yang sama dengan saldo WD
+// (SATU mata uang — itu dilemanya). Sejak 2026-11-25 (pilihan B):
+// pasukan DILATIH di Hangar (bukan dibeli instan) dan semua
+// peningkatan jadi RISET di Lab — Hangar tidak punya tombol upgrade.
 export const TROOP_MAX_COUNT = 20;
 export const TROOP_MAX_LEVEL = 5;
-// TAHAP UJI COBA (2026-11-23): beli DAN upgrade sama-sama 0,1 KT flat,
+// TAHAP UJI COBA (2026-11-23): latih DAN riset sama-sama 0,1 KT flat,
 // supaya semuanya bisa diuji walau saldo KT masih kecil. Bila uji coba
 // selesai, kembalikan harga asli: beli 10 + 5×jumlah sekarang KT,
 // upgrade 25×level KT. 0,1 aman di pembulatan 3 desimal (roundKt).
 export const TROOP_TEST_COST_KT = 0.1;
+// Hangar + Lab (2026-11-25, pilihan B):
+//   - Latih: waktu 5 menit × level drone, jalan di server seperti
+//     bor, satu antrean (satu drone sekali waktu).
+//   - Camp: kapasitas awal 10 pasukan total (Serbu + Perisai
+//     digabung); tiap riset Perluas Camp +5 (maks level 5 → 35).
+//   - Melewati batas: makin banyak makin mahal DAN makin lama —
+//     pengali 1 + kelebihan, sama untuk harga dan waktu (ke-1 ×2,
+//     ke-2 ×3, ke-3 ×4, dst.).
+//   - Riset di Lab: level drone, Perluas Camp, Pelatihan Cepat
+//     (+10% kecepatan latih per level, maks 5) — masing-masing
+//     butuh KT + waktu 10 menit × level target, satu riset sekali
+//     waktu.
+export const CAMP_BASE_CAPACITY = 10;
+export const CAMP_PER_RESEARCH = 5;
+export const RESEARCH_MAX_LEVEL = 5;
+export const TRAIN_BASE_SECONDS = 300; // 5 menit × level drone
+export const RESEARCH_BASE_SECONDS = 600; // 10 menit × level target
 const TROOP_POWER_BASE = 6; // kekuatan per drone: 6 + 4×level
 const TROOP_POWER_PER_LEVEL = 4;
 
@@ -1687,15 +1706,75 @@ function troopName(def: TroopDef, lang: Lang): string {
   return lang === "en" ? def.nameEn : def.name;
 }
 
-/** Biaya beli satu drone lagi — 0,1 KT flat selama tahap uji coba. */
-export function troopBuyCost(_count: number): number {
+/** Kapasitas camp: 10 + 5×level riset Perluas Camp (maks 35). */
+export function campCapacity(campLevel: number): number {
+  return (
+    CAMP_BASE_CAPACITY +
+    CAMP_PER_RESEARCH *
+      Math.max(0, Math.min(RESEARCH_MAX_LEVEL, campLevel))
+  );
+}
+
+/** Pengali kecepatan latih: 1 + 0,1×level riset Pelatihan Cepat. */
+export function trainingSpeedMult(speedLevel: number): number {
+  return (
+    1 +
+    0.1 * Math.max(0, Math.min(RESEARCH_MAX_LEVEL, speedLevel))
+  );
+}
+
+/** Pengali kelebihan camp: 1 bila masih muat, 2 untuk drone pertama
+ *  di atas batas, 3 untuk yang kedua, dst. */
+export function overCapacityMult(
+  totalTroops: number,
+  capacity: number,
+): number {
+  return totalTroops >= capacity ? totalTroops - capacity + 2 : 1;
+}
+
+/** Biaya latih satu drone — 0,1 KT flat (uji coba) × pengali kelebihan. */
+export function trainCostKt(totalTroops: number, capacity: number): number {
+  return roundKt(
+    TROOP_TEST_COST_KT * overCapacityMult(totalTroops, capacity),
+  );
+}
+
+/** Waktu latih satu drone (detik): 5 menit × level drone ÷ kecepatan
+ *  riset × pengali kelebihan, lantai 60 detik seperti bor. */
+export function trainDurationSec(
+  level: number,
+  speedLevel: number,
+  overMult: number,
+): number {
+  return Math.max(
+    60,
+    Math.round(
+      ((TRAIN_BASE_SECONDS * Math.max(1, level)) /
+        trainingSpeedMult(speedLevel)) *
+        overMult,
+    ),
+  );
+}
+
+/** Biaya riset — 0,1 KT flat selama tahap uji coba. */
+export function researchCostKt(): number {
   return TROOP_TEST_COST_KT;
 }
 
-/** Biaya upgrade level L → L+1 — 0,1 KT flat selama tahap uji coba. */
-export function troopUpgradeCost(_level: number): number {
-  return TROOP_TEST_COST_KT;
+/** Waktu riset (detik): 10 menit × level target. */
+export function researchDurationSec(targetLevel: number): number {
+  return RESEARCH_BASE_SECONDS * Math.max(1, targetLevel);
 }
+
+export type PvpTraining = { kind: TroopKind; endsAt: number; costKt: number };
+export type PvpResearchKind = "level" | "camp" | "speed";
+export type PvpResearch = {
+  kind: PvpResearchKind;
+  troopKind: TroopKind | null;
+  targetLevel: number;
+  endsAt: number;
+  costKt: number;
+};
 
 /** Kekuatan satu jenis pasukan: jumlah drone × (6 + 4×level). */
 export function troopPower(count: number, level: number): number {
@@ -1764,6 +1843,83 @@ function toClientEncounter(enc: PvpEncounter): {
     isNpc: enc.defenderPlayerId === null,
     defensePower: enc.defensePower,
     expiresAt: new Date(enc.expiresAt).toISOString(),
+  };
+}
+
+/** Antrean latih + riset tersimpan sebagai JSON di player (pola yang
+ *  sama dengan job/expedition) — rusak/tidak lengkap = tidak ada. */
+function parseTraining(raw: string | null | undefined): PvpTraining | null {
+  if (!raw) return null;
+  try {
+    const v = JSON.parse(raw) as Partial<PvpTraining>;
+    if (typeof v !== "object" || v === null) return null;
+    if (v.kind !== "attack" && v.kind !== "defense") return null;
+    if (typeof v.endsAt !== "number" || typeof v.costKt !== "number")
+      return null;
+    return { kind: v.kind, endsAt: v.endsAt, costKt: v.costKt };
+  } catch {
+    return null;
+  }
+}
+
+function parseResearch(raw: string | null | undefined): PvpResearch | null {
+  if (!raw) return null;
+  try {
+    const v = JSON.parse(raw) as Partial<PvpResearch>;
+    if (typeof v !== "object" || v === null) return null;
+    if (v.kind !== "level" && v.kind !== "camp" && v.kind !== "speed")
+      return null;
+    if (
+      v.troopKind !== null &&
+      v.troopKind !== undefined &&
+      v.troopKind !== "attack" &&
+      v.troopKind !== "defense"
+    )
+      return null;
+    if (
+      typeof v.targetLevel !== "number" ||
+      typeof v.endsAt !== "number" ||
+      typeof v.costKt !== "number"
+    )
+      return null;
+    return {
+      kind: v.kind,
+      troopKind: v.troopKind ?? null,
+      targetLevel: v.targetLevel,
+      endsAt: v.endsAt,
+      costKt: v.costKt,
+    };
+  } catch {
+    return null;
+  }
+}
+
+/** Bentuk antrean yang dikirim ke klien (waktu ISO). */
+function toClientTraining(t: PvpTraining): {
+  kind: TroopKind;
+  endsAt: string;
+  costKt: number;
+} {
+  return {
+    kind: t.kind,
+    endsAt: new Date(t.endsAt).toISOString(),
+    costKt: t.costKt,
+  };
+}
+
+function toClientResearch(r: PvpResearch): {
+  kind: PvpResearchKind;
+  troopKind: TroopKind | null;
+  targetLevel: number;
+  endsAt: string;
+  costKt: number;
+} {
+  return {
+    kind: r.kind,
+    troopKind: r.troopKind,
+    targetLevel: r.targetLevel,
+    endsAt: new Date(r.endsAt).toISOString(),
+    costKt: r.costKt,
   };
 }
 
@@ -2493,8 +2649,9 @@ export const gameActions = {
           createdAt: z.string(),
         }),
       ),
-      // PvP (2026-11-22): pasukan + kekuatan + perisai/cooldown +
-      // penawaran pertemuan yang sedang aktif (null bila tidak ada).
+      // PvP (2026-11-22, Hangar/Lab 2026-11-25): pasukan + kekuatan +
+      // camp + antrean latih/riset + perisai/cooldown + penawaran
+      // pertemuan yang sedang aktif (null bila tidak ada).
       pvp: z.object({
         attackPower: z.number(),
         defensePower: z.number(),
@@ -2503,8 +2660,8 @@ export const gameActions = {
             count: z.number(),
             level: z.number(),
             power: z.number(),
-            buyCost: z.number(),
-            upgradeCost: z.number().nullable(),
+            trainCost: z.number(),
+            trainDurationSec: z.number(),
             maxCount: z.number(),
             maxLevel: z.number(),
           }),
@@ -2512,12 +2669,37 @@ export const gameActions = {
             count: z.number(),
             level: z.number(),
             power: z.number(),
-            buyCost: z.number(),
-            upgradeCost: z.number().nullable(),
+            trainCost: z.number(),
+            trainDurationSec: z.number(),
             maxCount: z.number(),
             maxLevel: z.number(),
           }),
         }),
+        camp: z.object({
+          capacity: z.number(),
+          used: z.number(),
+          campLevel: z.number(),
+          speedLevel: z.number(),
+          maxResearchLevel: z.number(),
+        }),
+        researchCost: z.number(),
+        researchBaseSec: z.number(),
+        training: z
+          .object({
+            kind: z.enum(["attack", "defense"]),
+            endsAt: z.string(),
+            costKt: z.number(),
+          })
+          .nullable(),
+        research: z
+          .object({
+            kind: z.enum(["level", "camp", "speed"]),
+            troopKind: z.enum(["attack", "defense"]).nullable(),
+            targetLevel: z.number(),
+            endsAt: z.string(),
+            costKt: z.number(),
+          })
+          .nullable(),
         shieldUntil: z.string().nullable(),
         attackReadyAt: z.string().nullable(),
         encounter: z
@@ -2646,6 +2828,12 @@ export const gameActions = {
         pvpEncounterRaw && !pvpEncounterExpired(pvpEncounterRaw)
           ? pvpEncounterRaw
           : null;
+      // Hangar/Lab: antrean latih + riset + kapasitas camp.
+      const pvpTraining = parseTraining(p.training);
+      const pvpResearch = parseResearch(p.research);
+      const pvpCapacity = campCapacity(p.pvpCampLevel ?? 0);
+      const pvpUsed = troops.attack.count + troops.defense.count;
+      const pvpOverMult = overCapacityMult(pvpUsed, pvpCapacity);
       // Harga GRAM live (cache 5 menit di gram-price.ts) — harga
       // paket GRAM di bawah dihitung dari harga ini, jadi pemain
       // selalu melihat jumlah GRAM yang berlaku saat ini.
@@ -2874,11 +3062,12 @@ export const gameActions = {
               count: troops.attack.count,
               level: troops.attack.level,
               power: troopPower(troops.attack.count, troops.attack.level),
-              buyCost: troopBuyCost(troops.attack.count),
-              upgradeCost:
-                troops.attack.level >= TROOP_MAX_LEVEL
-                  ? null
-                  : troopUpgradeCost(troops.attack.level),
+              trainCost: trainCostKt(pvpUsed, pvpCapacity),
+              trainDurationSec: trainDurationSec(
+                troops.attack.level,
+                p.pvpSpeedLevel ?? 0,
+                pvpOverMult,
+              ),
               maxCount: TROOP_MAX_COUNT,
               maxLevel: TROOP_MAX_LEVEL,
             },
@@ -2886,15 +3075,27 @@ export const gameActions = {
               count: troops.defense.count,
               level: troops.defense.level,
               power: troopPower(troops.defense.count, troops.defense.level),
-              buyCost: troopBuyCost(troops.defense.count),
-              upgradeCost:
-                troops.defense.level >= TROOP_MAX_LEVEL
-                  ? null
-                  : troopUpgradeCost(troops.defense.level),
+              trainCost: trainCostKt(pvpUsed, pvpCapacity),
+              trainDurationSec: trainDurationSec(
+                troops.defense.level,
+                p.pvpSpeedLevel ?? 0,
+                pvpOverMult,
+              ),
               maxCount: TROOP_MAX_COUNT,
               maxLevel: TROOP_MAX_LEVEL,
             },
           },
+          camp: {
+            capacity: pvpCapacity,
+            used: pvpUsed,
+            campLevel: p.pvpCampLevel ?? 0,
+            speedLevel: p.pvpSpeedLevel ?? 0,
+            maxResearchLevel: RESEARCH_MAX_LEVEL,
+          },
+          researchCost: researchCostKt(),
+          researchBaseSec: RESEARCH_BASE_SECONDS,
+          training: pvpTraining ? toClientTraining(pvpTraining) : null,
+          research: pvpResearch ? toClientResearch(pvpResearch) : null,
           shieldUntil: p.pvpShieldUntil ? p.pvpShieldUntil.toISOString() : null,
           attackReadyAt:
             p.pvpLastAttackAt &&
@@ -3281,15 +3482,18 @@ export const gameActions = {
 
   // --- PvP (2026-11-22) ----------------------------------------------
   // Lab: beli + upgrade pasukan pakai KT yang sama dengan saldo WD.
-  buyTroop: defineGameAction({
+  startTraining: defineGameAction({
     description:
-      "Buys one more troop drone (Drone Serbu for attack or Drone Perisai for defense) with KT. Cost: 0.1 KT flat during the test phase. Max 20 drones per kind.",
+      "Starts training one troop drone in the Hangar (5 min × drone level, server-side, one queue). Cost: 0.1 KT flat in the test phase × the over-capacity multiplier (1 when the camp still has room, 2 for the first drone over capacity, 3 for the second, ...). The drone joins the camp when collected.",
     request: z.object({ kind: z.enum(["attack", "defense"]) }),
     response: resultShape.extend({
-      count: z.number(),
-      level: z.number(),
-      power: z.number(),
-      buyCost: z.number(),
+      training: z
+        .object({
+          kind: z.enum(["attack", "defense"]),
+          endsAt: z.string(),
+          costKt: z.number(),
+        })
+        .nullable(),
       ktBalance: z.number(),
     }),
     async handler(args, session) {
@@ -3298,39 +3502,183 @@ export const gameActions = {
       const S = serverStrings(lang);
       const p = await loadPlayer(db, session);
       const def = troopDef(args.kind);
-      const fail = (error: string) => ({ ok: false, error, count: 0, level: 1, power: 0, buyCost: 0, ktBalance: p.ktBalance });
+      const fail = (error: string) => ({
+        ok: false,
+        error,
+        training: null as {
+          kind: TroopKind;
+          endsAt: string;
+          costKt: number;
+        } | null,
+        ktBalance: p.ktBalance,
+      });
+      if (parseTraining(p.training)) return fail(S.errPvpTrainingBusy);
       const troops = await loadTroops(db, p.id);
       const cur = troops[args.kind];
-      if (cur.count >= TROOP_MAX_COUNT) return fail(S.errPvpTroopMaxCount(troopName(def, lang)));
-      const cost = troopBuyCost(cur.count);
-      if (p.ktBalance < cost) return fail(S.errKtNotEnough(cost, p.ktBalance));
+      if (cur.count >= TROOP_MAX_COUNT)
+        return fail(S.errPvpTroopMaxCount(troopName(def, lang)));
+      const capacity = campCapacity(p.pvpCampLevel ?? 0);
+      const used = troops.attack.count + troops.defense.count;
+      const overMult = overCapacityMult(used, capacity);
+      const cost = trainCostKt(used, capacity);
+      if (p.ktBalance < cost)
+        return fail(S.errKtNotEnough(cost, p.ktBalance));
+      const durationSec = trainDurationSec(
+        cur.level,
+        p.pvpSpeedLevel ?? 0,
+        overMult,
+      );
+      const training: PvpTraining = {
+        kind: args.kind,
+        endsAt: Date.now() + durationSec * 1000,
+        costKt: cost,
+      };
+      const newBalance = roundKt(p.ktBalance - cost);
+      await db
+        .update(schema.player)
+        .set({ ktBalance: newBalance, training: JSON.stringify(training) })
+        .where(eq(schema.player.id, p.id));
+      await logActivity(
+        db,
+        p.id,
+        "pvp_troop",
+        S.logPvpTrainStart(troopName(def, lang)),
+        -cost,
+      );
+      return {
+        ok: true,
+        error: null,
+        training: toClientTraining(training),
+        ktBalance: newBalance,
+      };
+    },
+  }),
+
+  collectTraining: defineGameAction({
+    description:
+      "Collects a finished training drone into the camp (count +1). Fails while the training timer is still running.",
+    request: z.object({}),
+    response: resultShape.extend({
+      kind: z.enum(["attack", "defense"]).nullable(),
+      count: z.number(),
+      level: z.number(),
+      power: z.number(),
+      ktBalance: z.number(),
+    }),
+    async handler(_args, session) {
+      const db = getDb();
+      const lang = session.lang;
+      const S = serverStrings(lang);
+      const p = await loadPlayer(db, session);
+      const fail = (error: string) => ({
+        ok: false,
+        error,
+        kind: null as TroopKind | null,
+        count: 0,
+        level: 1,
+        power: 0,
+        ktBalance: p.ktBalance,
+      });
+      const training = parseTraining(p.training);
+      if (!training) return fail(S.errPvpNoTraining);
+      if (Date.now() < training.endsAt)
+        return fail(
+          S.errPvpTrainingNotReady(
+            Math.ceil((training.endsAt - Date.now()) / 1000),
+          ),
+        );
+      const troops = await loadTroops(db, p.id);
+      const cur = troops[training.kind];
+      const def = troopDef(training.kind);
       const newCount = cur.count + 1;
       await db
         .insert(schema.pvpTroops)
-        .values({ playerId: p.id, kind: args.kind, count: newCount, level: cur.level })
+        .values({
+          playerId: p.id,
+          kind: training.kind,
+          count: newCount,
+          level: cur.level,
+        })
         .onConflictDoUpdate({
           target: [schema.pvpTroops.playerId, schema.pvpTroops.kind],
           set: { count: newCount },
         });
-      const newBalance = roundKt(p.ktBalance - cost);
       await db
         .update(schema.player)
-        .set({ ktBalance: newBalance })
+        .set({ training: null })
         .where(eq(schema.player.id, p.id));
-      await logActivity(db, p.id, "pvp_troop", S.logPvpTroopBuy(troopName(def, lang), newCount), -cost);
-      return { ok: true, error: null, count: newCount, level: cur.level, power: troopPower(newCount, cur.level), buyCost: troopBuyCost(newCount), ktBalance: newBalance };
+      await logActivity(
+        db,
+        p.id,
+        "pvp_troop",
+        S.logPvpTrainDone(troopName(def, lang), newCount),
+        null,
+      );
+      return {
+        ok: true,
+        error: null,
+        kind: training.kind,
+        count: newCount,
+        level: cur.level,
+        power: troopPower(newCount, cur.level),
+        ktBalance: p.ktBalance,
+      };
     },
   }),
 
-  upgradeTroop: defineGameAction({
+  cancelTraining: defineGameAction({
     description:
-      "Upgrades one troop kind (Drone Serbu or Drone Perisai) one level with KT. Cost: 0.1 KT flat during the test phase. Each drone's power is 6 + 4×level, so level 5 makes one drone worth 26 power. Max level 5.",
-    request: z.object({ kind: z.enum(["attack", "defense"]) }),
+      "Cancels the training in progress and refunds its KT cost in full.",
+    request: z.object({}),
     response: resultShape.extend({
-      count: z.number(),
-      level: z.number(),
-      power: z.number(),
-      upgradeCost: z.number().nullable(),
+      ktBalance: z.number(),
+    }),
+    async handler(_args, session) {
+      const db = getDb();
+      const lang = session.lang;
+      const S = serverStrings(lang);
+      const p = await loadPlayer(db, session);
+      const fail = (error: string) => ({
+        ok: false,
+        error,
+        ktBalance: p.ktBalance,
+      });
+      const training = parseTraining(p.training);
+      if (!training) return fail(S.errPvpNoTraining);
+      const def = troopDef(training.kind);
+      const newBalance = roundKt(p.ktBalance + training.costKt);
+      await db
+        .update(schema.player)
+        .set({ ktBalance: newBalance, training: null })
+        .where(eq(schema.player.id, p.id));
+      await logActivity(
+        db,
+        p.id,
+        "pvp_troop",
+        S.logPvpTrainCancel(troopName(def, lang)),
+        training.costKt,
+      );
+      return { ok: true, error: null, ktBalance: newBalance };
+    },
+  }),
+
+  startResearch: defineGameAction({
+    description:
+      "Starts one Lab research: a drone level (Serbu/Perisai +1), Expand Camp (+5 capacity), or Fast Training (+10% training speed). One research at a time. Cost: 0.1 KT flat in the test phase. Time: 10 min × target level. The effect applies when collected.",
+    request: z.object({
+      kind: z.enum(["level", "camp", "speed"]),
+      troopKind: z.enum(["attack", "defense"]).nullable(),
+    }),
+    response: resultShape.extend({
+      research: z
+        .object({
+          kind: z.enum(["level", "camp", "speed"]),
+          troopKind: z.enum(["attack", "defense"]).nullable(),
+          targetLevel: z.number(),
+          endsAt: z.string(),
+          costKt: z.number(),
+        })
+        .nullable(),
       ktBalance: z.number(),
     }),
     async handler(args, session) {
@@ -3338,39 +3686,195 @@ export const gameActions = {
       const lang = session.lang;
       const S = serverStrings(lang);
       const p = await loadPlayer(db, session);
-      const def = troopDef(args.kind);
-      const fail = (error: string) => ({ ok: false, error, count: 0, level: 1, power: 0, upgradeCost: null as number | null, ktBalance: p.ktBalance });
-      const troops = await loadTroops(db, p.id);
-      const cur = troops[args.kind];
-      if (cur.count === 0) return fail(S.errPvpTroopNone(troopName(def, lang)));
-      if (cur.level >= TROOP_MAX_LEVEL) return fail(S.errPvpTroopMaxLevel(troopName(def, lang)));
-      const cost = troopUpgradeCost(cur.level);
-      if (p.ktBalance < cost) return fail(S.errKtNotEnough(cost, p.ktBalance));
-      const newLevel = cur.level + 1;
-      await db
-        .update(schema.pvpTroops)
-        .set({ level: newLevel })
-        .where(
-          and(
-            eq(schema.pvpTroops.playerId, p.id),
-            eq(schema.pvpTroops.kind, args.kind),
-          ),
-        );
+      const fail = (error: string) => ({
+        ok: false,
+        error,
+        research: null as {
+          kind: PvpResearchKind;
+          troopKind: TroopKind | null;
+          targetLevel: number;
+          endsAt: string;
+          costKt: number;
+        } | null,
+        ktBalance: p.ktBalance,
+      });
+      if (parseResearch(p.research)) return fail(S.errPvpResearchBusy);
+      const cost = researchCostKt();
+      if (p.ktBalance < cost)
+        return fail(S.errKtNotEnough(cost, p.ktBalance));
+      let targetLevel: number;
+      let label: string;
+      if (args.kind === "level") {
+        if (!args.troopKind) return fail(S.errPvpResearchInvalid);
+        const troops = await loadTroops(db, p.id);
+        const cur = troops[args.troopKind];
+        if (cur.count === 0)
+          return fail(S.errPvpTroopNone(troopName(troopDef(args.troopKind), lang)));
+        if (cur.level >= TROOP_MAX_LEVEL)
+          return fail(
+            S.errPvpTroopMaxLevel(troopName(troopDef(args.troopKind), lang)),
+          );
+        targetLevel = cur.level + 1;
+        label = troopName(troopDef(args.troopKind), lang);
+      } else if (args.kind === "camp") {
+        const cur = p.pvpCampLevel ?? 0;
+        if (cur >= RESEARCH_MAX_LEVEL)
+          return fail(S.errPvpResearchMax(S.pvpResearchCampName));
+        targetLevel = cur + 1;
+        label = S.pvpResearchCampName;
+      } else {
+        const cur = p.pvpSpeedLevel ?? 0;
+        if (cur >= RESEARCH_MAX_LEVEL)
+          return fail(S.errPvpResearchMax(S.pvpResearchSpeedName));
+        targetLevel = cur + 1;
+        label = S.pvpResearchSpeedName;
+      }
+      const durationSec = researchDurationSec(targetLevel);
+      const research: PvpResearch = {
+        kind: args.kind,
+        troopKind: args.kind === "level" ? args.troopKind : null,
+        targetLevel,
+        endsAt: Date.now() + durationSec * 1000,
+        costKt: cost,
+      };
       const newBalance = roundKt(p.ktBalance - cost);
       await db
         .update(schema.player)
-        .set({ ktBalance: newBalance })
+        .set({ ktBalance: newBalance, research: JSON.stringify(research) })
         .where(eq(schema.player.id, p.id));
-      await logActivity(db, p.id, "pvp_troop", S.logPvpTroopUpgrade(troopName(def, lang), newLevel), -cost);
+      await logActivity(
+        db,
+        p.id,
+        "pvp_troop",
+        S.logPvpResearchStart(label, targetLevel),
+        -cost,
+      );
       return {
         ok: true,
         error: null,
-        count: cur.count,
-        level: newLevel,
-        power: troopPower(cur.count, newLevel),
-        upgradeCost: newLevel >= TROOP_MAX_LEVEL ? null : troopUpgradeCost(newLevel),
+        research: toClientResearch(research),
         ktBalance: newBalance,
       };
+    },
+  }),
+
+  collectResearch: defineGameAction({
+    description:
+      "Collects a finished Lab research and applies its effect (drone level +1, camp capacity +5, or training speed +10%).",
+    request: z.object({}),
+    response: resultShape.extend({
+      kind: z.enum(["level", "camp", "speed"]).nullable(),
+      troopKind: z.enum(["attack", "defense"]).nullable(),
+      targetLevel: z.number(),
+      ktBalance: z.number(),
+    }),
+    async handler(_args, session) {
+      const db = getDb();
+      const lang = session.lang;
+      const S = serverStrings(lang);
+      const p = await loadPlayer(db, session);
+      const fail = (error: string) => ({
+        ok: false,
+        error,
+        kind: null as PvpResearchKind | null,
+        troopKind: null as TroopKind | null,
+        targetLevel: 0,
+        ktBalance: p.ktBalance,
+      });
+      const research = parseResearch(p.research);
+      if (!research) return fail(S.errPvpNoResearch);
+      if (Date.now() < research.endsAt)
+        return fail(
+          S.errPvpResearchNotReady(
+            Math.ceil((research.endsAt - Date.now()) / 1000),
+          ),
+        );
+      let label: string;
+      if (research.kind === "level") {
+        const kind = research.troopKind ?? "attack";
+        await db
+          .update(schema.pvpTroops)
+          .set({ level: research.targetLevel })
+          .where(
+            and(
+              eq(schema.pvpTroops.playerId, p.id),
+              eq(schema.pvpTroops.kind, kind),
+            ),
+          );
+        label = troopName(troopDef(kind), lang);
+      } else if (research.kind === "camp") {
+        await db
+          .update(schema.player)
+          .set({ pvpCampLevel: research.targetLevel })
+          .where(eq(schema.player.id, p.id));
+        label = S.pvpResearchCampName;
+      } else {
+        await db
+          .update(schema.player)
+          .set({ pvpSpeedLevel: research.targetLevel })
+          .where(eq(schema.player.id, p.id));
+        label = S.pvpResearchSpeedName;
+      }
+      await db
+        .update(schema.player)
+        .set({ research: null })
+        .where(eq(schema.player.id, p.id));
+      await logActivity(
+        db,
+        p.id,
+        "pvp_troop",
+        S.logPvpResearchDone(label, research.targetLevel),
+        null,
+      );
+      return {
+        ok: true,
+        error: null,
+        kind: research.kind,
+        troopKind: research.troopKind,
+        targetLevel: research.targetLevel,
+        ktBalance: p.ktBalance,
+      };
+    },
+  }),
+
+  cancelResearch: defineGameAction({
+    description:
+      "Cancels the research in progress and refunds its KT cost in full.",
+    request: z.object({}),
+    response: resultShape.extend({
+      ktBalance: z.number(),
+    }),
+    async handler(_args, session) {
+      const db = getDb();
+      const lang = session.lang;
+      const S = serverStrings(lang);
+      const p = await loadPlayer(db, session);
+      const fail = (error: string) => ({
+        ok: false,
+        error,
+        ktBalance: p.ktBalance,
+      });
+      const research = parseResearch(p.research);
+      if (!research) return fail(S.errPvpNoResearch);
+      const label =
+        research.kind === "level"
+          ? troopName(troopDef(research.troopKind ?? "attack"), lang)
+          : research.kind === "camp"
+            ? S.pvpResearchCampName
+            : S.pvpResearchSpeedName;
+      const newBalance = roundKt(p.ktBalance + research.costKt);
+      await db
+        .update(schema.player)
+        .set({ ktBalance: newBalance, research: null })
+        .where(eq(schema.player.id, p.id));
+      await logActivity(
+        db,
+        p.id,
+        "pvp_troop",
+        S.logPvpResearchCancel(label),
+        research.costKt,
+      );
+      return { ok: true, error: null, ktBalance: newBalance };
     },
   }),
 

@@ -222,6 +222,16 @@ export interface ServerStrings {
   errPvpTroopNone: (name: string) => string;
   errPvpTroopMaxCount: (name: string) => string;
   errPvpTroopMaxLevel: (name: string) => string;
+  errPvpTrainingBusy: string;
+  errPvpNoTraining: string;
+  errPvpTrainingNotReady: (seconds: number) => string;
+  errPvpResearchBusy: string;
+  errPvpNoResearch: string;
+  errPvpResearchNotReady: (seconds: number) => string;
+  errPvpResearchMax: (name: string) => string;
+  errPvpResearchInvalid: string;
+  pvpResearchCampName: string;
+  pvpResearchSpeedName: string;
   /** Nama lawan NPC + penambang tanpa nama, untuk pesan log PvP. */
   pvpPirate: string;
   pvpUnknownMiner: string;
@@ -331,11 +341,15 @@ export interface ServerStrings {
   logPvpDefendedWin: (attackerName: string) => string;
   logPvpDefendedLose: (attackerName: string, lootKt: number) => string;
   logPvpDefendedLoseEmpty: (attackerName: string) => string;
-  logPvpTroopBuy: (name: string, count: number) => string;
-  logPvpTroopUpgrade: (name: string, level: number) => string;
   logPvpLootGain: (lootKt: number) => string;
   logPvpLootStolen: (lootKt: number) => string;
   logPvpLootDestroyed: (lootKt: number) => string;
+  logPvpTrainStart: (name: string) => string;
+  logPvpTrainDone: (name: string, count: number) => string;
+  logPvpTrainCancel: (name: string) => string;
+  logPvpResearchStart: (name: string, level: number) => string;
+  logPvpResearchDone: (name: string, level: number) => string;
+  logPvpResearchCancel: (name: string) => string;
   // Anti-cheat
   tamperScan: string;
   tamperMine: string;
@@ -421,9 +435,24 @@ const id: ServerStrings = {
   errPvpDefenderShielded: "Penambang ini sedang kebal — ia baru saja diserang, coba pemain lain.",
   errPvpDefenderGone: "Penambang itu sudah tidak bisa diserang — penawarannya dibatalkan.",
   errPvpTroopNone: (name) =>
-    `Kamu belum memiliki ${name} — beli dulu sebelum meng-upgrade.`,
+    `Kamu belum memiliki ${name} — latih dulu di Hangar sebelum meneliti levelnya.`,
   errPvpTroopMaxCount: (name) => `${name} sudah mencapai jumlah maksimum.`,
   errPvpTroopMaxLevel: (name) => `${name} sudah level maksimum.`,
+  errPvpTrainingBusy:
+    "Masih ada drone yang sedang dilatih — tunggu sampai selesai atau batalkan dulu.",
+  errPvpNoTraining: "Tidak ada drone yang sedang dilatih.",
+  errPvpTrainingNotReady: (seconds) =>
+    `Pelatihan belum selesai — masih ${fmtDur(seconds, "id")} lagi.`,
+  errPvpResearchBusy:
+    "Masih ada riset yang berjalan di Lab — tunggu sampai selesai atau batalkan dulu.",
+  errPvpNoResearch: "Tidak ada riset yang berjalan di Lab.",
+  errPvpResearchNotReady: (seconds) =>
+    `Riset belum selesai — masih ${fmtDur(seconds, "id")} lagi.`,
+  errPvpResearchMax: (name) => `${name} sudah level maksimum.`,
+  errPvpResearchInvalid:
+    "Riset tidak valid — pilih jenis drone untuk riset level.",
+  pvpResearchCampName: "Perluas Camp",
+  pvpResearchSpeedName: "Pelatihan Cepat",
   pvpPirate: "Perompak",
   pvpUnknownMiner: "Penambang Lain",
   errDailyBonusClaimed:
@@ -544,9 +573,15 @@ const id: ServerStrings = {
     `${attackerName} menyerangmu dan menang — ${fmtNum(lootKt, "id")} KT hasil tambangmu dirampas. Kamu kebal 1 jam.`,
   logPvpDefendedLoseEmpty: (attackerName) =>
     `${attackerName} menyerangmu dan menang — tapi tidak ada hasil tambang yang bisa dirampas. Kamu kebal 1 jam.`,
-  logPvpTroopBuy: (name, count) =>
-    `${name} ke-${count} dibeli.`,
-  logPvpTroopUpgrade: (name, level) => `${name} naik ke level ${level}.`,
+  logPvpTrainStart: (name) => `Pelatihan ${name} dimulai.`,
+  logPvpTrainDone: (name, count) =>
+    `Pelatihan ${name} selesai — sekarang kamu punya ${count}.`,
+  logPvpTrainCancel: (name) => `Pelatihan ${name} dibatalkan, KT kembali.`,
+  logPvpResearchStart: (name, level) =>
+    `Riset ${name} ke level ${level} dimulai di Lab.`,
+  logPvpResearchDone: (name, level) =>
+    `Riset ${name} selesai — sekarang level ${level}.`,
+  logPvpResearchCancel: (name) => `Riset ${name} dibatalkan, KT kembali.`,
   logPvpLootGain: (lootKt) =>
     `Rampasan PvP senilai ${fmtNum(lootKt, "id")} KT masuk ke kargomu.`,
   logPvpLootStolen: (lootKt) =>
@@ -641,9 +676,24 @@ const en: ServerStrings = {
   errPvpDefenderShielded: "This miner is currently immune — they were just attacked, try another player.",
   errPvpDefenderGone: "That miner can no longer be attacked — the offer was cancelled.",
   errPvpTroopNone: (name) =>
-    `You do not own any ${name} yet — buy one before upgrading.`,
+    `You do not own any ${name} yet — train one in the Hangar before researching its level.`,
   errPvpTroopMaxCount: (name) => `${name} is already at the maximum count.`,
   errPvpTroopMaxLevel: (name) => `${name} is already at max level.`,
+  errPvpTrainingBusy:
+    "A drone is still training — wait for it to finish or cancel it first.",
+  errPvpNoTraining: "No drone is currently training.",
+  errPvpTrainingNotReady: (seconds) =>
+    `Training is not finished yet — ${fmtDur(seconds, "en")} left.`,
+  errPvpResearchBusy:
+    "A research is still running in the Lab — wait for it to finish or cancel it first.",
+  errPvpNoResearch: "No research is currently running in the Lab.",
+  errPvpResearchNotReady: (seconds) =>
+    `Research is not finished yet — ${fmtDur(seconds, "en")} left.`,
+  errPvpResearchMax: (name) => `${name} is already at max level.`,
+  errPvpResearchInvalid:
+    "Invalid research — pick a drone type for level research.",
+  pvpResearchCampName: "Expand Camp",
+  pvpResearchSpeedName: "Fast Training",
   pvpPirate: "Pirate",
   pvpUnknownMiner: "Another Miner",
   errDailyBonusClaimed:
@@ -764,9 +814,15 @@ const en: ServerStrings = {
     `${attackerName} attacked you and won — ${fmtNum(lootKt, "en")} KT of your ore was looted. You are immune for 1 hour.`,
   logPvpDefendedLoseEmpty: (attackerName) =>
     `${attackerName} attacked you and won — but there was no ore to loot. You are immune for 1 hour.`,
-  logPvpTroopBuy: (name, count) =>
-    `${name} #${count} bought.`,
-  logPvpTroopUpgrade: (name, level) => `${name} upgraded to level ${level}.`,
+  logPvpTrainStart: (name) => `Training ${name} started.`,
+  logPvpTrainDone: (name, count) =>
+    `Training ${name} finished — you now own ${count}.`,
+  logPvpTrainCancel: (name) => `Training ${name} cancelled, KT refunded.`,
+  logPvpResearchStart: (name, level) =>
+    `Research ${name} to level ${level} started in the Lab.`,
+  logPvpResearchDone: (name, level) =>
+    `Research ${name} finished — now level ${level}.`,
+  logPvpResearchCancel: (name) => `Research ${name} cancelled, KT refunded.`,
   logPvpLootGain: (lootKt) =>
     `PvP loot worth ${fmtNum(lootKt, "en")} KT added to your cargo.`,
   logPvpLootStolen: (lootKt) =>
@@ -862,9 +918,24 @@ const ru: ServerStrings = {
   errPvpDefenderShielded: "Этот шахтёр сейчас неуязвим — его только что атаковали, попробуй другого игрока.",
   errPvpDefenderGone: "Этого шахтёра больше нельзя атаковать — предложение отменено.",
   errPvpTroopNone: (name) =>
-    `У тебя ещё нет: ${name} — сначала купи, потом улучшай.`,
+    `У тебя ещё нет: ${name} — сначала обучи в Ангаре, потом исследуй уровень.`,
   errPvpTroopMaxCount: (name) => `${name} уже в максимальном количестве.`,
   errPvpTroopMaxLevel: (name) => `${name} уже на максимальном уровне.`,
+  errPvpTrainingBusy:
+    "Дрон ещё обучается — дождись окончания или отмени обучение.",
+  errPvpNoTraining: "Сейчас ни один дрон не обучается.",
+  errPvpTrainingNotReady: (seconds) =>
+    `Обучение ещё не закончено — осталось ${fmtDur(seconds, "ru")}.`,
+  errPvpResearchBusy:
+    "В Лаборатории уже идёт исследование — дождись окончания или отмени его.",
+  errPvpNoResearch: "В Лаборатории сейчас нет исследований.",
+  errPvpResearchNotReady: (seconds) =>
+    `Исследование ещё не закончено — осталось ${fmtDur(seconds, "ru")}.`,
+  errPvpResearchMax: (name) => `${name} уже на максимальном уровне.`,
+  errPvpResearchInvalid:
+    "Неверное исследование — выбери тип дрона для исследования уровня.",
+  pvpResearchCampName: "Расширить лагерь",
+  pvpResearchSpeedName: "Быстрое обучение",
   pvpPirate: "Пират",
   pvpUnknownMiner: "Другой шахтёр",
   errDailyBonusClaimed:
@@ -985,9 +1056,15 @@ const ru: ServerStrings = {
     `${attackerName} атаковал тебя и победил — у тебя отняли добычу на ${fmtNum(lootKt, "ru")} KT. У тебя защита на 1 час.`,
   logPvpDefendedLoseEmpty: (attackerName) =>
     `${attackerName} атаковал тебя и победил, но добычи не было. У тебя защита на 1 час.`,
-  logPvpTroopBuy: (name, count) =>
-    `${name} №${count} куплен.`,
-  logPvpTroopUpgrade: (name, level) => `${name} улучшен до уровня ${level}.`,
+  logPvpTrainStart: (name) => `Обучение: ${name} — началось.`,
+  logPvpTrainDone: (name, count) =>
+    `Обучение: ${name} — готово, теперь у тебя ${count}.`,
+  logPvpTrainCancel: (name) => `Обучение: ${name} — отменено, KT возвращены.`,
+  logPvpResearchStart: (name, level) =>
+    `Исследование: ${name} до уровня ${level} — началось в Лаборатории.`,
+  logPvpResearchDone: (name, level) =>
+    `Исследование: ${name} — готово, теперь уровень ${level}.`,
+  logPvpResearchCancel: (name) => `Исследование: ${name} — отменено, KT возвращены.`,
   logPvpLootGain: (lootKt) =>
     `Добыча PvP на ${fmtNum(lootKt, "ru")} KT добавлена в твой груз.`,
   logPvpLootStolen: (lootKt) =>

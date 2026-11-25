@@ -599,7 +599,7 @@ function ConfettiLayer({ burst }: { burst: Burst }) {
   );
 }
 
-type Tab = "tambang" | "peta" | "pasar" | "upgrade" | "wd" | "komunitas" | "lab" | "admin" | "pengaturan";
+type Tab = "tambang" | "peta" | "pasar" | "upgrade" | "wd" | "komunitas" | "hangar" | "lab" | "admin" | "pengaturan";
 
 /** Layar boot bermerek — tampil saat state awal game dimuat (bukan
  *  saat error). Judul + bar progres animasi + baris status yang
@@ -932,13 +932,29 @@ export function App() {
   const sellOne = useMutation({ mutationFn: (args: { oreId: string; qty: number }) => api.sellOre(args), onSuccess: (r) => { if (r.ok) playCoin(); showResult(r.ok, r.error, t("sellOneDone", { kt: fmt(r.ktGained) })); refresh(); } });
   const buy = useMutation({ mutationFn: (upgradeId: string) => api.buyUpgrade({ upgradeId }), onSuccess: (r) => { showResult(r.ok, r.error, t("upgradeBought", { level: r.newLevel ?? "?", cost: fmt(r.costPaid) })); refresh(); } });
   // PvP (2026-11-22): beli/upgrade pasukan + serang/lewati pertemuan.
-  const buyTroop = useMutation({
-    mutationFn: (kind: "attack" | "defense") => api.buyTroop({ kind }),
-    onSuccess: (r, kind) => { if (r.ok) playCoin(); showResult(r.ok, r.error, t("labBuyDone", { name: kind === "attack" ? t("labTroopAttackName") : t("labTroopDefenseName"), count: r.count })); refresh(); },
+  const startTraining = useMutation({
+    mutationFn: (kind: "attack" | "defense") => api.startTraining({ kind }),
+    onSuccess: (r, kind) => { if (r.ok) playCoin(); showResult(r.ok, r.error, t("hangarTrainDone", { name: kind === "attack" ? t("labTroopAttackName") : t("labTroopDefenseName") })); refresh(); },
   });
-  const upgradeTroop = useMutation({
-    mutationFn: (kind: "attack" | "defense") => api.upgradeTroop({ kind }),
-    onSuccess: (r, kind) => { if (r.ok) playCoin(); showResult(r.ok, r.error, t("labUpgradeDone", { name: kind === "attack" ? t("labTroopAttackName") : t("labTroopDefenseName"), level: r.level })); refresh(); },
+  const collectTraining = useMutation({
+    mutationFn: () => api.collectTraining({}),
+    onSuccess: (r) => { if (r.ok) playSuccess(); showResult(r.ok, r.error, r.ok ? t("hangarCollectDone", { name: r.kind === "attack" ? t("labTroopAttackName") : t("labTroopDefenseName"), count: r.count }) : null); refresh(); },
+  });
+  const cancelTraining = useMutation({
+    mutationFn: () => api.cancelTraining({}),
+    onSuccess: (r) => { showResult(r.ok, r.error, r.ok ? t("hangarTrainCancelled") : null); refresh(); },
+  });
+  const startResearch = useMutation({
+    mutationFn: (args: { kind: "level" | "camp" | "speed"; troopKind: "attack" | "defense" | null }) => api.startResearch(args),
+    onSuccess: (r, args) => { if (r.ok) playCoin(); showResult(r.ok, r.error, r.ok ? t("labResearchDone", { name: args.kind === "level" ? (args.troopKind === "attack" ? t("labTroopAttackName") : t("labTroopDefenseName")) : args.kind === "camp" ? t("labResearchCamp") : t("labResearchSpeed"), level: r.research?.targetLevel ?? 0 }) : null); refresh(); },
+  });
+  const collectResearch = useMutation({
+    mutationFn: () => api.collectResearch({}),
+    onSuccess: (r) => { if (r.ok) playClaim(); showResult(r.ok, r.error, r.ok ? t("labResearchCollected", { level: r.targetLevel }) : null); refresh(); },
+  });
+  const cancelResearch = useMutation({
+    mutationFn: () => api.cancelResearch({}),
+    onSuccess: (r) => { showResult(r.ok, r.error, r.ok ? t("labResearchCancelled") : null); refresh(); },
   });
   const pvpAttack = useMutation({
     mutationFn: () => api.pvpAttack({}),
@@ -985,7 +1001,8 @@ export function App() {
     { id: "upgrade", label: t("tabHangar"), icon: <WrenchIcon size={16} /> },
     { id: "wd", label: t("tabWd"), icon: <GemIcon size={16} /> },
     { id: "komunitas", label: t("tabCommunity"), icon: <UsersIcon size={16} /> },
-    { id: "lab", label: t("tabLab"), icon: <SwordsIcon size={16} /> },
+    { id: "hangar", label: t("tabTroops"), icon: <SwordsIcon size={16} /> },
+    { id: "lab", label: t("tabLab"), icon: <BookIcon size={16} /> },
   ];
   // Tab Kendali hanya untuk pemilik — pemain biasa tidak pernah
   // melihatnya (server tetap yang menegakkan: aksi Kendali ditolak
@@ -1257,7 +1274,8 @@ export function App() {
 
         {tab === "wd" && (<WdTab data={data} onCancel={(id) => cancelWd.mutate(id)} cancelling={cancelWd.isPending} onDone={(ok, err, good) => { showResult(ok, err, good); refresh(); }} />)}
         {tab === "komunitas" && (<KomunitasTab userId={sessionInfo.userId} referrals={data.player.referrals} channelBonusClaimed={data.player.channelBonusClaimed} channelBonusKt={data.player.channelBonusKt} onClaimChannel={() => claimChannel.mutate()} claimingChannel={claimChannel.isPending} />)}
-        {tab === "lab" && (<LabTab data={data} onBuy={(kind) => buyTroop.mutate(kind)} onUpgrade={(kind) => upgradeTroop.mutate(kind)} buying={buyTroop.isPending} upgrading={upgradeTroop.isPending} />)}
+        {tab === "hangar" && (<HangarTab data={data} onTrain={(kind) => startTraining.mutate(kind)} onCollectTraining={() => collectTraining.mutate()} onCancelTraining={() => cancelTraining.mutate()} trainingBusy={startTraining.isPending || collectTraining.isPending || cancelTraining.isPending} onRefresh={refresh} />)}
+        {tab === "lab" && (<LabTab data={data} onResearch={(args) => startResearch.mutate(args)} onCollectResearch={() => collectResearch.mutate()} onCancelResearch={() => cancelResearch.mutate()} researchBusy={startResearch.isPending || collectResearch.isPending || cancelResearch.isPending} onRefresh={refresh} />)}
         {tab === "admin" && p.isAdmin && (<AdminTab data={data} onDone={(ok, err, good) => { showResult(ok, err, good); refresh(); }} />)}
         </div>
       </main>
@@ -1821,16 +1839,23 @@ function openExternalLink(url: string) {
 // PvP (2026-11-22): Laboratorium Pasukan — dua jenis drone yang
 // dibeli/di-upgrade pakai KT yang sama dengan saldo WD. Kartu
 // ringkasan kekuatan (Serang / Bertahan) ada di ATAS tab ini.
-function LabTab({ data, onBuy, onUpgrade, buying, upgrading }: {
+function HangarTab({ data, onTrain, onCollectTraining, onCancelTraining, trainingBusy, onRefresh }: {
   data: GameState;
-  onBuy: (kind: "attack" | "defense") => void;
-  onUpgrade: (kind: "attack" | "defense") => void;
-  buying: boolean;
-  upgrading: boolean;
+  onTrain: (kind: "attack" | "defense") => void;
+  onCollectTraining: () => void;
+  onCancelTraining: () => void;
+  trainingBusy: boolean;
+  onRefresh: () => void;
 }) {
+  const now = useNow(true);
   const pvp = data.pvp;
-  const shielded = pvp.shieldUntil != null && new Date(pvp.shieldUntil).getTime() > Date.now();
-  const attackOnCooldown = pvp.attackReadyAt != null && new Date(pvp.attackReadyAt).getTime() > Date.now();
+  const shielded = pvp.shieldUntil != null && new Date(pvp.shieldUntil).getTime() > now;
+  const attackOnCooldown = pvp.attackReadyAt != null && new Date(pvp.attackReadyAt).getTime() > now;
+  const training = pvp.training;
+  const trainReady = training != null && new Date(training.endsAt).getTime() <= now;
+  useEffect(() => { if (trainReady) onRefresh(); }, [trainReady, onRefresh]);
+  const overMult = pvp.camp.used >= pvp.camp.capacity ? pvp.camp.used - pvp.camp.capacity + 2 : 1;
+  const trainName = training == null ? null : training.kind === "attack" ? t("labTroopAttackName") : t("labTroopDefenseName");
   const troops = [
     { kind: "attack" as const, name: t("labTroopAttackName"), desc: t("labTroopAttackDesc"), state: pvp.troops.attack, icon: <AttackDroneIcon size={18} />, accent: "text-red-300", img: droneAttackImg },
     { kind: "defense" as const, name: t("labTroopDefenseName"), desc: t("labTroopDefenseDesc"), state: pvp.troops.defense, icon: <DefenseDroneIcon size={18} />, accent: "text-sky-300", img: droneDefenseImg },
@@ -1838,16 +1863,37 @@ function LabTab({ data, onBuy, onUpgrade, buying, upgrading }: {
   return (
     <section className="mt-3 space-y-3">
       <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3">
-        <h2 className="font-display text-lg">{t("labTitle")}</h2>
-        <ExpandableText className="mt-1 text-sm text-[var(--dim)]">{t("labDesc")}</ExpandableText>
+        <h2 className="font-display text-lg">{t("hangarTitle")}</h2>
+        <ExpandableText className="mt-1 text-sm text-[var(--dim)]">{t("hangarDesc")}</ExpandableText>
+        <p className="mt-2 text-sm font-bold">{t("hangarCamp", { used: pvp.camp.used, capacity: pvp.camp.capacity })}</p>
+        <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-black/30" role="progressbar" aria-valuenow={pvp.camp.used} aria-valuemax={pvp.camp.capacity}>
+          <div className={`h-full rounded-full ${pvp.camp.used > pvp.camp.capacity ? "bg-amber-400" : "bg-cyan-400"}`} style={{ width: `${Math.min(100, (pvp.camp.used / Math.max(1, pvp.camp.capacity)) * 100)}%` }} />
+        </div>
+        {overMult > 1 && (<p className="mt-2 text-sm font-bold text-amber-300">{t("hangarOverCap", { mult: overMult })}</p>)}
         <div className="mt-3 flex divide-x divide-[var(--border)] rounded-xl border border-[var(--border)] bg-black/20">
           <p className="flex flex-1 items-baseline justify-center gap-1.5 px-2 py-1.5 text-[11px] font-semibold text-[var(--dim)]">{t("labAttackPower")} <span className="font-display text-base text-red-300">{fmt(pvp.attackPower)}</span></p>
           <p className="flex flex-1 items-baseline justify-center gap-1.5 px-2 py-1.5 text-[11px] font-semibold text-[var(--dim)]">{t("labDefensePower")} <span className="font-display text-base text-sky-300">{fmt(pvp.defensePower)}</span></p>
         </div>
         {shielded && (<p className="mt-2 text-sm font-bold text-emerald-300">{t("labShielded", { date: fmtDate(pvp.shieldUntil!) })}</p>)}
-        {attackOnCooldown && (<p className="mt-1 text-sm text-[var(--dim)]">{t("labCooldown", { dur: fmtDur(Math.max(0, Math.floor((new Date(pvp.attackReadyAt!).getTime() - Date.now()) / 1000))) })}</p>)}
+        {attackOnCooldown && (<p className="mt-1 text-sm text-[var(--dim)]">{t("labCooldown", { dur: fmtDur(Math.max(0, Math.floor((new Date(pvp.attackReadyAt!).getTime() - now) / 1000))) })}</p>)}
         {pvp.attackPower === 0 && pvp.defensePower === 0 && (<p className="mt-2 text-sm text-[var(--dim)]">{t("labNoTroops")}</p>)}
       </div>
+      {training != null && (
+        <div className="rounded-2xl border border-amber-400/50 bg-amber-400/10 p-3">
+          <h3 className="font-display text-sm">{t("hangarTraining", { name: trainName ?? "" })}</h3>
+          {trainReady ? (
+            <p className="mt-1 text-sm font-bold text-emerald-300">{t("hangarTrainingReady")}</p>
+          ) : (
+            <p className="mt-1 text-sm text-[var(--dim)]">{t("hangarTrainingLeft", { dur: fmtDur(Math.max(0, Math.floor((new Date(training.endsAt).getTime() - now) / 1000))) })}</p>
+          )}
+          <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
+            {trainReady && (
+              <button type="button" onClick={onCollectTraining} disabled={trainingBusy} className="btn-press rounded-xl bg-emerald-400 px-5 py-2 text-sm font-bold text-black disabled:opacity-40">{t("hangarCollectBtn")}</button>
+            )}
+            <button type="button" onClick={onCancelTraining} disabled={trainingBusy} className="btn-press rounded-xl border border-[var(--border)] bg-[var(--surface2)] px-5 py-2 text-sm font-bold disabled:opacity-40">{t("hangarCancelBtn")}</button>
+          </div>
+        </div>
+      )}
       {troops.map((tr) => (
         <div key={tr.kind} className="overflow-hidden rounded-2xl border border-[var(--border)] bg-[var(--surface)]">
           <div className="flex justify-center bg-[#151a48] py-2">
@@ -1858,11 +1904,8 @@ function LabTab({ data, onBuy, onUpgrade, buying, upgrading }: {
             <ExpandableText className="mt-1 text-sm text-[var(--dim)]">{tr.desc}</ExpandableText>
             <p className="mt-2 text-sm font-bold">{t("labOwned", { count: tr.state.count, level: tr.state.level, power: tr.state.power })}</p>
             <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
-              <button type="button" onClick={() => onBuy(tr.kind)} disabled={buying || upgrading || tr.state.count >= tr.state.maxCount || data.player.ktBalance < tr.state.buyCost} className="btn-press rounded-xl bg-cyan-400 px-5 py-2 text-sm font-bold text-black disabled:opacity-40">
-                {tr.state.count >= tr.state.maxCount ? t("labMaxCount") : t("labBuyBtn", { cost: fmt(tr.state.buyCost) })}
-              </button>
-              <button type="button" onClick={() => onUpgrade(tr.kind)} disabled={buying || upgrading || tr.state.count === 0 || tr.state.upgradeCost == null || data.player.ktBalance < tr.state.upgradeCost} className="btn-press rounded-xl border border-amber-400/50 bg-amber-400/10 px-5 py-2 text-sm font-bold text-amber-200 disabled:opacity-40">
-                {tr.state.upgradeCost == null ? t("labMaxLevel") : t("labUpgradeBtn", { level: tr.state.level + 1, cost: fmt(tr.state.upgradeCost) })}
+              <button type="button" onClick={() => onTrain(tr.kind)} disabled={trainingBusy || training != null || tr.state.count >= tr.state.maxCount || data.player.ktBalance < tr.state.trainCost} className="btn-press rounded-xl bg-cyan-400 px-5 py-2 text-sm font-bold text-black disabled:opacity-40">
+                {tr.state.count >= tr.state.maxCount ? t("hangarMaxCount") : t("hangarTrainBtn", { cost: fmt(tr.state.trainCost), dur: fmtDur(tr.state.trainDurationSec) })}
               </button>
             </div>
           </div>
@@ -1872,6 +1915,70 @@ function LabTab({ data, onBuy, onUpgrade, buying, upgrading }: {
         <summary className="font-display inline-flex cursor-pointer items-center gap-2 text-sm"><BookIcon size={15} /> {t("labHowTitle")}</summary>
         <ExpandableText className="mt-2 text-sm leading-relaxed">{t("labHowDesc")}</ExpandableText>
       </details>
+    </section>
+  );
+}
+
+function LabTab({ data, onResearch, onCollectResearch, onCancelResearch, researchBusy, onRefresh }: {
+  data: GameState;
+  onResearch: (args: { kind: "level" | "camp" | "speed"; troopKind: "attack" | "defense" | null }) => void;
+  onCollectResearch: () => void;
+  onCancelResearch: () => void;
+  researchBusy: boolean;
+  onRefresh: () => void;
+}) {
+  const now = useNow(true);
+  const pvp = data.pvp;
+  const research = pvp.research;
+  const researchReady = research != null && new Date(research.endsAt).getTime() <= now;
+  useEffect(() => { if (researchReady) onRefresh(); }, [researchReady, onRefresh]);
+  const researchName = research == null ? null : research.kind === "level"
+    ? research.troopKind === "attack" ? t("labTroopAttackName") : t("labTroopDefenseName")
+    : research.kind === "camp" ? t("labResearchCamp") : t("labResearchSpeed");
+  const tracks = [
+    { key: "level-attack", kind: "level" as const, troopKind: "attack" as const, name: t("labTroopAttackName"), desc: t("labTroopAttackDesc"), level: pvp.troops.attack.level, maxLevel: pvp.troops.attack.maxLevel, effect: t("labResearchLevelEffect", { power: 6 + 4 * (pvp.troops.attack.level + 1) }), blocked: pvp.troops.attack.count === 0 },
+    { key: "level-defense", kind: "level" as const, troopKind: "defense" as const, name: t("labTroopDefenseName"), desc: t("labTroopDefenseDesc"), level: pvp.troops.defense.level, maxLevel: pvp.troops.defense.maxLevel, effect: t("labResearchLevelEffect", { power: 6 + 4 * (pvp.troops.defense.level + 1) }), blocked: pvp.troops.defense.count === 0 },
+    { key: "camp", kind: "camp" as const, troopKind: null, name: t("labResearchCamp"), desc: t("labResearchCampDesc"), level: pvp.camp.campLevel, maxLevel: pvp.camp.maxResearchLevel, effect: t("labResearchCampEffect", { capacity: pvp.camp.capacity + 5 }), blocked: false },
+    { key: "speed", kind: "speed" as const, troopKind: null, name: t("labResearchSpeed"), desc: t("labResearchSpeedDesc"), level: pvp.camp.speedLevel, maxLevel: pvp.camp.maxResearchLevel, effect: t("labResearchSpeedEffect", { pct: Math.round(100 * (1 + 0.1 * (pvp.camp.speedLevel + 1)) - 100) }), blocked: false },
+  ];
+  return (
+    <section className="mt-3 space-y-3">
+      <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3">
+        <h2 className="font-display text-lg">{t("labTitle")}</h2>
+        <ExpandableText className="mt-1 text-sm text-[var(--dim)]">{t("labDesc")}</ExpandableText>
+      </div>
+      {research != null && (
+        <div className="rounded-2xl border border-amber-400/50 bg-amber-400/10 p-3">
+          <h3 className="font-display text-sm">{t("labResearchRunning", { name: researchName ?? "", level: research.targetLevel })}</h3>
+          {researchReady ? (
+            <p className="mt-1 text-sm font-bold text-emerald-300">{t("labResearchReady")}</p>
+          ) : (
+            <p className="mt-1 text-sm text-[var(--dim)]">{t("labResearchLeft", { dur: fmtDur(Math.max(0, Math.floor((new Date(research.endsAt).getTime() - now) / 1000))) })}</p>
+          )}
+          <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
+            {researchReady && (
+              <button type="button" onClick={onCollectResearch} disabled={researchBusy} className="btn-press rounded-xl bg-emerald-400 px-5 py-2 text-sm font-bold text-black disabled:opacity-40">{t("labResearchCollectBtn")}</button>
+            )}
+            <button type="button" onClick={onCancelResearch} disabled={researchBusy} className="btn-press rounded-xl border border-[var(--border)] bg-[var(--surface2)] px-5 py-2 text-sm font-bold disabled:opacity-40">{t("labResearchCancelBtn")}</button>
+          </div>
+        </div>
+      )}
+      {tracks.map((tr) => {
+        const maxed = tr.level >= tr.maxLevel;
+        const nextLevel = tr.level + 1;
+        return (
+          <div key={tr.key} className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3">
+            <h3 className="font-display text-sm">{tr.name}</h3>
+            <ExpandableText className="mt-1 text-sm text-[var(--dim)]">{tr.desc}</ExpandableText>
+            <p className="mt-2 text-sm font-bold">{t("labResearchLevel", { level: tr.level, max: tr.maxLevel })} · {tr.effect}</p>
+            <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
+              <button type="button" onClick={() => onResearch({ kind: tr.kind, troopKind: tr.troopKind })} disabled={researchBusy || research != null || maxed || tr.blocked || data.player.ktBalance < pvp.researchCost} className="btn-press rounded-xl bg-amber-400 px-5 py-2 text-sm font-bold text-black disabled:opacity-40">
+                {maxed ? t("labResearchMax") : tr.blocked ? t("labResearchNeedTroop") : t("labResearchBtn", { level: nextLevel, cost: fmt(pvp.researchCost), dur: fmtDur(pvp.researchBaseSec * nextLevel) })}
+              </button>
+            </div>
+          </div>
+        );
+      })}
     </section>
   );
 }
