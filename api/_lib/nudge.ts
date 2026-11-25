@@ -22,6 +22,7 @@ import * as schema from "../../deploy/neon/schema.pg.js";
 import { type Db } from "./store.js";
 import { normalizeLang, serverStrings, type Lang } from "./i18n.js";
 import { sendTelegramMessage } from "./stars.js";
+import { wdMinKtForPaidCount } from "./game.js";
 
 /** Pemain dianggap tidak aktif bila terakhir beraktivitas lebih
  *  dari ini. */
@@ -31,17 +32,37 @@ export const NUDGE_COOLDOWN_DAYS = 7;
 /** Tautan Mini App yang disertakan di pesan pengingat. */
 export const MINI_APP_URL = "https://t.me/astra_mining_bot/astra_mining";
 
+/** Persen menuju WD berikutnya yang MASIH KURANG (0 = sudah bisa
+ *  WD sekarang). Target = WD pertama 100 KT, WD berikutnya 5.000
+ *  KT (wdMinKtForPaidCount). */
+export function wdProgressRemaining(
+  ktBalance: number,
+  paidCount: number,
+): number {
+  const target = wdMinKtForPaidCount(paidCount);
+  const progress = Math.min(
+    100,
+    Math.floor((Math.max(0, ktBalance) / target) * 100),
+  );
+  return 100 - progress;
+}
+
 /** Teks pengingat dalam bahasa pemain (default "id" bila bahasa
  *  tidak dikenal — pemain lama yang belum pernah membuka game
- *  sejak migrasi 0011). Tautan Mini App sama untuk semua bahasa. */
-export function nudgeText(lang: Lang = "id"): string {
-  return serverStrings(lang).nudgeText(MINI_APP_URL);
+ *  sejak migrasi 0011). Tautan Mini App sama untuk semua bahasa.
+ *  `remainingPct` = persen menuju WD yang masih kurang (0 = sudah
+ *  bisa WD) — supaya pemain tahu seberapa dekat mereka dengan
+ *  penarikan dan semangat kembali. */
+export function nudgeText(lang: Lang = "id", remainingPct = 100): string {
+  return serverStrings(lang).nudgeText(MINI_APP_URL, remainingPct);
 }
 
 export type NudgeCandidate = {
   id: number;
   telegramId: number;
   language: Lang;
+  ktBalance: number;
+  paidWdCount: number;
 };
 
 function asDate(v: unknown): Date | null {
@@ -75,9 +96,20 @@ export async function selectNudgeCandidates(
       createdAt: schema.player.createdAt,
       lastNudgeAt: schema.player.lastInactiveNudgeAt,
       language: schema.player.language,
+      ktBalance: schema.player.ktBalance,
     })
     .from(schema.player)
     .where(isNotNull(schema.player.telegramId));
+  const paidRows = await db
+    .select({
+      playerId: schema.wdRequests.playerId,
+      paid: sql<number>`count(*)`,
+    })
+    .from(schema.wdRequests)
+    .where(eq(schema.wdRequests.status, "paid"))
+    .groupBy(schema.wdRequests.playerId);
+  const paidByPlayer = new Map<number, number>();
+  for (const r of paidRows) paidByPlayer.set(r.playerId, Number(r.paid));
   const lastAct = await db
     .select({
       playerId: schema.activity.playerId,
@@ -104,6 +136,8 @@ export async function selectNudgeCandidates(
       id: p.id,
       telegramId: p.telegramId,
       language: normalizeLang(p.language),
+      ktBalance: p.ktBalance ?? 0,
+      paidWdCount: paidByPlayer.get(p.id) ?? 0,
     });
   }
   return out;
@@ -133,7 +167,13 @@ export async function runInactiveNudge(
   for (const c of candidates) {
     let ok = false;
     try {
-      ok = await send(c.telegramId, nudgeText(c.language));
+      ok = await send(
+        c.telegramId,
+        nudgeText(
+          c.language,
+          wdProgressRemaining(c.ktBalance, c.paidWdCount),
+        ),
+      );
     } catch {
       ok = false;
     }

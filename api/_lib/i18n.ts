@@ -324,7 +324,7 @@ export interface ServerStrings {
   wdNotifyApproved: (usdt: number) => string;
   wdNotifyPaid: (usdt: number) => string;
   // Pengingat tidak aktif (2026-11-24): sama, per bahasa pemain.
-  nudgeText: (url: string) => string;
+  nudgeText: (url: string, remainingPct: number) => string;
   logWdReject: (id: number, kt: number) => string;
   // Referral: hadiah 10 KT yang dibayar ke pengundang saat teman
   // yang diundangnya menyelesaikan ekspedisi pertama.
@@ -554,8 +554,8 @@ const id: ServerStrings = {
     `WD kamu sebesar ${fmtNum(usdt, "id")} USDT sudah disetujui dan sedang diproses.`,
   wdNotifyPaid: (usdt) =>
     `WD kamu sebesar ${fmtNum(usdt, "id")} USDT sudah dibayar. Cek dompetmu!`,
-  nudgeText: (url) =>
-    `Sudah 3 hari kamu tidak menambang di ASTRA MINING — asteroidmu menunggumu! Buka game dan lanjutkan ekspedisimu.\n${url}`,
+  nudgeText: (url, remainingPct) =>
+    `Sudah 3 hari kamu tidak menambang di ASTRA MINING — asteroidmu menunggumu! ${remainingPct <= 0 ? "Saldo KT-mu sudah cukup — kamu bisa menarik USDT sekarang!" : `Tinggal ${remainingPct}% lagi kamu bisa menarik USDT!`} Buka game dan lanjutkan ekspedisimu.\n${url}`,
   logWdReject: (id, kt) =>
     `WD #${id} ditolak — ${fmtNum(kt, "id")} KT dikembalikan ke saldo pemain.`,
   logReferralReward: (amount) =>
@@ -797,8 +797,8 @@ const en: ServerStrings = {
     `Your withdrawal of ${fmtNum(usdt, "en")} USDT has been approved and is being processed.`,
   wdNotifyPaid: (usdt) =>
     `Your withdrawal of ${fmtNum(usdt, "en")} USDT has been paid. Check your wallet!`,
-  nudgeText: (url) =>
-    `You haven't mined in ASTRA MINING for 3 days — your asteroid is waiting for you! Open the game and continue your expedition.\n${url}`,
+  nudgeText: (url, remainingPct) =>
+    `You haven't mined in ASTRA MINING for 3 days — your asteroid is waiting for you! ${remainingPct <= 0 ? "Your KT balance is enough — you can withdraw USDT now!" : `Only ${remainingPct}% left until you can withdraw USDT!`} Open the game and continue your expedition.\n${url}`,
   logWdReject: (id, kt) =>
     `WD #${id} rejected — ${fmtNum(kt, "en")} KT refunded to the player's balance.`,
   logReferralReward: (amount) =>
@@ -1041,8 +1041,8 @@ const ru: ServerStrings = {
     `Твой вывод на ${fmtNum(usdt, "ru")} USDT одобрен и обрабатывается.`,
   wdNotifyPaid: (usdt) =>
     `Твой вывод на ${fmtNum(usdt, "ru")} USDT оплачен. Проверь кошелёк!`,
-  nudgeText: (url) =>
-    `Ты не добывал в ASTRA MINING уже 3 дня — твой астероид ждёт тебя! Открой игру и продолжи экспедицию.\n${url}`,
+  nudgeText: (url, remainingPct) =>
+    `Ты не добывал в ASTRA MINING уже 3 дня — твой астероид ждёт тебя! ${remainingPct <= 0 ? "Твоего баланса KT уже хватает — ты можешь вывести USDT прямо сейчас!" : `Осталось всего ${remainingPct}% до вывода USDT!`} Открой игру и продолжи экспедицию.\n${url}`,
   logWdReject: (id, kt) =>
     `Вывод #${id} отклонён — ${fmtNum(kt, "ru")} KT возвращены на баланс игрока.`,
   logReferralReward: (amount) =>
