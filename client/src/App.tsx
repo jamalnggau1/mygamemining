@@ -606,7 +606,7 @@ function ConfettiLayer({ burst }: { burst: Burst }) {
   );
 }
 
-type Tab = "tambang" | "peta" | "pasar" | "upgrade" | "wd" | "komunitas" | "hangar" | "lab" | "admin" | "pengaturan";
+type Tab = "tambang" | "peta" | "pasar" | "upgrade" | "wd" | "misi" | "hangar" | "lab" | "admin" | "pengaturan";
 
 /** Layar boot bermerek — tampil saat state awal game dimuat (bukan
  *  saat error). Judul + bar progres animasi + baris status yang
@@ -1007,7 +1007,7 @@ export function App() {
     { id: "pasar", label: t("tabMarket"), icon: <SatelliteIcon size={16} />, badge: totalOreQty > 0 ? totalOreQty : undefined },
     { id: "upgrade", label: t("tabHangar"), icon: <WrenchIcon size={16} /> },
     { id: "wd", label: t("tabWd"), icon: <GemIcon size={16} /> },
-    { id: "komunitas", label: t("tabCommunity"), icon: <UsersIcon size={16} /> },
+    { id: "misi", label: t("tabMisi"), icon: <GiftIcon size={16} /> },
     { id: "hangar", label: t("tabTroops"), icon: <SwordsIcon size={16} /> },
     { id: "lab", label: t("tabLab"), icon: <BookIcon size={16} /> },
   ];
@@ -1079,7 +1079,6 @@ export function App() {
               </div>
             </div>
           </section>
-          {p.canClaimDailyBonus && (<button type="button" onClick={() => claimBonus.mutate()} disabled={claimBonus.isPending} className="btn-press mt-2 inline-flex w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-cyan-400 bg-cyan-400/10 px-4 py-2 font-bold text-cyan-200"><GiftIcon size={17} /> {t("claimDaily", { kt: fmt(p.dailyBonusKt) })}</button>)}
           <div className="mt-2">
             <button type="button" onClick={handleWatchAd} disabled={watchAd.isPending || adPlaying || !p.ads.canWatch} aria-label={t("adAriaFull", { reward: fmt(p.ads.rewardEnergy), remaining: p.ads.remainingToday, cap: p.ads.dailyCap })} className="ad-banner-gold btn-press inline-flex w-full items-center justify-center gap-2 px-4 py-2.5 text-sm font-bold disabled:opacity-40">
               <span aria-hidden="true">«</span>
@@ -1280,7 +1279,7 @@ export function App() {
         )}
 
         {tab === "wd" && (<WdTab data={data} onCancel={(id) => cancelWd.mutate(id)} cancelling={cancelWd.isPending} onDone={(ok, err, good) => { showResult(ok, err, good); refresh(); }} />)}
-        {tab === "komunitas" && (<KomunitasTab userId={sessionInfo.userId} referrals={data.player.referrals} channelBonusClaimed={data.player.channelBonusClaimed} channelBonusKt={data.player.channelBonusKt} onClaimChannel={() => claimChannel.mutate()} claimingChannel={claimChannel.isPending} />)}
+        {tab === "misi" && (<MisiTab userId={sessionInfo.userId} referrals={data.player.referrals} channelBonusClaimed={data.player.channelBonusClaimed} channelBonusKt={data.player.channelBonusKt} onClaimChannel={() => claimChannel.mutate()} claimingChannel={claimChannel.isPending} canClaimDailyBonus={data.player.canClaimDailyBonus} dailyBonusKt={data.player.dailyBonusKt} onClaimDaily={() => claimBonus.mutate()} claimingDaily={claimBonus.isPending} />)}
         {tab === "hangar" && (<HangarTab data={data} onTrain={(kind) => startTraining.mutate(kind)} onCollectTraining={() => collectTraining.mutate()} onCancelTraining={() => cancelTraining.mutate()} trainingBusy={startTraining.isPending || collectTraining.isPending || cancelTraining.isPending} onRefresh={refresh} />)}
         {tab === "lab" && (<LabTab data={data} onResearch={(args) => startResearch.mutate(args)} onCollectResearch={() => collectResearch.mutate()} onCancelResearch={() => cancelResearch.mutate()} researchBusy={startResearch.isPending || collectResearch.isPending || cancelResearch.isPending} onRefresh={refresh} />)}
         {tab === "admin" && p.isAdmin && (<AdminTab data={data} onDone={(ok, err, good) => { showResult(ok, err, good); refresh(); }} />)}
@@ -1807,7 +1806,7 @@ function AdminWdCard({ wd, onDone }: { wd: Wd; onDone: (ok: boolean, error: stri
   return (<div className="rounded-2xl bg-[var(--surface)] border border-[var(--border)] p-3"><div className="flex items-center justify-between gap-2"><p className="font-display text-base">#{wd.id} · {fmt(wd.amountUsdt)} USDT</p><span className={`rounded-full border px-2 py-0.5 text-[11px] font-bold ${statusClass(wd.status)}`}>{statusLabel(wd.status)}</span></div>{wd.needsReview && (<p className="mt-2 rounded-lg border border-amber-400/50 bg-amber-400/10 px-3 py-2 text-xs font-bold text-amber-200">{t("wdNeedsReview")}</p>)}<p className="mt-1 text-sm text-[var(--dim)]">{t("wdLockedLine", { kt: fmt(wd.amountKt), date: fmtDateTime(wd.createdAt) })}</p><p className="mt-2 break-all rounded-lg bg-[var(--surface2)] px-3 py-2 font-mono text-xs">{wd.walletAddress}</p>{wd.adminNote && <p className="mt-2 text-sm">{t("wdAdminNote", { note: wd.adminNote })}</p>}{wd.txRef && <p className="mt-1 break-all font-mono text-xs text-[var(--dim)]">{t("wdTxRefLabel", { ref: wd.txRef })}</p>}{(wd.status === "pending" || wd.status === "approved") && (<div className="mt-2.5 space-y-2"><div><label htmlFor={`note-${wd.id}`} className="text-xs font-bold">{t("wdNoteLabel")}</label><input id={`note-${wd.id}`} value={note} onChange={(e) => setNote(e.target.value)} placeholder={t("wdNotePlaceholder")} className="mt-1 w-full rounded-xl border border-[var(--border)] bg-[var(--bg)] px-3 py-2 text-sm" /></div>{wd.status === "approved" && (<div><label htmlFor={`tx-${wd.id}`} className="text-xs font-bold">{t("wdTxRefLabel2")}</label><input id={`tx-${wd.id}`} value={txRef} onChange={(e) => setTxRef(e.target.value)} placeholder={t("wdTxRefPlaceholder")} className="mt-1 w-full rounded-xl border border-[var(--border)] bg-[var(--bg)] px-3 py-2 font-mono text-sm" /></div>)}<div className="flex flex-wrap gap-2">{wd.status === "pending" && (<button type="button" onClick={() => act.mutate("approve")} disabled={act.isPending} aria-label={t("wdApproveAria", { id: wd.id })} className="btn-press rounded-xl bg-sky-600 px-4 py-2 font-bold text-white disabled:opacity-40">{t("wdApprove")}</button>)}{wd.status === "approved" && (<button type="button" onClick={() => act.mutate("pay")} disabled={act.isPending} aria-label={t("wdPayAria", { id: wd.id })} className="btn-press rounded-xl bg-emerald-600 px-4 py-2 font-bold text-white disabled:opacity-40">{t("wdMarkPaid")}</button>)}<button type="button" onClick={() => act.mutate("reject")} disabled={act.isPending} aria-label={t("wdRejectAria", { id: wd.id })} className="btn-press rounded-xl border border-red-400 px-4 py-2 font-bold text-red-300 disabled:opacity-40">{t("wdRejectRefund")}</button></div></div>)}</div>);
 }
 
-// --- Tab Komunitas (2026-11-20) ---------------------------------------
+// --- Tab Misi (dulu Komunitas, 2026-11-20; rename + bonus harian pindah ke sini 2026-11-25) ---
 // Untuk SEMUA pemain (Kendali tetap admin-only). Isinya: gabung channel
 // resmi, gabung grup diskusi (segera hadir — belum ada link grup), dan
 // referral. Referral SUDAH dilacak server: saat pemain membuka Mini
@@ -1996,7 +1995,7 @@ function LabTab({ data, onResearch, onCollectResearch, onCancelResearch, researc
   );
 }
 
-function KomunitasTab({ userId, referrals, channelBonusClaimed, channelBonusKt, onClaimChannel, claimingChannel }: { userId: number | null; referrals: { invited: number; rewarded: number; earnedKt: number; list: Array<{ id: number; name: string; status: "pending" | "rewarded"; joinedAt: string }> }; channelBonusClaimed: boolean; channelBonusKt: number; onClaimChannel: () => void; claimingChannel: boolean }) {
+function MisiTab({ userId, referrals, channelBonusClaimed, channelBonusKt, onClaimChannel, claimingChannel, canClaimDailyBonus, dailyBonusKt, onClaimDaily, claimingDaily }: { userId: number | null; referrals: { invited: number; rewarded: number; earnedKt: number; list: Array<{ id: number; name: string; status: "pending" | "rewarded"; joinedAt: string }> }; channelBonusClaimed: boolean; channelBonusKt: number; onClaimChannel: () => void; claimingChannel: boolean; canClaimDailyBonus: boolean; dailyBonusKt: number; onClaimDaily: () => void; claimingDaily: boolean }) {
   const [copied, setCopied] = useState(false);
   // Link referral: Mini App + startapp payload ref_<telegramId>.
   // startapp membuka Mini App LANGSUNG dengan kode menempel
@@ -2033,6 +2032,20 @@ function KomunitasTab({ userId, referrals, channelBonusClaimed, channelBonusKt, 
   };
   return (
     <section className="mt-3 space-y-2.5">
+      <div className="rounded-2xl bg-[var(--surface)] border border-[var(--border)] p-3">
+        <div className="flex items-start gap-3">
+          <span aria-hidden="true" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-[var(--border)] bg-[var(--surface2)]"><GiftIcon size={20} /></span>
+          <div>
+            <h3 className="font-display text-sm">{t("dailyBonusTitle")}</h3>
+            <ExpandableText className="mt-0.5 text-sm text-[var(--dim)]">{t("dailyBonusDesc", { kt: fmt(dailyBonusKt) })}</ExpandableText>
+          </div>
+        </div>
+        {canClaimDailyBonus ? (
+          <button type="button" onClick={onClaimDaily} disabled={claimingDaily} className="btn-press mt-2.5 w-full rounded-xl border-2 border-dashed border-cyan-400 bg-cyan-400/10 px-4 py-2 font-bold text-cyan-200">{t("claimDaily", { kt: fmt(dailyBonusKt) })}</button>
+        ) : (
+          <p className="mt-2.5 text-center text-sm font-bold text-emerald-300">{t("dailyBonusClaimedState")}</p>
+        )}
+      </div>
       <div className="rounded-2xl bg-[var(--surface)] border border-[var(--border)] p-3">
         <div className="flex items-start gap-3">
           <span aria-hidden="true" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-[var(--border)] bg-[var(--surface2)]"><SatelliteIcon size={20} /></span>
