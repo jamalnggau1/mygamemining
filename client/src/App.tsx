@@ -1879,19 +1879,19 @@ function HangarTab({ data, onTrain, onCollectTraining, onCancelTraining, trainin
         {pvp.attackPower === 0 && pvp.defensePower === 0 && (<p className="mt-2 text-sm text-[var(--dim)]">{t("labNoTroops")}</p>)}
       </div>
       {training != null && (
-        <div className="rounded-2xl border border-amber-400/50 bg-amber-400/10 p-2.5">
-          <h3 className="text-sm font-bold">{t("hangarTraining", { name: trainName ?? "" })}</h3>
-          {trainReady ? (
-            <p className="mt-1 text-sm font-bold text-emerald-300">{t("hangarTrainingReady")}</p>
-          ) : (
-            <p className="mt-1 text-sm text-[var(--dim)]">{t("hangarTrainingLeft", { dur: fmtDur(Math.max(0, Math.floor((new Date(training.endsAt).getTime() - now) / 1000))) })}</p>
-          )}
-          <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
-            {trainReady && (
-              <button type="button" onClick={onCollectTraining} disabled={trainingBusy} className="btn-press rounded-xl bg-emerald-400 px-4 py-1.5 text-sm font-bold text-black disabled:opacity-40">{t("hangarCollectBtn")}</button>
+        <div className="flex items-center gap-2 rounded-xl border border-amber-400/50 bg-amber-400/10 px-2.5 py-2">
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-bold">{t("hangarTraining", { name: trainName ?? "" })}</p>
+            {trainReady ? (
+              <p className="text-xs font-bold text-emerald-300">{t("hangarTrainingReady")}</p>
+            ) : (
+              <p className="text-xs text-[var(--dim)]">{t("hangarTrainingLeft", { dur: fmtDur(Math.max(0, Math.floor((new Date(training.endsAt).getTime() - now) / 1000))) })}</p>
             )}
-            <button type="button" onClick={onCancelTraining} disabled={trainingBusy} className="btn-press rounded-xl border border-[var(--border)] bg-[var(--surface2)] px-4 py-1.5 text-sm font-bold disabled:opacity-40">{t("hangarCancelBtn")}</button>
           </div>
+          {trainReady && (
+            <button type="button" onClick={onCollectTraining} disabled={trainingBusy} className="btn-press shrink-0 rounded-lg bg-emerald-400 px-3 py-1 text-xs font-bold text-black disabled:opacity-40">{t("hangarCollectBtn")}</button>
+          )}
+          <button type="button" onClick={onCancelTraining} disabled={trainingBusy} className="btn-press shrink-0 rounded-lg border border-[var(--border)] bg-[var(--surface2)] px-3 py-1 text-xs font-bold disabled:opacity-40">{t("hangarCancelBtn")}</button>
         </div>
       )}
       {troops.map((tr) => (
@@ -1903,11 +1903,9 @@ function HangarTab({ data, onTrain, onCollectTraining, onCancelTraining, trainin
             <h3 className="inline-flex items-center gap-2 text-sm font-bold"><span className={tr.accent}>{tr.icon}</span> {tr.name}</h3>
             <ExpandableText className="mt-1 text-sm text-[var(--dim)]">{tr.desc}</ExpandableText>
             <p className="mt-2 text-sm font-bold">{t("labOwned", { count: tr.state.count, level: tr.state.level, power: tr.state.power })}</p>
-            <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
-              <button type="button" onClick={() => onTrain(tr.kind)} disabled={trainingBusy || training != null || tr.state.count >= tr.state.maxCount || data.player.ktBalance < tr.state.trainCost} className="btn-press rounded-xl bg-cyan-400 px-4 py-1.5 text-sm font-bold text-black disabled:opacity-40">
-                {tr.state.count >= tr.state.maxCount ? t("hangarMaxCount") : t("hangarTrainBtn", { cost: fmt(tr.state.trainCost), dur: fmtDur(tr.state.trainDurationSec) })}
-              </button>
-            </div>
+            <button type="button" onClick={() => onTrain(tr.kind)} disabled={trainingBusy || training != null || tr.state.count >= tr.state.maxCount || data.player.ktBalance < tr.state.trainCost} className="btn-press mt-3 w-full rounded-xl bg-cyan-400 px-4 py-1.5 text-sm font-bold text-black disabled:opacity-40">
+              {tr.state.count >= tr.state.maxCount ? t("hangarMaxCount") : t("hangarTrainBtn", { cost: fmt(tr.state.trainCost), dur: fmtDur(tr.state.trainDurationSec) })}
+            </button>
           </div>
         </div>
       ))}
@@ -1948,19 +1946,19 @@ function LabTab({ data, onResearch, onCollectResearch, onCancelResearch, researc
         <ExpandableText className="mt-1 text-sm text-[var(--dim)]">{t("labDesc")}</ExpandableText>
       </div>
       {research != null && (
-        <div className="rounded-2xl border border-amber-400/50 bg-amber-400/10 p-2.5">
-          <h3 className="text-sm font-bold">{t("labResearchRunning", { name: researchName ?? "", level: research.targetLevel })}</h3>
-          {researchReady ? (
-            <p className="mt-1 text-sm font-bold text-emerald-300">{t("labResearchReady")}</p>
-          ) : (
-            <p className="mt-1 text-sm text-[var(--dim)]">{t("labResearchLeft", { dur: fmtDur(Math.max(0, Math.floor((new Date(research.endsAt).getTime() - now) / 1000))) })}</p>
-          )}
-          <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
-            {researchReady && (
-              <button type="button" onClick={onCollectResearch} disabled={researchBusy} className="btn-press rounded-xl bg-emerald-400 px-4 py-1.5 text-sm font-bold text-black disabled:opacity-40">{t("labResearchCollectBtn")}</button>
+        <div className="flex items-center gap-2 rounded-xl border border-amber-400/50 bg-amber-400/10 px-2.5 py-2">
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-bold">{t("labResearchRunning", { name: researchName ?? "", level: research.targetLevel })}</p>
+            {researchReady ? (
+              <p className="text-xs font-bold text-emerald-300">{t("labResearchReady")}</p>
+            ) : (
+              <p className="text-xs text-[var(--dim)]">{t("labResearchLeft", { dur: fmtDur(Math.max(0, Math.floor((new Date(research.endsAt).getTime() - now) / 1000))) })}</p>
             )}
-            <button type="button" onClick={onCancelResearch} disabled={researchBusy} className="btn-press rounded-xl border border-[var(--border)] bg-[var(--surface2)] px-4 py-1.5 text-sm font-bold disabled:opacity-40">{t("labResearchCancelBtn")}</button>
           </div>
+          {researchReady && (
+            <button type="button" onClick={onCollectResearch} disabled={researchBusy} className="btn-press shrink-0 rounded-lg bg-emerald-400 px-3 py-1 text-xs font-bold text-black disabled:opacity-40">{t("labResearchCollectBtn")}</button>
+          )}
+          <button type="button" onClick={onCancelResearch} disabled={researchBusy} className="btn-press shrink-0 rounded-lg border border-[var(--border)] bg-[var(--surface2)] px-3 py-1 text-xs font-bold disabled:opacity-40">{t("labResearchCancelBtn")}</button>
         </div>
       )}
       {tracks.map((tr) => {
