@@ -2071,37 +2071,37 @@ function MisiTab({ userId, referrals, channelBonusClaimed, channelBonusKt, onCla
         </div>
         <button type="button" disabled aria-label={t("commGroupAria")} className="mt-2.5 w-full rounded-xl border border-[var(--border)] bg-[var(--surface2)] px-4 py-2 font-bold text-[var(--dim)] disabled:opacity-60">{t("commGroupSoon")}</button>
       </div>
-      <div className="rounded-2xl bg-[var(--surface)] border border-[var(--border)] p-3">
-        <div className="flex items-start gap-3">
-          <span aria-hidden="true" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-[var(--border)] bg-[var(--surface2)]"><GiftIcon size={20} /></span>
+      <div className="rounded-2xl bg-[var(--surface)] border border-[var(--border)] p-2.5">
+        <div className="flex items-start gap-2.5">
+          <span aria-hidden="true" className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-[var(--border)] bg-[var(--surface2)]"><GiftIcon size={18} /></span>
           <div>
-            <h3 className="font-display text-sm">{t("commRefTitle")}</h3>
-            <ExpandableText className="mt-0.5 text-sm text-[var(--dim)]">{t("commRefDesc", { kt: fmt(REFERRAL_REWARD_KT), refereeKt: fmt(REFERRAL_REFEREE_REWARD_KT) })}</ExpandableText>
+            <h3 className="text-sm font-bold">{t("commRefTitle")}</h3>
+            <ExpandableText className="mt-0.5 text-xs text-[var(--dim)]">{t("commRefDesc", { kt: fmt(REFERRAL_REWARD_KT), refereeKt: fmt(REFERRAL_REFEREE_REWARD_KT) })}</ExpandableText>
           </div>
         </div>
         {refLink ? (
-          <div className="mt-2.5">
+          <div className="mt-2">
             <label htmlFor="ref-link" className="text-xs font-bold">{t("commRefLinkLabel")}</label>
             <div className="mt-1 flex gap-2">
-              <p id="ref-link" className="min-w-0 flex-1 break-all rounded-xl bg-[var(--surface2)] px-3 py-2 font-mono text-xs">{refLink}</p>
-              <button type="button" onClick={copyLink} aria-label={t("commRefCopyAria")} className="btn-press shrink-0 rounded-xl bg-cyan-400 px-4 py-2 font-bold text-black">{copied ? t("commRefCopied") : t("commRefCopy")}</button>
+              <p id="ref-link" className="min-w-0 flex-1 break-all rounded-xl bg-[var(--surface2)] px-2.5 py-1.5 font-mono text-xs">{refLink}</p>
+              <button type="button" onClick={copyLink} aria-label={t("commRefCopyAria")} className="btn-press shrink-0 self-center rounded-xl bg-cyan-400 px-3 py-1.5 text-xs font-bold text-black">{copied ? t("commRefCopied") : t("commRefCopy")}</button>
             </div>
           </div>
         ) : (
           <p className="mt-3 text-sm text-[var(--dim)]">{t("commRefNoTelegram")}</p>
         )}
-        <p className="mt-2 text-xs text-[var(--dim)]">{t("commRefStats", { invited: fmt(referrals.invited), earned: fmt(referrals.earnedKt) })}</p>
+        <p className="mt-1.5 text-xs text-[var(--dim)]">{t("commRefStats", { invited: fmt(referrals.invited), earned: fmt(referrals.earnedKt) })}</p>
         {referrals.list.length > 0 ? (
-          <div className="mt-2.5">
+          <div className="mt-2">
             <p className="text-xs font-bold">{t("commRefListTitle")}</p>
             <ul className="mt-1.5 space-y-1.5">
               {referrals.list.map((f) => (
-                <li key={f.id} className="flex items-center justify-between gap-2 rounded-xl bg-[var(--surface2)] px-3 py-2">
+                <li key={f.id} className="flex items-center justify-between gap-2 rounded-xl bg-[var(--surface2)] px-2.5 py-1.5">
                   <div className="min-w-0">
-                    <p className="truncate text-sm font-bold">{f.name}</p>
-                    <p className="text-xs text-[var(--dim)]">{fmtDate(f.joinedAt)}</p>
+                    <p className="truncate text-xs font-bold">{f.name}</p>
+                    <p className="text-[11px] text-[var(--dim)]">{fmtDate(f.joinedAt)}</p>
                   </div>
-                  <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[11px] font-bold ${f.status === "rewarded" ? "border-emerald-400/50 bg-emerald-400/15 text-emerald-300" : "border-amber-400/50 bg-amber-400/15 text-amber-300"}`}>{f.status === "rewarded" ? t("refRewarded", { kt: fmt(REFERRAL_REWARD_KT) }) : t("refPending")}</span>
+                  <span className={`shrink-0 rounded-full border px-1.5 py-0.5 text-[10px] font-bold ${f.status === "rewarded" ? "border-emerald-400/50 bg-emerald-400/15 text-emerald-300" : "border-amber-400/50 bg-amber-400/15 text-amber-300"}`}>{f.status === "rewarded" ? t("refRewarded", { kt: fmt(REFERRAL_REWARD_KT) }) : t("refPending")}</span>
                 </li>
               ))}
             </ul>
