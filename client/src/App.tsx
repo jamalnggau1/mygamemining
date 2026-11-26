@@ -22,6 +22,43 @@ import kuiperImg from "./assets/map-kuiper.webp";
 import ktLogoImg from "./assets/kt-logo.webp";
 import droneAttackImg from "./assets/drone-serbu.webp";
 import droneDefenseImg from "./assets/drone-perisai.webp";
+import oreRegolithImg from "./assets/ores/ore-regolith.webp";
+import oreKondritImg from "./assets/ores/ore-kondrit.webp";
+import oreBesinikelImg from "./assets/ores/ore-besinikel.webp";
+import oreKobaltImg from "./assets/ores/ore-kobalt.webp";
+import orePlatinumImg from "./assets/ores/ore-platinum.webp";
+import oreIridiumImg from "./assets/ores/ore-iridium.webp";
+import oreHelium3Img from "./assets/ores/ore-helium3.webp";
+import oreOpalImg from "./assets/ores/ore-opal.webp";
+import oreTopazImg from "./assets/ores/ore-topaz.webp";
+import oreTurkuoisImg from "./assets/ores/ore-turkuois.webp";
+import oreAmetisImg from "./assets/ores/ore-ametis.webp";
+import oreZamrudImg from "./assets/ores/ore-zamrud.webp";
+import oreRubiImg from "./assets/ores/ore-rubi.webp";
+import oreSafirImg from "./assets/ores/ore-safir.webp";
+import oreBerlianImg from "./assets/ores/ore-berlian.webp";
+import oreOpalesImg from "./assets/ores/ore-opales.webp";
+import oreVoidiumImg from "./assets/ores/ore-voidium.webp";
+
+const ORE_IMAGES: Record<string, string> = {
+  regolith: oreRegolithImg,
+  kondrit: oreKondritImg,
+  besinikel: oreBesinikelImg,
+  kobalt: oreKobaltImg,
+  platinum: orePlatinumImg,
+  iridium: oreIridiumImg,
+  helium3: oreHelium3Img,
+  opal: oreOpalImg,
+  topaz: oreTopazImg,
+  turkuois: oreTurkuoisImg,
+  ametis: oreAmetisImg,
+  zamrud: oreZamrudImg,
+  rubi: oreRubiImg,
+  safir: oreSafirImg,
+  berlian: oreBerlianImg,
+  opales: oreOpalesImg,
+  voidium: oreVoidiumImg,
+};
 
 const MAP_IMAGES: Record<string, string> = {
   hero: heroImg,
@@ -74,7 +111,12 @@ function useNow(active: boolean): number {
 const RARE_ORE_IDS = new Set(["platinum", "iridium", "helium3", "zamrud", "rubi", "safir", "berlian", "opales", "voidium"]);
 
 /** Distinct mineral artwork per ore id, tinted with the ore's own color. */
-export function OreIcon({ id, color, size = 26 }: { id: string; color: string; size?: number }) {
+export function OreIcon({ id, color, size = 26, fill = false }: { id: string; color: string; size?: number; fill?: boolean }) {
+  const img = ORE_IMAGES[id];
+  if (img) {
+    if (fill) return <img src={img} alt="" aria-hidden="true" className="h-full w-full object-cover" />;
+    return <img src={img} width={size} height={size} alt="" aria-hidden="true" className="rounded-md object-cover" style={{ width: size, height: size }} />;
+  }
   const common = { width: size, height: size, viewBox: "0 0 24 24", "aria-hidden": true as const, focusable: false as const };
   switch (id) {
     case "regolith": // irregular grey rock with craters
@@ -1153,7 +1195,7 @@ export function App() {
                         return (
                           <li key={v.index} className={`vein-tile rounded-xl border p-2.5 ${v.mined ? "border-[var(--border)] bg-black/30 opacity-70" : "border-cyan-500/25 bg-[var(--surface2)]"}`}>
                             <div className="flex items-start gap-3">
-                              <span aria-hidden="true" className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-white/20 ${v.mined ? "" : "ore-glow"} ${rare && !v.mined ? "crystal-shine" : ""}`} style={{ backgroundColor: v.color + "33" }}><OreIcon id={v.icon} color={v.color} size={24} /></span>
+                              <span aria-hidden="true" className={`flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-white/20 ${v.mined ? "" : "ore-glow"} ${rare && !v.mined ? "crystal-shine" : ""}`} style={{ backgroundColor: v.color + "33" }}><OreIcon id={v.icon} color={v.color} size={24} fill /></span>
                               <div className="min-w-0 flex-1">
                                 <p className="font-bold leading-tight">{v.name} <span className="text-sm font-semibold text-[var(--dim)]">{t("veinQty", { qty: v.qty, s: v.qty === 1 ? "" : "s" })}</span></p>
                                 <p className="mt-0.5 text-xs text-[var(--dim)]">
@@ -1264,7 +1306,7 @@ export function App() {
             <div className="p-3">
               <div className="flex items-center justify-between gap-3"><h2 className="font-display text-base">{t("marketTitle")}</h2><button type="button" onClick={() => sellAll.mutate()} disabled={sellAll.isPending || totalOreQty === 0} className="btn-press rounded-xl bg-cyan-400 px-3 py-1.5 text-xs font-bold text-black disabled:opacity-40">{t("sellAll")}</button></div>
               <p className="mt-1 line-clamp-2 text-sm text-[var(--dim)]">{t("marketNote", { premium: p.premium.active ? t("marketNotePremium") : "" })}</p>
-              <ul className="mt-2 divide-y divide-[var(--border)]">{data.ores.map((o) => { const rare = RARE_ORE_IDS.has(o.id); return (<li key={o.id} className="flex items-center gap-3 py-2"><span aria-hidden="true" className={`ore-glow flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-white/20 ${rare ? "crystal-shine" : ""}`} style={{ backgroundColor: o.color + "33" }}><OreIcon id={o.icon} color={o.color} size={24} /></span><div className="min-w-0 flex-1"><p className="font-bold leading-tight">{o.name}</p><p className="text-xs text-[var(--dim)]">{fmt(o.sellPrice)} {t("perUnitCargo", { qty: fmt(o.qty) })}</p></div><p className="font-display text-sm">{fmt(o.sellPrice * o.qty)} KT</p><button type="button" onClick={() => sellOne.mutate({ oreId: o.id, qty: o.qty })} disabled={sellOne.isPending || o.qty === 0} aria-label={t("sellAllAria", { name: o.name })} className="btn-press rounded-lg bg-[var(--surface2)] px-3 py-2 text-sm font-bold disabled:opacity-40">{t("sell")}</button></li>); })}</ul>
+              <ul className="mt-2 divide-y divide-[var(--border)]">{data.ores.map((o) => { const rare = RARE_ORE_IDS.has(o.id); return (<li key={o.id} className="flex items-center gap-3 py-2"><span aria-hidden="true" className={`ore-glow flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-white/20 ${rare ? "crystal-shine" : ""}`} style={{ backgroundColor: o.color + "33" }}><OreIcon id={o.icon} color={o.color} size={24} fill /></span><div className="min-w-0 flex-1"><p className="font-bold leading-tight">{o.name}</p><p className="text-xs text-[var(--dim)]">{fmt(o.sellPrice)} {t("perUnitCargo", { qty: fmt(o.qty) })}</p></div><p className="font-display text-sm">{fmt(o.sellPrice * o.qty)} KT</p><button type="button" onClick={() => sellOne.mutate({ oreId: o.id, qty: o.qty })} disabled={sellOne.isPending || o.qty === 0} aria-label={t("sellAllAria", { name: o.name })} className="btn-press rounded-lg bg-[var(--surface2)] px-3 py-2 text-sm font-bold disabled:opacity-40">{t("sell")}</button></li>); })}</ul>
               {totalOreQty === 0 && (<p className="py-3 text-center text-sm text-[var(--dim)]">{t("cargoEmpty", { tab: t("tabMine") })}</p>)}
             </div>
           </section>
