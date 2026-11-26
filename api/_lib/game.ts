@@ -1621,7 +1621,10 @@ async function payReferralRewardIfPending(
 
 // Peluang bertemu penambang lain saat scan selesai, per peta
 // (indeks peta 0..4). Peta 1 (Orbit Rendah) aman: 0%.
-export const PVP_ENCOUNTER_CHANCE = [0, 0.1, 0.15, 0.2, 0.3] as const;
+// Peluang pertemuan PvP saat scan selesai (keputusan owner
+// 2026-11-26: "naikan deh 20 di peta 2 dan naik terus, dasarnya
+// 20 kan tadi dasarnya 10" — Peta 1 tetap 0%, aman).
+export const PVP_ENCOUNTER_CHANCE = [0, 0.2, 0.25, 0.3, 0.4] as const;
 // Penawaran pertemuan berlaku 10 menit, atau sampai scan/asteroid/
 // peta berikutnya dimulai (startScan/abandon/travel/complete
 // menghapus penawaran lama).
