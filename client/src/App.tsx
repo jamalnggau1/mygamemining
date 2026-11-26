@@ -1110,6 +1110,10 @@ export function App() {
                 <p className="font-display mt-1 text-xl leading-tight">{t("sector", { n: p.layer })}</p>
                 {p.sectorProgress && (<p className="text-xs text-slate-200">{t("sectorProgress", { current: p.sectorProgress.current, needed: p.sectorProgress.needed, next: p.layer + 1 })}</p>)}
                 <p className="text-sm text-slate-200">{t("kmFromEarth", { km: fmt(p.depthMeters) })}</p>
+                <div className="mt-2 flex items-center gap-3 border-t border-white/15 pt-2">
+                  <span className="inline-flex items-center gap-1 text-xs font-bold text-slate-200" title={t("labAttackPower")}><span className="text-red-300"><SwordsIcon size={14} /></span> {fmt(data.pvp.attackPower)}</span>
+                  <span className="inline-flex items-center gap-1 text-xs font-bold text-slate-200" title={t("labDefensePower")}><span className="text-sky-300"><ShieldIcon size={14} /></span> {fmt(data.pvp.defensePower)}</span>
+                </div>
               </div>
               <div className="w-28 shrink-0 text-right sm:w-32">
                 <p className="inline-flex items-center justify-end gap-1 text-[11px] font-semibold text-[var(--dim)]"><ZapIcon size={13} /> {t("shipEnergyLabel")}</p>
