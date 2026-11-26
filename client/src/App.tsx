@@ -1424,8 +1424,9 @@ function SettingsTab({ sessionLabel, username, onOpenTutorial }: { sessionLabel:
             <p className="text-sm font-bold">{t("soundTitle")}</p>
             <p className="mt-0.5 text-xs text-[var(--dim)]">{t("soundHint")}</p>
           </div>
-          <button type="button" role="switch" aria-checked={on} aria-label={t("soundTitle")} onClick={toggle} className={`btn-press relative h-5 w-9 shrink-0 rounded-full transition-colors ${on ? "bg-cyan-400" : "bg-[var(--surface2)]"}`}>
-            <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-all ${on ? "left-[18px]" : "left-0.5"}`} />
+          <button type="button" role="switch" aria-checked={on} aria-label={t("soundTitle")} onClick={toggle} className="btn-press relative h-6 w-9 shrink-0">
+            <span className={`absolute inset-x-0 top-1/2 h-3 -translate-y-1/2 rounded-full transition-colors ${on ? "bg-cyan-400" : "bg-[var(--surface2)]"}`} />
+            <span className={`absolute top-1/2 h-2.5 w-2.5 -translate-y-1/2 rounded-full bg-white shadow transition-all ${on ? "left-[24px]" : "left-0.5"}`} />
           </button>
         </div>
         <p className="mt-2 text-xs font-bold text-[var(--dim)]">{on ? t("soundOn") : t("soundOff")}</p>
@@ -1436,8 +1437,9 @@ function SettingsTab({ sessionLabel, username, onOpenTutorial }: { sessionLabel:
             <p className="text-sm font-bold">{t("musicTitle")}</p>
             <p className="mt-0.5 text-xs text-[var(--dim)]">{t("musicHint")}</p>
           </div>
-          <button type="button" role="switch" aria-checked={musicOn} aria-label={t("musicTitle")} onClick={toggleMusic} className={`btn-press relative h-5 w-9 shrink-0 rounded-full transition-colors ${musicOn ? "bg-cyan-400" : "bg-[var(--surface2)]"}`}>
-            <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-all ${musicOn ? "left-[18px]" : "left-0.5"}`} />
+          <button type="button" role="switch" aria-checked={musicOn} aria-label={t("musicTitle")} onClick={toggleMusic} className="btn-press relative h-6 w-9 shrink-0">
+            <span className={`absolute inset-x-0 top-1/2 h-3 -translate-y-1/2 rounded-full transition-colors ${musicOn ? "bg-cyan-400" : "bg-[var(--surface2)]"}`} />
+            <span className={`absolute top-1/2 h-2.5 w-2.5 -translate-y-1/2 rounded-full bg-white shadow transition-all ${musicOn ? "left-[24px]" : "left-0.5"}`} />
           </button>
         </div>
         <p className="mt-2 text-xs font-bold text-[var(--dim)]">{musicOn ? t("soundOn") : t("soundOff")}</p>
