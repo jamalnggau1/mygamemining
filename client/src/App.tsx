@@ -1192,12 +1192,12 @@ export function App() {
             {data.pvp.encounter && (
               <div className="rounded-2xl border border-red-500/40 bg-red-500/10 p-2.5">
                 <h3 className="inline-flex items-center gap-2 text-sm font-bold text-red-200"><SwordsIcon size={16} /> {t("pvpEncounterTitle")}</h3>
-                <p className="mt-1 text-sm">
+                <p className="mt-1 text-xs">
                   {data.pvp.encounter.isNpc
                     ? t("pvpEncounterPirate")
                     : t("pvpEncounterMiner", { name: data.pvp.encounter.defenderName ?? t("pvpUnknownMiner") })}
                 </p>
-                <p className="mt-1 text-sm font-bold">
+                <p className="mt-1 text-xs font-bold">
                   {t("pvpEncounterPowers", { def: data.pvp.encounter.defensePower, atk: data.pvp.attackPower })}
                 </p>
                 <p className="mt-0.5 text-xs text-[var(--dim)]">
@@ -1207,10 +1207,10 @@ export function App() {
                   <p className="mt-1 text-xs font-bold text-amber-300">{t("labCooldown", { dur: fmtDur(Math.max(0, Math.floor((new Date(data.pvp.attackReadyAt).getTime() - Date.now()) / 1000))) })}</p>
                 )}
                 <div className="mt-2 grid grid-cols-2 gap-2">
-                  <button type="button" onClick={() => pvpAttack.mutate()} disabled={pvpAttack.isPending || pvpSkip.isPending || (data.pvp.attackReadyAt != null && new Date(data.pvp.attackReadyAt).getTime() > Date.now())} className="btn-press rounded-xl bg-red-500 px-4 py-1.5 text-sm font-bold text-white disabled:opacity-40">
+                  <button type="button" onClick={() => pvpAttack.mutate()} disabled={pvpAttack.isPending || pvpSkip.isPending || (data.pvp.attackReadyAt != null && new Date(data.pvp.attackReadyAt).getTime() > Date.now())} className="btn-press rounded-xl bg-red-500 px-3 py-1 text-xs font-bold text-white disabled:opacity-40">
                     {t("pvpAttackBtn")}
                   </button>
-                  <button type="button" onClick={() => pvpSkip.mutate()} disabled={pvpAttack.isPending || pvpSkip.isPending} className="btn-press rounded-xl border border-[var(--border)] px-4 py-1.5 text-sm font-bold disabled:opacity-40">
+                  <button type="button" onClick={() => pvpSkip.mutate()} disabled={pvpAttack.isPending || pvpSkip.isPending} className="btn-press rounded-xl border border-[var(--border)] px-3 py-1 text-xs font-bold disabled:opacity-40">
                     {t("pvpSkipBtn")}
                   </button>
                 </div>
@@ -1218,7 +1218,7 @@ export function App() {
             )}
 
             <div className="grid grid-cols-3 gap-2 text-center">
-              {[{ label: t("statDigs"), value: fmt(p.totalDigs) }, { label: t("statAsteroids"), value: fmt(p.asteroidsDone) }, { label: t("statUsdtPaid"), value: fmt(p.totalWdPaidUsdt) }].map((s, i) => (<div key={s.label} className="animate-float-slow rounded-xl bg-[var(--surface)] border border-[var(--border)] px-2 py-2" style={{ animationDelay: `${i * 0.9}s` }}><p className="font-display text-lg">{s.value}</p><p className="text-[11px] font-semibold text-[var(--dim)]">{s.label}</p></div>))}
+              {[{ label: t("statDigs"), value: fmt(p.totalDigs) }, { label: t("statAsteroids"), value: fmt(p.asteroidsDone) }, { label: t("statUsdtPaid"), value: fmt(p.totalWdPaidUsdt) }].map((s, i) => (<div key={s.label} className="animate-float-slow rounded-xl bg-[var(--surface)] border border-[var(--border)] px-2 py-1.5" style={{ animationDelay: `${i * 0.9}s` }}><p className="text-base font-bold">{s.value}</p><p className="text-[10px] font-semibold text-[var(--dim)]">{s.label}</p></div>))}
             </div>
 
             <details className="rounded-2xl bg-[var(--surface)] border border-[var(--border)] p-3">
@@ -1590,10 +1590,10 @@ function JobPanel({ job, dualDrill, onCollect, collecting, onCancel, cancelling,
     { left: "24%", top: "78%", sx: "-20px", sy: "8px", delay: "0.55s" },
   ];
   return (
-    <div className="mt-3 rounded-xl border border-cyan-500/30 bg-[var(--surface2)] p-3" role="status" aria-label={t("jobAria")}>
-      <div className="flex items-center gap-3">
+    <div className="mt-2 rounded-xl border border-cyan-500/30 bg-[var(--surface2)] p-2" role="status" aria-label={t("jobAria")}>
+      <div className="flex items-center gap-2">
         {!ready && isScan && (
-          <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-full border border-cyan-400/50 bg-[#04121f]" aria-hidden="true">
+          <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded-full border border-cyan-400/50 bg-[#04121f]" aria-hidden="true">
             <div className="radar-sweep absolute inset-0 rounded-full" />
             <div className="absolute inset-[16%] rounded-full border border-cyan-400/25" />
             <div className="absolute inset-[33%] rounded-full border border-cyan-400/25" />
@@ -1607,14 +1607,14 @@ function JobPanel({ job, dualDrill, onCollect, collecting, onCancel, cancelling,
           </div>
         )}
         {!ready && !isScan && (
-          <div className="relative flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-full border border-amber-400/40 bg-[#170f04]" aria-hidden="true">
+          <div className="relative flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full border border-amber-400/40 bg-[#170f04]" aria-hidden="true">
             {dualDrill ? (
               <>
-                <span className="drill-working absolute left-[16%] top-[24%] text-amber-300"><DrillIcon size={26} /></span>
-                <span className="drill-working absolute bottom-[16%] right-[14%] text-amber-200" style={{ animationDelay: "0.11s" }}><DrillIcon size={26} /></span>
+                <span className="drill-working absolute left-[16%] top-[24%] text-amber-300"><DrillIcon size={16} /></span>
+                <span className="drill-working absolute bottom-[16%] right-[14%] text-amber-200" style={{ animationDelay: "0.11s" }}><DrillIcon size={16} /></span>
               </>
             ) : (
-              <span className="drill-working text-amber-300"><DrillIcon size={32} /></span>
+              <span className="drill-working text-amber-300"><DrillIcon size={20} /></span>
             )}
             {sparks.map((s, i) => (
               <span key={i} className="spark" style={{ left: s.left, top: s.top, animationDelay: s.delay, "--sx": s.sx, "--sy": s.sy } as CSSProperties} />
@@ -1622,26 +1622,24 @@ function JobPanel({ job, dualDrill, onCollect, collecting, onCancel, cancelling,
           </div>
         )}
         <div className="min-w-0 flex-1">
-          <h3 className="font-display text-sm">{title}</h3>
-          {!ready && (<p className="mt-1 text-sm font-bold">{t("jobTimeLeft", { dur: fmtDur(remaining) })}</p>)}
-          <p className="mt-1 text-xs text-[var(--dim)]">{ready
-            ? (isScan
-              ? t("jobReadyScan")
-              : job.jammed
-                ? t("jobReadyJammed")
-                : job.hullHit
-                  ? t("jobReadyHull")
-                  : t("jobReadyMine"))
-            : t("jobRunning")}</p>
+          <h3 className="text-sm font-bold">{title}</h3>
+          {!ready && (<p className="mt-1 text-xs font-bold">{t("jobTimeLeft", { dur: fmtDur(remaining) })}</p>)}
+          {ready && (<p className="mt-1 text-xs text-[var(--dim)]">{isScan
+            ? t("jobReadyScan")
+            : job.jammed
+              ? t("jobReadyJammed")
+              : job.hullHit
+                ? t("jobReadyHull")
+                : t("jobReadyMine")}</p>)}
         </div>
       </div>
-      <div className="mt-2.5 h-3 overflow-hidden rounded-full bg-black/40" role="progressbar" aria-valuenow={Math.round(progress)} aria-valuemin={0} aria-valuemax={100} aria-label={t("jobProgress")}>
+      <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-black/40" role="progressbar" aria-valuenow={Math.round(progress)} aria-valuemin={0} aria-valuemax={100} aria-label={t("jobProgress")}>
         <div className={`h-full rounded-full transition-all ${ready ? "bg-emerald-400" : "job-working"}`} style={{ width: `${ready ? 100 : progress}%` }} />
       </div>
       {ready ? (
-        <button type="button" onClick={onCollect} disabled={collecting} className="btn-press collect-pop mt-2.5 w-full rounded-xl bg-emerald-400 px-4 py-2.5 font-display text-sm text-black disabled:opacity-40">{isScan ? t("jobCollectScan") : t("jobCollectMine")}</button>
+        <button type="button" onClick={onCollect} disabled={collecting} className="btn-press collect-pop mt-2 w-full rounded-xl bg-emerald-400 px-4 py-1.5 text-sm font-bold text-black disabled:opacity-40">{isScan ? t("jobCollectScan") : t("jobCollectMine")}</button>
       ) : (
-        <button type="button" onClick={onCancel} disabled={cancelling} className="btn-press mt-2.5 rounded-xl border border-red-400 px-4 py-2 text-sm font-bold text-red-300 disabled:opacity-40">{t("jobCancel")}</button>
+        <button type="button" onClick={onCancel} disabled={cancelling} className="btn-press mt-2 rounded-xl border border-red-400 px-3 py-1.5 text-xs font-bold text-red-300 disabled:opacity-40">{t("jobCancel")}</button>
       )}
     </div>
   );
