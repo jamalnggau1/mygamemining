@@ -1648,9 +1648,17 @@ export const TROOP_MAX_COUNT = 20;
 export const TROOP_MAX_LEVEL = 5;
 // TAHAP UJI COBA (2026-11-23): latih DAN riset sama-sama 0,1 KT flat,
 // Harga pasukan (keputusan owner 2026-11-25): 1 KT × level — latih
-// drone Lv5 = 5 KT, riset ke Lv5 = 5 KT. Sebelumnya 0,1 KT flat
-// selama tahap uji coba (2026-11-23 s.d. 2026-11-25).
+// drone Lv5 = 5 KT. Sebelumnya 0,1 KT flat selama tahap uji coba
+// (2026-11-23 s.d. 2026-11-25). Riset punya harga sendiri sejak
+// 2026-11-26 (di bawah).
 export const TROOP_BASE_COST_KT = 1;
+// Harga riset (keputusan owner 2026-11-26: "level 1 ke level 2 saja
+// butuh 20 kt lalu kalikan saja itu"): satu langkah riset dari level
+// L ke L+1 = 20 KT × L — ke Lv2 = 20 KT, ke Lv3 = 40 KT, ke Lv4 =
+// 60 KT, ke Lv5 = 80 KT; langkah pertama (ke Lv1) juga 20 KT.
+// Berlaku ke SEMUA jalur riset (level Serbu/Perisai, Perluas Camp,
+// Pelatihan Cepat) — satu jalur penuh Lv0→Lv5 = 220 KT.
+export const RESEARCH_BASE_COST_KT = 20;
 // Hangar + Lab (2026-11-25, pilihan B):
 //   - Latih: waktu 5 menit × level drone, jalan di server seperti
 //     bor, satu antrean (satu drone sekali waktu).
@@ -1661,13 +1669,14 @@ export const TROOP_BASE_COST_KT = 1;
 //     ke-2 ×3, ke-3 ×4, dst.).
 //   - Riset di Lab: level drone, Perluas Camp, Pelatihan Cepat
 //     (+10% kecepatan latih per level, maks 5) — masing-masing
-//     butuh KT + waktu 10 menit × level target, satu riset sekali
-//     waktu.
+//     butuh KT + waktu 3 jam × level target (keputusan owner
+//     2026-11-26: riset lama "masih terlalu murah dan waktunya
+//     masih sangat singkat"), satu riset sekali waktu.
 export const CAMP_BASE_CAPACITY = 10;
 export const CAMP_PER_RESEARCH = 5;
 export const RESEARCH_MAX_LEVEL = 5;
 export const TRAIN_BASE_SECONDS = 300; // 5 menit × level drone
-export const RESEARCH_BASE_SECONDS = 600; // 10 menit × level target
+export const RESEARCH_BASE_SECONDS = 10800; // 3 jam × level target (owner 2026-11-26)
 const TROOP_POWER_BASE = 6; // kekuatan per drone: 6 + 4×level
 const TROOP_POWER_PER_LEVEL = 4;
 
@@ -1756,12 +1765,16 @@ export function trainDurationSec(
   );
 }
 
-/** Biaya riset — 1 KT × level target. */
+/** Biaya riset ke level target — 20 KT × level saat ini (ke Lv1 =
+ *  20 KT, ke Lv2 = 20 KT, ke Lv3 = 40 KT, ke Lv4 = 60 KT, ke Lv5
+ *  = 80 KT; keputusan owner 2026-11-26). */
 export function researchCostKt(targetLevel: number): number {
-  return roundKt(TROOP_BASE_COST_KT * Math.max(1, targetLevel));
+  return roundKt(
+    RESEARCH_BASE_COST_KT * Math.max(1, targetLevel - 1),
+  );
 }
 
-/** Waktu riset (detik): 10 menit × level target. */
+/** Waktu riset (detik): 3 jam × level target. */
 export function researchDurationSec(targetLevel: number): number {
   return RESEARCH_BASE_SECONDS * Math.max(1, targetLevel);
 }
