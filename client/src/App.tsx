@@ -2078,46 +2078,46 @@ function MisiTab({ userId, referrals, channelBonusClaimed, channelBonusKt, onCla
   };
   return (
     <section className="mt-3 space-y-2.5">
-      <div className="rounded-2xl bg-[var(--surface)] border border-[var(--border)] p-3">
-        <div className="flex items-start gap-3">
-          <span aria-hidden="true" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-[var(--border)] bg-[var(--surface2)]"><GiftIcon size={20} /></span>
+      <div className="rounded-2xl bg-[var(--surface)] border border-[var(--border)] p-2.5">
+        <div className="flex items-start gap-2.5">
+          <span aria-hidden="true" className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-[var(--border)] bg-[var(--surface2)]"><GiftIcon size={18} /></span>
           <div>
-            <h3 className="font-display text-sm">{t("dailyBonusTitle")}</h3>
-            <ExpandableText className="mt-0.5 text-sm text-[var(--dim)]">{t("dailyBonusDesc", { kt: fmt(dailyBonusKt) })}</ExpandableText>
+            <h3 className="text-sm font-bold">{t("dailyBonusTitle")}</h3>
+            <ExpandableText className="mt-0.5 text-xs text-[var(--dim)]">{t("dailyBonusDesc", { kt: fmt(dailyBonusKt) })}</ExpandableText>
           </div>
         </div>
         {canClaimDailyBonus ? (
-          <button type="button" onClick={onClaimDaily} disabled={claimingDaily} className="btn-press mt-2.5 w-full rounded-xl border-2 border-dashed border-cyan-400 bg-cyan-400/10 px-4 py-2 font-bold text-cyan-200">{t("claimDaily", { kt: fmt(dailyBonusKt) })}</button>
+          <button type="button" onClick={onClaimDaily} disabled={claimingDaily} className="btn-press mt-2 w-full rounded-xl border-2 border-dashed border-cyan-400 bg-cyan-400/10 px-3 py-1.5 text-xs font-bold text-cyan-200">{t("claimDaily", { kt: fmt(dailyBonusKt) })}</button>
         ) : (
-          <p className="mt-2.5 text-center text-sm font-bold text-emerald-300">{t("dailyBonusClaimedState")}</p>
+          <p className="mt-2 text-center text-sm font-bold text-emerald-300">{t("dailyBonusClaimedState")}</p>
         )}
       </div>
-      <div className="rounded-2xl bg-[var(--surface)] border border-[var(--border)] p-3">
-        <div className="flex items-start gap-3">
-          <span aria-hidden="true" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-[var(--border)] bg-[var(--surface2)]"><SatelliteIcon size={20} /></span>
+      <div className="rounded-2xl bg-[var(--surface)] border border-[var(--border)] p-2.5">
+        <div className="flex items-start gap-2.5">
+          <span aria-hidden="true" className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-[var(--border)] bg-[var(--surface2)]"><SatelliteIcon size={18} /></span>
           <div>
-            <h3 className="font-display text-sm">{t("commChannelTitle")}</h3>
-            <ExpandableText className="mt-0.5 text-sm text-[var(--dim)]">{t("commChannelDesc")}</ExpandableText>
+            <h3 className="text-sm font-bold">{t("commChannelTitle")}</h3>
+            <ExpandableText className="mt-0.5 text-xs text-[var(--dim)]">{t("commChannelDesc")}</ExpandableText>
           </div>
         </div>
         {!channelBonusClaimed && (
-          <button type="button" onClick={() => openExternalLink(CHANNEL_URL)} aria-label={t("commChannelAria")} className="btn-press mt-2.5 w-full rounded-xl bg-cyan-400 px-4 py-2 font-bold text-black">{t("commChannelBtn")}</button>
+          <button type="button" onClick={() => openExternalLink(CHANNEL_URL)} aria-label={t("commChannelAria")} className="btn-press mt-2 w-full rounded-xl bg-cyan-400 px-3 py-1.5 text-xs font-bold text-black">{t("commChannelBtn")}</button>
         )}
         {userId != null && (channelBonusClaimed ? (
-          <p className="mt-2.5 text-center text-sm font-bold text-emerald-300">{t("commChannelClaimed")}</p>
+          <p className="mt-2 text-center text-sm font-bold text-emerald-300">{t("commChannelClaimed")}</p>
         ) : (
-          <button type="button" onClick={onClaimChannel} disabled={claimingChannel} aria-label={t("commChannelClaim", { kt: fmt(channelBonusKt) })} className="btn-press mt-2.5 w-full rounded-xl border-2 border-dashed border-amber-400 bg-amber-400/10 px-4 py-2 font-bold text-amber-200">{t("commChannelClaim", { kt: fmt(channelBonusKt) })}</button>
+          <button type="button" onClick={onClaimChannel} disabled={claimingChannel} aria-label={t("commChannelClaim", { kt: fmt(channelBonusKt) })} className="btn-press mt-2 w-full rounded-xl border-2 border-dashed border-amber-400 bg-amber-400/10 px-3 py-1.5 text-xs font-bold text-amber-200">{t("commChannelClaim", { kt: fmt(channelBonusKt) })}</button>
         ))}
       </div>
-      <div className="rounded-2xl bg-[var(--surface)] border border-[var(--border)] p-3">
-        <div className="flex items-start gap-3">
-          <span aria-hidden="true" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-[var(--border)] bg-[var(--surface2)]"><UsersIcon size={20} /></span>
+      <div className="rounded-2xl bg-[var(--surface)] border border-[var(--border)] p-2.5">
+        <div className="flex items-start gap-2.5">
+          <span aria-hidden="true" className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-[var(--border)] bg-[var(--surface2)]"><UsersIcon size={18} /></span>
           <div>
-            <h3 className="font-display text-sm">{t("commGroupTitle")}</h3>
-            <ExpandableText className="mt-0.5 text-sm text-[var(--dim)]">{t("commGroupDesc")}</ExpandableText>
+            <h3 className="text-sm font-bold">{t("commGroupTitle")}</h3>
+            <ExpandableText className="mt-0.5 text-xs text-[var(--dim)]">{t("commGroupDesc")}</ExpandableText>
           </div>
         </div>
-        <button type="button" disabled aria-label={t("commGroupAria")} className="mt-2.5 w-full rounded-xl border border-[var(--border)] bg-[var(--surface2)] px-4 py-2 font-bold text-[var(--dim)] disabled:opacity-60">{t("commGroupSoon")}</button>
+        <button type="button" disabled aria-label={t("commGroupAria")} className="mt-2 w-full rounded-xl border border-[var(--border)] bg-[var(--surface2)] px-3 py-1.5 text-xs font-bold text-[var(--dim)] disabled:opacity-60">{t("commGroupSoon")}</button>
       </div>
       <div className="rounded-2xl bg-[var(--surface)] border border-[var(--border)] p-2.5">
         <div className="flex items-start gap-2.5">
