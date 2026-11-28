@@ -2099,15 +2099,22 @@ function MisiTab({ userId, referrals, channelBonusClaimed, channelBonusKt, onCla
       setTimeout(() => setCopied(false), 2000);
     }
   };
-  // Bagikan (owner 2026-11-28): di dalam Telegram, buka pemilih chat
-  // (switchInlineQuery) — pesannya sudah terisi teks ajakan + link
-  // referral, jadi terkirim sebagai pesan terusan ke teman yang dipilih.
-  // Di luar Telegram pakai share bawaan HP; kalau tidak ada, salin link.
+  // Bagikan (owner 2026-11-28): di dalam Telegram, buka layar share
+  // Telegram (t.me/share/url) — pemilih chat langsung terbuka dan
+  // pesannya terkirim sebagai pesan terusan. Cara pertama
+  // (switchInlineQuery) TIDAK JALAN: fungsi itu hanya ada bila game
+  // dibuka lewat mode inline, sementara pemain membuka lewat tombol
+  // Mainkan/link — jadi tombol tidak bereaksi sama sekali.
   const shareLink = async () => {
     if (!refLink) return;
+    const shareUrl =
+      "https://t.me/share/url?url=" +
+      encodeURIComponent(refLink) +
+      "&text=" +
+      encodeURIComponent(t("commRefShareMsg"));
     const wa = window.Telegram?.WebApp;
-    if (wa && typeof wa.switchInlineQuery === "function") {
-      wa.switchInlineQuery(t("commRefShareText", { link: refLink }), ["users", "groups", "channels"]);
+    if (wa) {
+      openExternalLink(shareUrl);
       return;
     }
     if (typeof navigator.share === "function") {

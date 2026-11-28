@@ -29,10 +29,6 @@ interface TelegramWebApp {
   expand: () => void;
   /** Open a t.me link inside Telegram (channel, group, bot). */
   openTelegramLink: (url: string) => void;
-  /** Open Telegram's chat picker with a pre-filled message
-   *  (switchInlineQuery) — used by the referral Share button so the
-   *  invite goes out as a forwarded message to a chosen chat. */
-  switchInlineQuery: (query: string, chooseChatTypes?: string[]) => void;
   /** Open a Telegram Stars invoice (native payment sheet). The
    *  callback receives the payment status: "paid" when the user
    *  completed the payment, "cancelled" / "failed" / "pending"
