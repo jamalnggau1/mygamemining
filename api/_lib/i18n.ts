@@ -341,6 +341,9 @@ export interface ServerStrings {
   logPvpDefendedWin: (attackerName: string, atk: number, def: number, dead: number, deadName: string) => string;
   logPvpDefendedLose: (attackerName: string, lootKt: number, atk: number, def: number) => string;
   logPvpDefendedLoseEmpty: (attackerName: string, atk: number, def: number) => string;
+  pvpNotifyAttackedWin: (attackerName: string, atk: number, def: number, dead: number, deadName: string) => string;
+  pvpNotifyAttackedLose: (attackerName: string, lootKt: number, atk: number, def: number, dead: number, deadName: string) => string;
+  pvpNotifyAttackedLoseEmpty: (attackerName: string, atk: number, def: number, dead: number, deadName: string) => string;
   logPvpLootGain: (lootKt: number) => string;
   logPvpLootStolen: (lootKt: number) => string;
   logPvpLootDestroyed: (lootKt: number) => string;
@@ -574,6 +577,12 @@ const id: ServerStrings = {
     `${attackerName} menyerangmu dan menang (serang ${atk} vs bertahan ${def}) — ${fmtNum(lootKt, "id")} KT hasil tambangmu dirampas. Kamu kebal 1 jam.`,
   logPvpDefendedLoseEmpty: (attackerName, atk, def) =>
     `${attackerName} menyerangmu dan menang (serang ${atk} vs bertahan ${def}) — tapi tidak ada hasil tambang yang bisa dirampas. Kamu kebal 1 jam.`,
+  pvpNotifyAttackedWin: (attackerName, atk, def, dead, deadName) =>
+    `${attackerName} menyerangmu tapi pertahananmu menang (serang ${atk} vs bertahan ${def}) — hasil tambangmu aman, dan kamu kebal 1 jam.${dead > 0 ? ` ${dead} × ${deadName} musuh gugur.` : ""}`,
+  pvpNotifyAttackedLose: (attackerName, lootKt, atk, def, dead, deadName) =>
+    `${attackerName} menyerangmu dan menang (serang ${atk} vs bertahan ${def}) — ${fmtNum(lootKt, "id")} KT hasil tambangmu dirampas.${dead > 0 ? ` ${dead} × ${deadName} gugur.` : ""} Kamu kebal 1 jam.`,
+  pvpNotifyAttackedLoseEmpty: (attackerName, atk, def, dead, deadName) =>
+    `${attackerName} menyerangmu dan menang (serang ${atk} vs bertahan ${def}) — tapi tidak ada hasil tambang yang bisa dirampas.${dead > 0 ? ` ${dead} × ${deadName} gugur.` : ""} Kamu kebal 1 jam.`,
   logPvpTrainStart: (name) => `Pelatihan ${name} dimulai.`,
   logPvpTrainDone: (name, count) =>
     `Pelatihan ${name} selesai — sekarang kamu punya ${count}.`,
@@ -817,6 +826,12 @@ const en: ServerStrings = {
     `${attackerName} attacked you and won (attack ${atk} vs defense ${def}) — ${fmtNum(lootKt, "en")} KT of your ore was looted. You are immune for 1 hour.`,
   logPvpDefendedLoseEmpty: (attackerName, atk, def) =>
     `${attackerName} attacked you and won (attack ${atk} vs defense ${def}) — but there was no ore to loot. You are immune for 1 hour.`,
+  pvpNotifyAttackedWin: (attackerName, atk, def, dead, deadName) =>
+    `${attackerName} attacked you but your defense won (attack ${atk} vs defense ${def}) — your ore is safe, and you are immune for 1 hour.${dead > 0 ? ` ${dead} × ${deadName} of the enemy fell.` : ""}`,
+  pvpNotifyAttackedLose: (attackerName, lootKt, atk, def, dead, deadName) =>
+    `${attackerName} attacked you and won (attack ${atk} vs defense ${def}) — ${fmtNum(lootKt, "en")} KT of your ore was looted.${dead > 0 ? ` ${dead} × ${deadName} fell.` : ""} You are immune for 1 hour.`,
+  pvpNotifyAttackedLoseEmpty: (attackerName, atk, def, dead, deadName) =>
+    `${attackerName} attacked you and won (attack ${atk} vs defense ${def}) — but there was no ore to loot.${dead > 0 ? ` ${dead} × ${deadName} fell.` : ""} You are immune for 1 hour.`,
   logPvpTrainStart: (name) => `Training ${name} started.`,
   logPvpTrainDone: (name, count) =>
     `Training ${name} finished — you now own ${count}.`,
@@ -1061,6 +1076,12 @@ const ru: ServerStrings = {
     `${attackerName} атаковал тебя и победил (атака ${atk} против защиты ${def}) — у тебя отняли добычу на ${fmtNum(lootKt, "ru")} KT. У тебя защита на 1 час.`,
   logPvpDefendedLoseEmpty: (attackerName, atk, def) =>
     `${attackerName} атаковал тебя и победил (атака ${atk} против защиты ${def}), но добычи не было. У тебя защита на 1 час.`,
+  pvpNotifyAttackedWin: (attackerName, atk, def, dead, deadName) =>
+    `${attackerName} атаковал тебя, но твоя защита победила (атака ${atk} против защиты ${def}) — добыча в безопасности, у тебя защита на 1 час.${dead > 0 ? ` ${dead} × ${deadName} врага погибло.` : ""}`,
+  pvpNotifyAttackedLose: (attackerName, lootKt, atk, def, dead, deadName) =>
+    `${attackerName} атаковал тебя и победил (атака ${atk} против защиты ${def}) — у тебя отняли добычу на ${fmtNum(lootKt, "ru")} KT.${dead > 0 ? ` ${dead} × ${deadName} погибло.` : ""} У тебя защита на 1 час.`,
+  pvpNotifyAttackedLoseEmpty: (attackerName, atk, def, dead, deadName) =>
+    `${attackerName} атаковал тебя и победил (атака ${atk} против защиты ${def}), но добычи не было.${dead > 0 ? ` ${dead} × ${deadName} погибло.` : ""} У тебя защита на 1 час.`,
   logPvpTrainStart: (name) => `Обучение: ${name} — началось.`,
   logPvpTrainDone: (name, count) =>
     `Обучение: ${name} — готово, теперь у тебя ${count}.`,

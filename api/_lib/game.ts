@@ -1367,7 +1367,7 @@ async function getPlayerStats(db: Db): Promise<PlayerStats> {
  *  pemain web lama tanpa telegram_id dilewati diam-diam; kegagalan
  *  kirim TIDAK PERNAH menggagalkan aksi WD — ditangkap dan diabaikan
  *  (WD sudah tercatat di database sebelum notifikasi dikirim). */
-async function notifyWdPlayer(
+async function notifyPlayer(
   telegramId: number | null,
   text: string,
 ): Promise<void> {
@@ -4237,6 +4237,23 @@ export const gameActions = {
       } catch {
         // Audit gagal tidak boleh merusak hasil pertempuran.
       }
+      // Notifikasi Telegram ke pemain yang diserang (2026-11-28,
+      // owner): seperti notifikasi WD — best-effort, dalam bahasa
+      // si bertahan, gagal kirim tidak merusak hasil pertempuran.
+      // NPC tidak punya Telegram, jadi tidak ada notifikasi.
+      // Perisai 1 jam membatasi notifikasi ke paling banyak 1
+      // per jam per pemain.
+      if (defenderRow) {
+        const defLang = normalizeLang(defenderRow.language ?? "id");
+        const defStrings = serverStrings(defLang);
+        const defDeadName = dead > 0 ? troopName(troopDef(loserKind), defLang) : "";
+        const text = won
+          ? loot.length > 0
+            ? defStrings.pvpNotifyAttackedLose(attackerLabel, lootKt, attackerPower, defenderPower, dead, defDeadName)
+            : defStrings.pvpNotifyAttackedLoseEmpty(attackerLabel, attackerPower, defenderPower, dead, defDeadName)
+          : defStrings.pvpNotifyAttackedWin(attackerLabel, attackerPower, defenderPower, dead, defDeadName);
+        await notifyPlayer(defenderRow.telegramId, text);
+      }
       return {
         ok: true,
         error: null,
@@ -5195,7 +5212,7 @@ export const gameActions = {
         await logActivity(db, wd.playerId, "wd_approve", S.logWdApprove(wd.id, wd.amountUsdt), null);
         // Notifikasi Telegram ke pemain (best-effort — gagal kirim
         // tidak menggagalkan approve).
-        await notifyWdPlayer(
+        await notifyPlayer(
           target.telegramId,
           T.wdNotifyApproved(wd.amountUsdt),
         );
@@ -5222,7 +5239,7 @@ export const gameActions = {
         // Notifikasi Telegram ke pemain (best-effort — gagal kirim
         // tidak menggagalkan penandaan dibayar). Bahasa = bahasa
         // PENERIMA, seperti di approve.
-        await notifyWdPlayer(
+        await notifyPlayer(
           target.telegramId,
           T.wdNotifyPaid(wd.amountUsdt),
         );
