@@ -1043,7 +1043,8 @@ export function App() {
   const totalOreQty = data.ores.reduce((a, o) => a + o.qty, 0);
   const ktToNextUsdt = p.ktBalance >= p.wdMinKt ? 0 : p.wdMinKt - p.ktBalance;
   // Titik merah di tab: Jual = jumlah bijih di kargo, Kendali = antrean WD,
-  // Pasukan = ada latihan selesai (siap diambil), Lab = ada riset selesai.
+  // Misi = bonus harian belum diklaim, Pasukan = ada latihan selesai
+  // (siap diambil), Lab = ada riset selesai.
   // Diperiksa terhadap jam saat render; data di-refresh tiap 5 detik,
   // jadi titiknya muncul paling lambat ~5 detik setelah selesai.
   const trainReady = data.pvp.training != null && new Date(data.pvp.training.endsAt).getTime() <= Date.now();
@@ -1053,7 +1054,7 @@ export function App() {
     { id: "peta", label: t("tabMaps"), icon: <MapIcon size={14} /> },
     { id: "pasar", label: t("tabMarket"), icon: <SatelliteIcon size={14} />, badge: totalOreQty > 0 ? totalOreQty : undefined },
     { id: "wd", label: t("tabWd"), icon: <GemIcon size={14} /> },
-    { id: "misi", label: t("tabMisi"), icon: <GiftIcon size={14} /> },
+    { id: "misi", label: t("tabMisi"), icon: <GiftIcon size={14} />, badge: p.canClaimDailyBonus ? 1 : undefined },
     { id: "hangar", label: t("tabTroops"), icon: <SwordsIcon size={14} />, badge: trainReady ? 1 : undefined },
     { id: "lab", label: t("tabLab"), icon: <BookIcon size={14} />, badge: researchReady ? 1 : undefined },
   ];
