@@ -2099,6 +2099,27 @@ function MisiTab({ userId, referrals, channelBonusClaimed, channelBonusKt, onCla
       setTimeout(() => setCopied(false), 2000);
     }
   };
+  // Bagikan (owner 2026-11-28): di dalam Telegram, buka pemilih chat
+  // (switchInlineQuery) — pesannya sudah terisi teks ajakan + link
+  // referral, jadi terkirim sebagai pesan terusan ke teman yang dipilih.
+  // Di luar Telegram pakai share bawaan HP; kalau tidak ada, salin link.
+  const shareLink = async () => {
+    if (!refLink) return;
+    const wa = window.Telegram?.WebApp;
+    if (wa && typeof wa.switchInlineQuery === "function") {
+      wa.switchInlineQuery(t("commRefShareText", { link: refLink }), ["users", "groups", "channels"]);
+      return;
+    }
+    if (typeof navigator.share === "function") {
+      try {
+        await navigator.share({ text: t("commRefShareText", { link: refLink }), url: refLink });
+      } catch {
+        // Dibatalkan pengguna — bukan error.
+      }
+      return;
+    }
+    await copyLink();
+  };
   return (
     <section className="mt-3 space-y-2.5">
       <div className="rounded-2xl bg-[var(--surface)] border border-[var(--border)] p-2.5">
@@ -2155,7 +2176,7 @@ function MisiTab({ userId, referrals, channelBonusClaimed, channelBonusKt, onCla
             <label htmlFor="ref-link" className="text-xs font-bold">{t("commRefLinkLabel")}</label>
             <div className="mt-1 flex gap-2">
               <p id="ref-link" className="min-w-0 flex-1 break-all rounded-xl bg-[var(--surface2)] px-2.5 py-1.5 font-mono text-xs">{refLink}</p>
-              <button type="button" onClick={copyLink} aria-label={t("commRefCopyAria")} className="btn-press shrink-0 self-center rounded-xl bg-cyan-400 px-3 py-1.5 text-xs font-bold text-black">{copied ? t("commRefCopied") : t("commRefCopy")}</button>
+              <button type="button" onClick={shareLink} aria-label={t("commRefShareAria")} className="btn-press shrink-0 self-center rounded-xl bg-cyan-400 px-3 py-1.5 text-xs font-bold text-black">{copied ? t("commRefCopied") : t("commRefShare")}</button>
             </div>
           </div>
         ) : (
