@@ -648,7 +648,7 @@ function ConfettiLayer({ burst }: { burst: Burst }) {
   );
 }
 
-type Tab = "tambang" | "peta" | "pasar" | "upgrade" | "wd" | "misi" | "hangar" | "lab" | "admin" | "pengaturan";
+type Tab = "tambang" | "peta" | "pasar" | "wd" | "misi" | "hangar" | "lab" | "admin" | "pengaturan";
 
 /** Layar boot bermerek — tampil saat state awal game dimuat (bukan
  *  saat error). Judul + bar progres animasi + baris status yang
@@ -979,7 +979,6 @@ export function App() {
   };
   const sellAll = useMutation({ mutationFn: () => api.sellAllOre({}), onSuccess: (r) => { if (r.ok) playCoin(); showResult(r.ok, r.error, t("sellAllDone", { kt: fmt(r.ktGained) })); refresh(); } });
   const sellOne = useMutation({ mutationFn: (args: { oreId: string; qty: number }) => api.sellOre(args), onSuccess: (r) => { if (r.ok) playCoin(); showResult(r.ok, r.error, t("sellOneDone", { kt: fmt(r.ktGained) })); refresh(); } });
-  const buy = useMutation({ mutationFn: (upgradeId: string) => api.buyUpgrade({ upgradeId }), onSuccess: (r) => { showResult(r.ok, r.error, t("upgradeBought", { level: r.newLevel ?? "?", cost: fmt(r.costPaid) })); refresh(); } });
   // PvP (2026-11-22): beli/upgrade pasukan + serang/lewati pertemuan.
   const startTraining = useMutation({
     mutationFn: (kind: "attack" | "defense") => api.startTraining({ kind }),
@@ -994,8 +993,8 @@ export function App() {
     onSuccess: (r) => { showResult(r.ok, r.error, r.ok ? t("hangarTrainCancelled") : null); refresh(); },
   });
   const startResearch = useMutation({
-    mutationFn: (args: { kind: "level" | "camp" | "speed"; troopKind: "attack" | "defense" | null }) => api.startResearch(args),
-    onSuccess: (r, args) => { if (r.ok) playCoin(); showResult(r.ok, r.error, r.ok ? t("labResearchDone", { name: args.kind === "level" ? (args.troopKind === "attack" ? t("labTroopAttackName") : t("labTroopDefenseName")) : args.kind === "camp" ? t("labResearchCamp") : t("labResearchSpeed"), level: r.research?.targetLevel ?? 0 }) : null); refresh(); },
+    mutationFn: (args: { kind: "level" | "camp" | "speed" | "upgrade"; troopKind: "attack" | "defense" | null; upgradeId: string | null }) => api.startResearch(args),
+    onSuccess: (r, args) => { if (r.ok) playCoin(); showResult(r.ok, r.error, r.ok ? t("labResearchDone", { name: args.kind === "level" ? (args.troopKind === "attack" ? t("labTroopAttackName") : t("labTroopDefenseName")) : args.kind === "camp" ? t("labResearchCamp") : args.kind === "speed" ? t("labResearchSpeed") : (data.upgrades.find((u) => u.id === args.upgradeId)?.name ?? ""), level: r.research?.targetLevel ?? 0 }) : null); refresh(); },
   });
   const collectResearch = useMutation({
     mutationFn: () => api.collectResearch({}),
@@ -1047,7 +1046,6 @@ export function App() {
     { id: "tambang", label: t("tabMine"), icon: <RocketIcon size={16} /> },
     { id: "peta", label: t("tabMaps"), icon: <MapIcon size={16} /> },
     { id: "pasar", label: t("tabMarket"), icon: <SatelliteIcon size={16} />, badge: totalOreQty > 0 ? totalOreQty : undefined },
-    { id: "upgrade", label: t("tabHangar"), icon: <WrenchIcon size={16} /> },
     { id: "wd", label: t("tabWd"), icon: <GemIcon size={16} /> },
     { id: "misi", label: t("tabMisi"), icon: <GiftIcon size={16} /> },
     { id: "hangar", label: t("tabTroops"), icon: <SwordsIcon size={16} /> },
@@ -1097,7 +1095,7 @@ export function App() {
             {p.premium.active ? (
               <p className="mt-1.5 inline-flex items-center gap-1.5 rounded-full border border-amber-400/50 bg-amber-400/15 px-2.5 py-0.5 text-xs font-bold text-amber-300"><CrownIcon size={13} /> {t("premiumActive", { tier: p.premium.tier === "pro" ? t("dualDrillTag") : t("standardTag") })}{p.premium.until ? t("premiumUntilShort", { date: fmtDate(p.premium.until) }) : ""}</p>
             ) : (
-              <button type="button" onClick={() => setTab("upgrade")} className="btn-press mt-1.5 inline-flex items-center gap-1.5 rounded-full border border-amber-400/40 bg-amber-400/10 px-2.5 py-0.5 text-xs font-bold text-amber-200"><CrownIcon size={13} /> {t("activatePremium")}</button>
+              <button type="button" onClick={() => setTab("misi")} className="btn-press mt-1.5 inline-flex items-center gap-1.5 rounded-full border border-amber-400/40 bg-amber-400/10 px-2.5 py-0.5 text-xs font-bold text-amber-200"><CrownIcon size={13} /> {t("activatePremium")}</button>
             )}
           </section>
           {/* Panel Posisi Misi — latar cincin (redesain 2026-11-24) */}
@@ -1301,7 +1299,7 @@ export function App() {
         )}
 
         {tab === "peta" && (
-          <PetaTab data={data} onTravel={(i) => travel.mutate(i)} travelling={travel.isPending} jobActive={job != null} onGoPremium={() => setTab("upgrade")} />
+          <PetaTab data={data} onTravel={(i) => travel.mutate(i)} travelling={travel.isPending} jobActive={job != null} onGoPremium={() => setTab("misi")} />
         )}
 
         {tab === "pasar" && (
@@ -1316,16 +1314,9 @@ export function App() {
           </section>
         )}
 
-        {tab === "upgrade" && (
-          <section className="mt-3 space-y-2.5">
-            <PremiumCard data={data} onBuy={(plan) => buyPremium.mutate(plan)} buying={buyPremium.isPending} onBuyGram={(plan) => buyPremiumGram.mutate(plan)} buyingGram={buyPremiumGram.isPending} gramPhase={gramPhase} inTelegram={sessionInfo.inTelegram} onCancelOrder={(id) => cancelPremiumOrder.mutate(id)} cancelling={cancelPremiumOrder.isPending} />
-            <div className="relative overflow-hidden rounded-2xl border border-[var(--border)]"><img src={stationImg} alt={t("stationImgAlt")} className="h-28 w-full object-cover" /><div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent flex items-end p-3"><ExpandableText className="text-sm font-semibold text-white">{t("hanggarCaption")}</ExpandableText></div></div>
-            {data.upgrades.map((u) => (<div key={u.id} className="vein-tile rounded-2xl bg-[var(--surface)] border border-[var(--border)] p-3"><div className="flex items-start justify-between gap-3"><div className="flex items-start gap-2.5"><span aria-hidden="true" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-[var(--border)] bg-[var(--surface2)]"><UpgradeIcon id={u.id} size={20} /></span><div><h3 className="font-display text-sm">{u.name}</h3><ExpandableText className="mt-0.5 text-sm text-[var(--dim)]">{u.desc}</ExpandableText><div className="mt-1.5 flex gap-1" aria-label={t("levelAria", { l: u.level, m: u.maxLevel })}>{Array.from({ length: u.maxLevel }, (_, i) => (<span key={i} className={`h-1.5 w-4 rounded-full ${i < u.level ? "bg-cyan-400" : "bg-[var(--surface2)]"}`} />))}</div></div></div><div className="shrink-0 text-right"><p className="text-xs font-semibold text-[var(--dim)]">{t("levelLabel")}</p><p className="font-display text-xl">{u.level}<span className="text-sm text-[var(--dim)]">/{u.maxLevel}</span></p></div></div>{u.nextCost != null ? (<button type="button" onClick={() => buy.mutate(u.id)} disabled={buy.isPending || p.ktBalance < u.nextCost} aria-label={t("buyAria", { name: u.name, l: u.level + 1, cost: fmt(u.nextCost) })} className="btn-press mt-2.5 w-full rounded-xl bg-cyan-400 px-4 py-1.5 font-bold text-black disabled:opacity-40">{p.ktBalance < u.nextCost ? t("needKt", { cost: fmt(u.nextCost) }) : t("installUpgrade", { cost: fmt(u.nextCost) })}</button>) : (<p className="mt-2.5 rounded-xl bg-[var(--surface2)] px-4 py-1.5 text-center font-bold">{t("maxLevel")}</p>)}</div>))}
-          </section>
-        )}
 
         {tab === "wd" && (<WdTab data={data} onCancel={(id) => cancelWd.mutate(id)} cancelling={cancelWd.isPending} onDone={(ok, err, good) => { showResult(ok, err, good); refresh(); }} />)}
-        {tab === "misi" && (<MisiTab userId={sessionInfo.userId} referrals={data.player.referrals} channelBonusClaimed={data.player.channelBonusClaimed} channelBonusKt={data.player.channelBonusKt} onClaimChannel={() => claimChannel.mutate()} claimingChannel={claimChannel.isPending} canClaimDailyBonus={data.player.canClaimDailyBonus} dailyBonusKt={data.player.dailyBonusKt} onClaimDaily={() => claimBonus.mutate()} claimingDaily={claimBonus.isPending} />)}
+        {tab === "misi" && (<MisiTab userId={sessionInfo.userId} referrals={data.player.referrals} channelBonusClaimed={data.player.channelBonusClaimed} channelBonusKt={data.player.channelBonusKt} onClaimChannel={() => claimChannel.mutate()} claimingChannel={claimChannel.isPending} canClaimDailyBonus={data.player.canClaimDailyBonus} dailyBonusKt={data.player.dailyBonusKt} onClaimDaily={() => claimBonus.mutate()} claimingDaily={claimBonus.isPending} premiumData={data} onBuyPremium={(plan) => buyPremium.mutate(plan)} buyingPremium={buyPremium.isPending} onBuyPremiumGram={(plan) => buyPremiumGram.mutate(plan)} buyingPremiumGram={buyPremiumGram.isPending} gramPhase={gramPhase} inTelegram={sessionInfo.inTelegram} onCancelPremiumOrder={(id) => cancelPremiumOrder.mutate(id)} cancellingPremiumOrder={cancelPremiumOrder.isPending} />)}
         {tab === "hangar" && (<HangarTab data={data} onTrain={(kind) => startTraining.mutate(kind)} onCollectTraining={() => collectTraining.mutate()} onCancelTraining={() => cancelTraining.mutate()} trainingBusy={startTraining.isPending || collectTraining.isPending || cancelTraining.isPending} onRefresh={refresh} />)}
         {tab === "lab" && (<LabTab data={data} onResearch={(args) => startResearch.mutate(args)} onCollectResearch={() => collectResearch.mutate()} onCancelResearch={() => cancelResearch.mutate()} researchBusy={startResearch.isPending || collectResearch.isPending || cancelResearch.isPending} onRefresh={refresh} />)}
         {tab === "admin" && p.isAdmin && (<AdminTab data={data} onDone={(ok, err, good) => { showResult(ok, err, good); refresh(); }} />)}
@@ -1971,7 +1962,7 @@ function HangarTab({ data, onTrain, onCollectTraining, onCancelTraining, trainin
 
 function LabTab({ data, onResearch, onCollectResearch, onCancelResearch, researchBusy, onRefresh }: {
   data: GameState;
-  onResearch: (args: { kind: "level" | "camp" | "speed"; troopKind: "attack" | "defense" | null }) => void;
+  onResearch: (args: { kind: "level" | "camp" | "speed" | "upgrade"; troopKind: "attack" | "defense" | null; upgradeId: string | null }) => void;
   onCollectResearch: () => void;
   onCancelResearch: () => void;
   researchBusy: boolean;
@@ -1982,15 +1973,36 @@ function LabTab({ data, onResearch, onCollectResearch, onCancelResearch, researc
   const research = pvp.research;
   const researchReady = research != null && new Date(research.endsAt).getTime() <= now;
   useEffect(() => { if (researchReady) onRefresh(); }, [researchReady, onRefresh]);
+  const [labSub, setLabSub] = useState<"pasukan" | "kapal">("pasukan");
   const researchName = research == null ? null : research.kind === "level"
     ? research.troopKind === "attack" ? t("labTroopAttackName") : t("labTroopDefenseName")
-    : research.kind === "camp" ? t("labResearchCamp") : t("labResearchSpeed");
+    : research.kind === "camp" ? t("labResearchCamp")
+    : research.kind === "speed" ? t("labResearchSpeed")
+    : (data.upgrades.find((u) => u.id === research.upgradeId)?.name ?? "");
   const tracks = [
-    { key: "level-attack", kind: "level" as const, troopKind: "attack" as const, name: t("labTroopAttackName"), desc: t("labTroopAttackDesc"), level: pvp.troops.attack.level, maxLevel: pvp.troops.attack.maxLevel, effect: t("labResearchLevelEffect", { power: 6 + 4 * (pvp.troops.attack.level + 1) }), blocked: pvp.troops.attack.count === 0, cost: pvp.researchCosts.levelAttack, icon: <SwordsIcon size={24} />, accent: "text-red-300" },
-    { key: "level-defense", kind: "level" as const, troopKind: "defense" as const, name: t("labTroopDefenseName"), desc: t("labTroopDefenseDesc"), level: pvp.troops.defense.level, maxLevel: pvp.troops.defense.maxLevel, effect: t("labResearchLevelEffect", { power: 6 + 4 * (pvp.troops.defense.level + 1) }), blocked: pvp.troops.defense.count === 0, cost: pvp.researchCosts.levelDefense, icon: <ShieldIcon size={24} />, accent: "text-sky-300" },
-    { key: "camp", kind: "camp" as const, troopKind: null, name: t("labResearchCamp"), desc: t("labResearchCampDesc"), level: pvp.camp.campLevel, maxLevel: pvp.camp.maxResearchLevel, effect: t("labResearchCampEffect", { capacity: pvp.camp.capacity + 5 }), blocked: false, cost: pvp.researchCosts.camp, icon: <UsersIcon size={24} />, accent: "text-amber-300" },
-    { key: "speed", kind: "speed" as const, troopKind: null, name: t("labResearchSpeed"), desc: t("labResearchSpeedDesc"), level: pvp.camp.speedLevel, maxLevel: pvp.camp.maxResearchLevel, effect: t("labResearchSpeedEffect", { pct: Math.round(100 * (1 + 0.1 * (pvp.camp.speedLevel + 1)) - 100) }), blocked: false, cost: pvp.researchCosts.speed, icon: <ZapIcon size={24} />, accent: "text-emerald-300" },
+    { key: "level-attack", kind: "level" as const, troopKind: "attack" as const, upgradeId: null as string | null, name: t("labTroopAttackName"), desc: t("labTroopAttackDesc"), level: pvp.troops.attack.level, maxLevel: pvp.troops.attack.maxLevel, effect: t("labResearchLevelEffect", { power: 6 + 4 * (pvp.troops.attack.level + 1) }) as string | null, blocked: pvp.troops.attack.count === 0, cost: pvp.researchCosts.levelAttack, icon: <SwordsIcon size={24} />, accent: "text-red-300" },
+    { key: "level-defense", kind: "level" as const, troopKind: "defense" as const, upgradeId: null as string | null, name: t("labTroopDefenseName"), desc: t("labTroopDefenseDesc"), level: pvp.troops.defense.level, maxLevel: pvp.troops.defense.maxLevel, effect: t("labResearchLevelEffect", { power: 6 + 4 * (pvp.troops.defense.level + 1) }) as string | null, blocked: pvp.troops.defense.count === 0, cost: pvp.researchCosts.levelDefense, icon: <ShieldIcon size={24} />, accent: "text-sky-300" },
+    { key: "camp", kind: "camp" as const, troopKind: null, upgradeId: null as string | null, name: t("labResearchCamp"), desc: t("labResearchCampDesc"), level: pvp.camp.campLevel, maxLevel: pvp.camp.maxResearchLevel, effect: t("labResearchCampEffect", { capacity: pvp.camp.capacity + 5 }) as string | null, blocked: false, cost: pvp.researchCosts.camp, icon: <UsersIcon size={24} />, accent: "text-amber-300" },
+    { key: "speed", kind: "speed" as const, troopKind: null, upgradeId: null as string | null, name: t("labResearchSpeed"), desc: t("labResearchSpeedDesc"), level: pvp.camp.speedLevel, maxLevel: pvp.camp.maxResearchLevel, effect: t("labResearchSpeedEffect", { pct: Math.round(100 * (1 + 0.1 * (pvp.camp.speedLevel + 1)) - 100) }) as string | null, blocked: false, cost: pvp.researchCosts.speed, icon: <ZapIcon size={24} />, accent: "text-emerald-300" },
   ];
+  // Sub-tab Kapal: 6 upgrade kapal sebagai riset berwaktu (owner
+  // 2026-11-28) — biaya = harga upgrade biasa, waktu = 3 jam ×
+  // level target, antrean tunggal bareng riset pasukan.
+  const shipTracks = data.upgrades.map((u) => ({
+    key: `upgrade-${u.id}`,
+    kind: "upgrade" as const,
+    troopKind: null as null,
+    upgradeId: u.id as string | null,
+    name: u.name,
+    desc: u.desc,
+    level: u.level,
+    maxLevel: u.maxLevel,
+    effect: null as string | null,
+    blocked: false,
+    cost: u.nextCost ?? 0,
+    icon: <UpgradeIcon id={u.id} size={24} />,
+    accent: "text-cyan-300",
+  }));
   return (
     <section className="mt-3 space-y-3">
       <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3">
@@ -2013,7 +2025,11 @@ function LabTab({ data, onResearch, onCollectResearch, onCancelResearch, researc
           <button type="button" onClick={onCancelResearch} disabled={researchBusy} className="btn-press shrink-0 rounded-lg border border-[var(--border)] bg-[var(--surface2)] px-3 py-1 text-xs font-bold disabled:opacity-40">{t("labResearchCancelBtn")}</button>
         </div>
       )}
-      {tracks.map((tr) => {
+      <div className="flex gap-2" role="tablist" aria-label={t("labTitle")}>
+        <button type="button" role="tab" aria-selected={labSub === "pasukan"} onClick={() => setLabSub("pasukan")} className={`btn-press flex-1 rounded-xl px-3 py-1.5 text-xs font-bold ${labSub === "pasukan" ? "bg-cyan-400 text-black" : "bg-[var(--surface2)] text-[var(--dim)]"}`}>{t("tabTroops")}</button>
+        <button type="button" role="tab" aria-selected={labSub === "kapal"} onClick={() => setLabSub("kapal")} className={`btn-press flex-1 rounded-xl px-3 py-1.5 text-xs font-bold ${labSub === "kapal" ? "bg-cyan-400 text-black" : "bg-[var(--surface2)] text-[var(--dim)]"}`}>{t("labSubShip")}</button>
+      </div>
+      {(labSub === "pasukan" ? tracks : shipTracks).map((tr) => {
         const maxed = tr.level >= tr.maxLevel;
         const nextLevel = tr.level + 1;
         return (
@@ -2025,13 +2041,13 @@ function LabTab({ data, onResearch, onCollectResearch, onCancelResearch, researc
                   <h3 className="min-w-0 flex-1 truncate text-sm font-bold">{tr.name}</h3>
                   <span className="shrink-0 text-xs text-[var(--dim)]">{maxed ? `Lv.${tr.level}` : `Lv.${tr.level} → Lv.${nextLevel}`}</span>
                 </div>
-                <p className="mt-0.5 flex flex-wrap items-center gap-1.5 text-sm"><span className="font-bold text-emerald-300">{t("labResearchLevel", { level: tr.level, max: tr.maxLevel })}</span><img src={ktLogoImg} alt="" className="h-4 w-4 rounded-full object-cover" /><span className="font-bold">{fmt(tr.cost)} KT</span></p>
+                <p className="mt-0.5 flex flex-wrap items-center gap-1.5 text-sm"><span className="font-bold text-emerald-300">{t("labResearchLevel", { level: tr.level, max: tr.maxLevel })}</span>{!maxed && (<><img src={ktLogoImg} alt="" className="h-4 w-4 rounded-full object-cover" /><span className="font-bold">{fmt(tr.cost)} KT</span></>)}</p>
                 <ExpandableText className="mt-1 text-sm text-[var(--dim)]">{tr.desc}</ExpandableText>
-                {!maxed && (<p className="mt-1 text-sm font-bold text-emerald-300">{tr.effect}</p>)}
+                {!maxed && tr.effect != null && (<p className="mt-1 text-sm font-bold text-emerald-300">{tr.effect}</p>)}
                 {!maxed && (<p className="mt-0.5 text-xs text-[var(--dim)]">{t("labResearchDur", { dur: fmtDur(pvp.researchBaseSec * nextLevel) })}</p>)}
               </div>
             </div>
-            <button type="button" onClick={() => onResearch({ kind: tr.kind, troopKind: tr.troopKind })} disabled={researchBusy || research != null || maxed || tr.blocked || data.player.ktBalance < tr.cost} className="btn-press mt-2 flex w-full items-center justify-center gap-1 rounded-xl bg-amber-400 px-4 py-1.5 text-sm font-bold text-black disabled:opacity-40">
+            <button type="button" onClick={() => onResearch({ kind: tr.kind, troopKind: tr.troopKind, upgradeId: tr.upgradeId })} disabled={researchBusy || research != null || maxed || tr.blocked || data.player.ktBalance < tr.cost} className="btn-press mt-2 flex w-full items-center justify-center gap-1 rounded-xl bg-amber-400 px-4 py-1.5 text-sm font-bold text-black disabled:opacity-40">
               {maxed ? t("labResearchMax") : tr.blocked ? t("labResearchNeedTroop") : (<>{t("labResearchBtnShort")} <ChevronRightIcon size={14} /></>)}
             </button>
           </div>
@@ -2041,7 +2057,7 @@ function LabTab({ data, onResearch, onCollectResearch, onCancelResearch, researc
   );
 }
 
-function MisiTab({ userId, referrals, channelBonusClaimed, channelBonusKt, onClaimChannel, claimingChannel, canClaimDailyBonus, dailyBonusKt, onClaimDaily, claimingDaily }: { userId: number | null; referrals: { invited: number; rewarded: number; earnedKt: number; list: Array<{ id: number; name: string; status: "pending" | "rewarded"; joinedAt: string }> }; channelBonusClaimed: boolean; channelBonusKt: number; onClaimChannel: () => void; claimingChannel: boolean; canClaimDailyBonus: boolean; dailyBonusKt: number; onClaimDaily: () => void; claimingDaily: boolean }) {
+function MisiTab({ userId, referrals, channelBonusClaimed, channelBonusKt, onClaimChannel, claimingChannel, canClaimDailyBonus, dailyBonusKt, onClaimDaily, claimingDaily, premiumData, onBuyPremium, buyingPremium, onBuyPremiumGram, buyingPremiumGram, gramPhase, inTelegram, onCancelPremiumOrder, cancellingPremiumOrder }: { userId: number | null; referrals: { invited: number; rewarded: number; earnedKt: number; list: Array<{ id: number; name: string; status: "pending" | "rewarded"; joinedAt: string }> }; channelBonusClaimed: boolean; channelBonusKt: number; onClaimChannel: () => void; claimingChannel: boolean; canClaimDailyBonus: boolean; dailyBonusKt: number; onClaimDaily: () => void; claimingDaily: boolean; premiumData: GameState; onBuyPremium: (plan: "standard" | "pro") => void; buyingPremium: boolean; onBuyPremiumGram: (plan: "standard" | "pro") => void; buyingPremiumGram: boolean; gramPhase: "idle" | "paying" | "verifying"; inTelegram: boolean; onCancelPremiumOrder: (id: number) => void; cancellingPremiumOrder: boolean }) {
   const [copied, setCopied] = useState(false);
   // Link referral: Mini App + startapp payload ref_<telegramId>.
   // startapp membuka Mini App LANGSUNG dengan kode menempel
@@ -2158,6 +2174,7 @@ function MisiTab({ userId, referrals, channelBonusClaimed, channelBonusKt, onCla
           <p className="mt-2 text-xs text-[var(--dim)]">{t("commRefEmpty")}</p>
         ) : null}
       </div>
+      <PremiumCard data={premiumData} onBuy={onBuyPremium} buying={buyingPremium} onBuyGram={onBuyPremiumGram} buyingGram={buyingPremiumGram} gramPhase={gramPhase} inTelegram={inTelegram} onCancelOrder={onCancelPremiumOrder} cancelling={cancellingPremiumOrder} />
     </section>
   );
 }

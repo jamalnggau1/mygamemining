@@ -1783,10 +1783,15 @@ export function researchDurationSec(targetLevel: number): number {
 }
 
 export type PvpTraining = { kind: TroopKind; endsAt: number; costKt: number };
-export type PvpResearchKind = "level" | "camp" | "speed";
+/** Jenis riset Lab — "upgrade" = upgrade kapal (dulu beli instan
+ *  di tab Hanggar; owner 2026-11-28: ikut aturan Lab, berwaktu,
+ *  bukan instan). upgradeId = id upgrade (beliung/tangki/bor/
+ *  ransel/negosiator/pemindai), null untuk riset pasukan. */
+export type PvpResearchKind = "level" | "camp" | "speed" | "upgrade";
 export type PvpResearch = {
   kind: PvpResearchKind;
   troopKind: TroopKind | null;
+  upgradeId: string | null;
   targetLevel: number;
   endsAt: number;
   costKt: number;
@@ -1894,8 +1899,14 @@ function parseResearch(raw: string | null | undefined): PvpResearch | null {
   try {
     const v = JSON.parse(raw) as Partial<PvpResearch>;
     if (typeof v !== "object" || v === null) return null;
-    if (v.kind !== "level" && v.kind !== "camp" && v.kind !== "speed")
+    if (
+      v.kind !== "level" &&
+      v.kind !== "camp" &&
+      v.kind !== "speed" &&
+      v.kind !== "upgrade"
+    )
       return null;
+    if (v.kind === "upgrade" && typeof v.upgradeId !== "string") return null;
     if (
       v.troopKind !== null &&
       v.troopKind !== undefined &&
@@ -1912,6 +1923,7 @@ function parseResearch(raw: string | null | undefined): PvpResearch | null {
     return {
       kind: v.kind,
       troopKind: v.troopKind ?? null,
+      upgradeId: v.upgradeId ?? null,
       targetLevel: v.targetLevel,
       endsAt: v.endsAt,
       costKt: v.costKt,
@@ -1937,6 +1949,7 @@ function toClientTraining(t: PvpTraining): {
 function toClientResearch(r: PvpResearch): {
   kind: PvpResearchKind;
   troopKind: TroopKind | null;
+  upgradeId: string | null;
   targetLevel: number;
   endsAt: string;
   costKt: number;
@@ -1944,6 +1957,7 @@ function toClientResearch(r: PvpResearch): {
   return {
     kind: r.kind,
     troopKind: r.troopKind,
+    upgradeId: r.upgradeId,
     targetLevel: r.targetLevel,
     endsAt: new Date(r.endsAt).toISOString(),
     costKt: r.costKt,
@@ -2644,6 +2658,7 @@ export const gameActions = {
           level: z.number(),
           maxLevel: z.number(),
           nextCost: z.number().nullable(),
+          researchDurationSec: z.number().nullable(),
         }),
       ),
       withdrawals: z.array(wdShape),
@@ -2725,8 +2740,9 @@ export const gameActions = {
           .nullable(),
         research: z
           .object({
-            kind: z.enum(["level", "camp", "speed"]),
+            kind: z.enum(["level", "camp", "speed", "upgrade"]),
             troopKind: z.enum(["attack", "defense"]).nullable(),
+            upgradeId: z.string().nullable(),
             targetLevel: z.number(),
             endsAt: z.string(),
             costKt: z.number(),
@@ -3062,6 +3078,8 @@ export const gameActions = {
             level,
             maxLevel: u.maxLevel,
             nextCost: level >= u.maxLevel ? null : upgradeCost(u, level),
+            researchDurationSec:
+              level >= u.maxLevel ? null : researchDurationSec(level + 1),
           };
         }),
         withdrawals: wdRows.map((w) => toWd(w, (riskByOwner.get(w.playerId) ?? 0) > 0)),
@@ -3701,16 +3719,18 @@ export const gameActions = {
 
   startResearch: defineGameAction({
     description:
-      "Starts one Lab research: a drone level (Serbu/Perisai +1), Expand Camp (+5 capacity), or Fast Training (+10% training speed). One research at a time. Cost: 0.1 KT flat in the test phase. Time: 10 min × target level. The effect applies when collected.",
+      "Starts one Lab research: a drone level (Serbu/Perisai +1), Expand Camp (+5 capacity), Fast Training (+10% training speed), or a ship upgrade (one level, at its usual KT cost). One research at a time, shared queue. Cost: troop research 20 KT × current level; ship upgrade = its upgrade price. Time: 3 h × target level. The effect applies when collected.",
     request: z.object({
-      kind: z.enum(["level", "camp", "speed"]),
+      kind: z.enum(["level", "camp", "speed", "upgrade"]),
       troopKind: z.enum(["attack", "defense"]).nullable(),
+      upgradeId: z.string().nullable().optional(),
     }),
     response: resultShape.extend({
       research: z
         .object({
-          kind: z.enum(["level", "camp", "speed"]),
+          kind: z.enum(["level", "camp", "speed", "upgrade"]),
           troopKind: z.enum(["attack", "defense"]).nullable(),
+          upgradeId: z.string().nullable(),
           targetLevel: z.number(),
           endsAt: z.string(),
           costKt: z.number(),
@@ -3729,6 +3749,7 @@ export const gameActions = {
         research: null as {
           kind: PvpResearchKind;
           troopKind: TroopKind | null;
+          upgradeId: string | null;
           targetLevel: number;
           endsAt: string;
           costKt: number;
@@ -3738,6 +3759,8 @@ export const gameActions = {
       if (parseResearch(p.research)) return fail(S.errPvpResearchBusy);
       let targetLevel: number;
       let label: string;
+      let cost: number;
+      let upgradeId: string | null = null;
       if (args.kind === "level") {
         if (!args.troopKind) return fail(S.errPvpResearchInvalid);
         const troops = await loadTroops(db, p.id);
@@ -3750,26 +3773,43 @@ export const gameActions = {
           );
         targetLevel = cur.level + 1;
         label = troopName(troopDef(args.troopKind), lang);
+        cost = researchCostKt(targetLevel);
       } else if (args.kind === "camp") {
         const cur = p.pvpCampLevel ?? 0;
         if (cur >= RESEARCH_MAX_LEVEL)
           return fail(S.errPvpResearchMax(S.pvpResearchCampName));
         targetLevel = cur + 1;
         label = S.pvpResearchCampName;
-      } else {
+        cost = researchCostKt(targetLevel);
+      } else if (args.kind === "speed") {
         const cur = p.pvpSpeedLevel ?? 0;
         if (cur >= RESEARCH_MAX_LEVEL)
           return fail(S.errPvpResearchMax(S.pvpResearchSpeedName));
         targetLevel = cur + 1;
         label = S.pvpResearchSpeedName;
+        cost = researchCostKt(targetLevel);
+      } else {
+        // Riset upgrade kapal (owner 2026-11-28): biaya = harga
+        // upgrade biasa (bukan tarif riset pasukan), waktu = 3 jam
+        // × level target seperti riset lain.
+        const def = args.upgradeId ? upgradeById(args.upgradeId) : undefined;
+        if (!def) return fail(S.errUpgradeUnknown);
+        const levels = await loadLevels(db, p.id);
+        const cur = levels[def.id] ?? 0;
+        if (cur >= def.maxLevel)
+          return fail(S.errUpgradeMax(upgradeName(def, lang)));
+        targetLevel = cur + 1;
+        label = upgradeName(def, lang);
+        cost = upgradeCost(def, cur);
+        upgradeId = def.id;
       }
-      const cost = researchCostKt(targetLevel);
       if (p.ktBalance < cost)
         return fail(S.errKtNotEnough(cost, p.ktBalance));
       const durationSec = researchDurationSec(targetLevel);
       const research: PvpResearch = {
         kind: args.kind,
         troopKind: args.kind === "level" ? args.troopKind : null,
+        upgradeId,
         targetLevel,
         endsAt: Date.now() + durationSec * 1000,
         costKt: cost,
@@ -3797,11 +3837,12 @@ export const gameActions = {
 
   collectResearch: defineGameAction({
     description:
-      "Collects a finished Lab research and applies its effect (drone level +1, camp capacity +5, or training speed +10%).",
+      "Collects a finished Lab research and applies its effect (drone level +1, camp capacity +5, training speed +10%, or one ship upgrade level).",
     request: z.object({}),
     response: resultShape.extend({
-      kind: z.enum(["level", "camp", "speed"]).nullable(),
+      kind: z.enum(["level", "camp", "speed", "upgrade"]).nullable(),
       troopKind: z.enum(["attack", "defense"]).nullable(),
+      upgradeId: z.string().nullable(),
       targetLevel: z.number(),
       ktBalance: z.number(),
     }),
@@ -3815,6 +3856,7 @@ export const gameActions = {
         error,
         kind: null as PvpResearchKind | null,
         troopKind: null as TroopKind | null,
+        upgradeId: null as string | null,
         targetLevel: 0,
         ktBalance: p.ktBalance,
       });
@@ -3845,12 +3887,47 @@ export const gameActions = {
           .set({ pvpCampLevel: research.targetLevel })
           .where(eq(schema.player.id, p.id));
         label = S.pvpResearchCampName;
-      } else {
+      } else if (research.kind === "speed") {
         await db
           .update(schema.player)
           .set({ pvpSpeedLevel: research.targetLevel })
           .where(eq(schema.player.id, p.id));
         label = S.pvpResearchSpeedName;
+      } else {
+        // Riset upgrade kapal: naikkan level upgrade satu tingkat
+        // (upsert baris upgrades, sama seperti buyUpgrade dulu).
+        const def = research.upgradeId
+          ? upgradeById(research.upgradeId)
+          : undefined;
+        if (!def) return fail(S.errPvpResearchInvalid);
+        const existing = await db
+          .select()
+          .from(schema.upgrades)
+          .where(
+            and(
+              eq(schema.upgrades.playerId, p.id),
+              eq(schema.upgrades.upgradeId, def.id),
+            ),
+          )
+          .limit(1);
+        if (existing[0]) {
+          await db
+            .update(schema.upgrades)
+            .set({ level: research.targetLevel })
+            .where(
+              and(
+                eq(schema.upgrades.playerId, p.id),
+                eq(schema.upgrades.upgradeId, def.id),
+              ),
+            );
+        } else {
+          await db.insert(schema.upgrades).values({
+            playerId: p.id,
+            upgradeId: def.id,
+            level: research.targetLevel,
+          });
+        }
+        label = upgradeName(def, lang);
       }
       await db
         .update(schema.player)
@@ -3868,6 +3945,7 @@ export const gameActions = {
         error: null,
         kind: research.kind,
         troopKind: research.troopKind,
+        upgradeId: research.upgradeId,
         targetLevel: research.targetLevel,
         ktBalance: p.ktBalance,
       };
@@ -3893,12 +3971,20 @@ export const gameActions = {
       });
       const research = parseResearch(p.research);
       if (!research) return fail(S.errPvpNoResearch);
+      const upgradeDef =
+        research.kind === "upgrade" && research.upgradeId
+          ? upgradeById(research.upgradeId)
+          : undefined;
       const label =
         research.kind === "level"
           ? troopName(troopDef(research.troopKind ?? "attack"), lang)
           : research.kind === "camp"
             ? S.pvpResearchCampName
-            : S.pvpResearchSpeedName;
+            : research.kind === "speed"
+              ? S.pvpResearchSpeedName
+              : upgradeDef
+                ? upgradeName(upgradeDef, lang)
+                : (research.upgradeId ?? "");
       const newBalance = roundKt(p.ktBalance + research.costKt);
       await db
         .update(schema.player)
@@ -4939,70 +5025,6 @@ export const gameActions = {
     },
   }),
 
-  buyUpgrade: defineGameAction({
-    description:
-      "Buys the next level of an upgrade, paying its KT cost from the player's balance.",
-    request: z.object({ upgradeId: z.string() }),
-    response: resultShape.extend({
-      newLevel: z.number().nullable(),
-      costPaid: z.number(),
-      ktBalance: z.number(),
-    }),
-    async handler(args, session) {
-      const db = getDb();
-      // i18n: request language — user-facing strings only.
-      const lang = session.lang;
-      const S = serverStrings(lang);
-      const p = await loadPlayer(db, session);
-      const levels = await loadLevels(db, p.id);
-      const def = upgradeById(args.upgradeId);
-      const fail = (error: string) => ({ ok: false, error, newLevel: null as number | null, costPaid: 0, ktBalance: p.ktBalance });
-      if (!def) return fail(S.errUpgradeUnknown);
-      const level = levels[def.id] ?? 0;
-      if (level >= def.maxLevel) return fail(S.errUpgradeMax(upgradeName(def, lang)));
-      const cost = upgradeCost(def, level);
-      if (p.ktBalance < cost)
-        return fail(S.errKtNotEnough(cost, p.ktBalance));
-      const existing = await db
-        .select()
-        .from(schema.upgrades)
-        .where(
-          and(
-            eq(schema.upgrades.playerId, p.id),
-            eq(schema.upgrades.upgradeId, def.id),
-          ),
-        )
-        .limit(1);
-      if (existing[0]) {
-        await db
-          .update(schema.upgrades)
-          .set({ level: level + 1 })
-          .where(
-            and(
-              eq(schema.upgrades.playerId, p.id),
-              eq(schema.upgrades.upgradeId, def.id),
-            ),
-          );
-      } else {
-        await db
-          .insert(schema.upgrades)
-          .values({ playerId: p.id, upgradeId: def.id, level: 1 });
-      }
-      const newBalance = roundKt(p.ktBalance - cost);
-      await db
-        .update(schema.player)
-        .set({ ktBalance: newBalance })
-        .where(eq(schema.player.id, p.id));
-      await logActivity(db, p.id, "upgrade", S.logUpgrade(upgradeName(def, lang), level + 1), -cost);
-      return {
-        ok: true,
-        error: null,
-        newLevel: level + 1,
-        costPaid: cost,
-        ktBalance: newBalance,
-      };
-    },
-  }),
 
   requestWithdrawal: defineGameAction({
     description:

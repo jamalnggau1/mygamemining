@@ -152,7 +152,6 @@ export const api: Api = {
   watchAd: (args) => callAction("watchAd", args),
   sellOre: (args) => callAction("sellOre", args),
   sellAllOre: (args) => callAction("sellAllOre", args),
-  buyUpgrade: (args) => callAction("buyUpgrade", args),
   requestWithdrawal: (args) => callAction("requestWithdrawal", args),
   cancelWithdrawal: (args) => callAction("cancelWithdrawal", args),
   updateWithdrawal: (args) => callAction("updateWithdrawal", args),
