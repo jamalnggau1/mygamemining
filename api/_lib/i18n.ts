@@ -335,12 +335,12 @@ export interface ServerStrings {
   // yang didapat/hilang (Log Ekonomi). Entri untuk pemain yang
   // diserang ditulis dalam bahasa penyerang (sama seperti log
   // referral/admin — bahasa per pemain tidak disimpan).
-  logPvpAttackWin: (defenderName: string, lootKt: number) => string;
-  logPvpAttackWinEmpty: (defenderName: string) => string;
-  logPvpAttackLose: (defenderName: string) => string;
-  logPvpDefendedWin: (attackerName: string) => string;
-  logPvpDefendedLose: (attackerName: string, lootKt: number) => string;
-  logPvpDefendedLoseEmpty: (attackerName: string) => string;
+  logPvpAttackWin: (defenderName: string, lootKt: number, atk: number, def: number, dead: number, deadName: string) => string;
+  logPvpAttackWinEmpty: (defenderName: string, atk: number, def: number, dead: number, deadName: string) => string;
+  logPvpAttackLose: (defenderName: string, atk: number, def: number) => string;
+  logPvpDefendedWin: (attackerName: string, atk: number, def: number, dead: number, deadName: string) => string;
+  logPvpDefendedLose: (attackerName: string, lootKt: number, atk: number, def: number) => string;
+  logPvpDefendedLoseEmpty: (attackerName: string, atk: number, def: number) => string;
   logPvpLootGain: (lootKt: number) => string;
   logPvpLootStolen: (lootKt: number) => string;
   logPvpLootDestroyed: (lootKt: number) => string;
@@ -562,18 +562,18 @@ const id: ServerStrings = {
     `Teman yang kamu undang menyelesaikan ekspedisi pertamanya — hadiah referral ${fmtNum(amount, "id")} KT masuk ke saldo.`,
   logReferralRefereeBonus: (amount) =>
     `Kamu menyelesaikan ekspedisi pertamamu lewat undangan teman — bonus referral ${fmtNum(amount, "id")} KT masuk ke saldo.`,
-  logPvpAttackWin: (defenderName, lootKt) =>
-    `Kamu menyerang ${defenderName} dan MENANG — merampas hasil tambang senilai ${fmtNum(lootKt, "id")} KT.`,
-  logPvpAttackWinEmpty: (defenderName) =>
-    `Kamu menyerang ${defenderName} dan MENANG — tapi tidak ada hasil tambang yang bisa dirampas.`,
-  logPvpAttackLose: (defenderName) =>
-    `Kamu menyerang ${defenderName} dan KALAH — kekuatan bertahannya lebih besar.`,
-  logPvpDefendedWin: (attackerName) =>
-    `${attackerName} menyerangmu tapi pertahananmu menang — hasil tambangmu aman, dan kamu kebal 1 jam.`,
-  logPvpDefendedLose: (attackerName, lootKt) =>
-    `${attackerName} menyerangmu dan menang — ${fmtNum(lootKt, "id")} KT hasil tambangmu dirampas. Kamu kebal 1 jam.`,
-  logPvpDefendedLoseEmpty: (attackerName) =>
-    `${attackerName} menyerangmu dan menang — tapi tidak ada hasil tambang yang bisa dirampas. Kamu kebal 1 jam.`,
+  logPvpAttackWin: (defenderName, lootKt, atk, def, dead, deadName) =>
+    `Kamu menyerang ${defenderName} dan MENANG (serang ${atk} vs bertahan ${def}) — merampas hasil tambang senilai ${fmtNum(lootKt, "id")} KT.${dead > 0 ? ` ${dead} × ${deadName} musuh gugur.` : ""}`,
+  logPvpAttackWinEmpty: (defenderName, atk, def, dead, deadName) =>
+    `Kamu menyerang ${defenderName} dan MENANG (serang ${atk} vs bertahan ${def}) — tapi tidak ada hasil tambang yang bisa dirampas.${dead > 0 ? ` ${dead} × ${deadName} musuh gugur.` : ""}`,
+  logPvpAttackLose: (defenderName, atk, def) =>
+    `Kamu menyerang ${defenderName} dan KALAH (serang ${atk} vs bertahan ${def}) — kekuatan bertahannya lebih besar.`,
+  logPvpDefendedWin: (attackerName, atk, def, dead, deadName) =>
+    `${attackerName} menyerangmu tapi pertahananmu menang (serang ${atk} vs bertahan ${def}) — hasil tambangmu aman, dan kamu kebal 1 jam.${dead > 0 ? ` ${dead} × ${deadName} musuh gugur.` : ""}`,
+  logPvpDefendedLose: (attackerName, lootKt, atk, def) =>
+    `${attackerName} menyerangmu dan menang (serang ${atk} vs bertahan ${def}) — ${fmtNum(lootKt, "id")} KT hasil tambangmu dirampas. Kamu kebal 1 jam.`,
+  logPvpDefendedLoseEmpty: (attackerName, atk, def) =>
+    `${attackerName} menyerangmu dan menang (serang ${atk} vs bertahan ${def}) — tapi tidak ada hasil tambang yang bisa dirampas. Kamu kebal 1 jam.`,
   logPvpTrainStart: (name) => `Pelatihan ${name} dimulai.`,
   logPvpTrainDone: (name, count) =>
     `Pelatihan ${name} selesai — sekarang kamu punya ${count}.`,
@@ -805,18 +805,18 @@ const en: ServerStrings = {
     `A friend you invited completed their first expedition — referral reward of ${fmtNum(amount, "en")} KT added to your balance.`,
   logReferralRefereeBonus: (amount) =>
     `You completed your first expedition via a friend's invite — referral bonus of ${fmtNum(amount, "en")} KT added to your balance.`,
-  logPvpAttackWin: (defenderName, lootKt) =>
-    `You attacked ${defenderName} and WON — looting ore worth ${fmtNum(lootKt, "en")} KT.`,
-  logPvpAttackWinEmpty: (defenderName) =>
-    `You attacked ${defenderName} and WON — but there was no ore to loot.`,
-  logPvpAttackLose: (defenderName) =>
-    `You attacked ${defenderName} and LOST — their defense was stronger.`,
-  logPvpDefendedWin: (attackerName) =>
-    `${attackerName} attacked you but your defense won — your ore is safe, and you are immune for 1 hour.`,
-  logPvpDefendedLose: (attackerName, lootKt) =>
-    `${attackerName} attacked you and won — ${fmtNum(lootKt, "en")} KT of your ore was looted. You are immune for 1 hour.`,
-  logPvpDefendedLoseEmpty: (attackerName) =>
-    `${attackerName} attacked you and won — but there was no ore to loot. You are immune for 1 hour.`,
+  logPvpAttackWin: (defenderName, lootKt, atk, def, dead, deadName) =>
+    `You attacked ${defenderName} and WON (attack ${atk} vs defense ${def}) — looting ore worth ${fmtNum(lootKt, "en")} KT.${dead > 0 ? ` ${dead} × ${deadName} of the enemy fell.` : ""}`,
+  logPvpAttackWinEmpty: (defenderName, atk, def, dead, deadName) =>
+    `You attacked ${defenderName} and WON (attack ${atk} vs defense ${def}) — but there was no ore to loot.${dead > 0 ? ` ${dead} × ${deadName} of the enemy fell.` : ""}`,
+  logPvpAttackLose: (defenderName, atk, def) =>
+    `You attacked ${defenderName} and LOST (attack ${atk} vs defense ${def}) — their defense was stronger.`,
+  logPvpDefendedWin: (attackerName, atk, def, dead, deadName) =>
+    `${attackerName} attacked you but your defense won (attack ${atk} vs defense ${def}) — your ore is safe, and you are immune for 1 hour.${dead > 0 ? ` ${dead} × ${deadName} of the enemy fell.` : ""}`,
+  logPvpDefendedLose: (attackerName, lootKt, atk, def) =>
+    `${attackerName} attacked you and won (attack ${atk} vs defense ${def}) — ${fmtNum(lootKt, "en")} KT of your ore was looted. You are immune for 1 hour.`,
+  logPvpDefendedLoseEmpty: (attackerName, atk, def) =>
+    `${attackerName} attacked you and won (attack ${atk} vs defense ${def}) — but there was no ore to loot. You are immune for 1 hour.`,
   logPvpTrainStart: (name) => `Training ${name} started.`,
   logPvpTrainDone: (name, count) =>
     `Training ${name} finished — you now own ${count}.`,
@@ -1049,18 +1049,18 @@ const ru: ServerStrings = {
     `Приглашённый тобой друг завершил свою первую экспедицию — реферальная награда ${fmtNum(amount, "ru")} KT добавлена на баланс.`,
   logReferralRefereeBonus: (amount) =>
     `Ты завершил свою первую экспедицию по приглашению друга — реферальный бонус ${fmtNum(amount, "ru")} KT добавлен на баланс.`,
-  logPvpAttackWin: (defenderName, lootKt) =>
-    `Ты атаковал ${defenderName} и ПОБЕДИЛ, захватив добычу на ${fmtNum(lootKt, "ru")} KT.`,
-  logPvpAttackWinEmpty: (defenderName) =>
-    `Ты атаковал ${defenderName} и ПОБЕДИЛ, но добычи не было.`,
-  logPvpAttackLose: (defenderName) =>
-    `Ты атаковал ${defenderName} и ПРОИГРАЛ — его защита оказалась сильнее.`,
-  logPvpDefendedWin: (attackerName) =>
-    `${attackerName} атаковал тебя, но твоя защита победила — добыча в безопасности, у тебя защита на 1 час.`,
-  logPvpDefendedLose: (attackerName, lootKt) =>
-    `${attackerName} атаковал тебя и победил — у тебя отняли добычу на ${fmtNum(lootKt, "ru")} KT. У тебя защита на 1 час.`,
-  logPvpDefendedLoseEmpty: (attackerName) =>
-    `${attackerName} атаковал тебя и победил, но добычи не было. У тебя защита на 1 час.`,
+  logPvpAttackWin: (defenderName, lootKt, atk, def, dead, deadName) =>
+    `Ты атаковал ${defenderName} и ПОБЕДИЛ (атака ${atk} против защиты ${def}), захватив добычу на ${fmtNum(lootKt, "ru")} KT.${dead > 0 ? ` ${dead} × ${deadName} врага погибло.` : ""}`,
+  logPvpAttackWinEmpty: (defenderName, atk, def, dead, deadName) =>
+    `Ты атаковал ${defenderName} и ПОБЕДИЛ (атака ${atk} против защиты ${def}), но добычи не было.${dead > 0 ? ` ${dead} × ${deadName} врага погибло.` : ""}`,
+  logPvpAttackLose: (defenderName, atk, def) =>
+    `Ты атаковал ${defenderName} и ПРОИГРАЛ (атака ${atk} против защиты ${def}) — его защита оказалась сильнее.`,
+  logPvpDefendedWin: (attackerName, atk, def, dead, deadName) =>
+    `${attackerName} атаковал тебя, но твоя защита победила (атака ${atk} против защиты ${def}) — добыча в безопасности, у тебя защита на 1 час.${dead > 0 ? ` ${dead} × ${deadName} врага погибло.` : ""}`,
+  logPvpDefendedLose: (attackerName, lootKt, atk, def) =>
+    `${attackerName} атаковал тебя и победил (атака ${atk} против защиты ${def}) — у тебя отняли добычу на ${fmtNum(lootKt, "ru")} KT. У тебя защита на 1 час.`,
+  logPvpDefendedLoseEmpty: (attackerName, atk, def) =>
+    `${attackerName} атаковал тебя и победил (атака ${atk} против защиты ${def}), но добычи не было. У тебя защита на 1 час.`,
   logPvpTrainStart: (name) => `Обучение: ${name} — началось.`,
   logPvpTrainDone: (name, count) =>
     `Обучение: ${name} — готово, теперь у тебя ${count}.`,

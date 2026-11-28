@@ -4088,6 +4088,38 @@ export const gameActions = {
       // Pertempuran DETERMINISTIK: kekuatan lebih besar menang; seri
       // = bertahan menang (keuntungan kandang). Tanpa acak.
       const won = attackerPower > defenderPower;
+      // Korban pasukan (2026-11-25): yang kalah kehilangan sebagian
+      // drone jenis yang dipakainya — makin tinggi level, makin
+      // sedikit yang gugur (20% ÷ level, minimal 1). NPC tidak
+      // punya pasukan, jadi tidak ada korban di pihaknya. Dihitung
+      // DI SINI (sebelum entri log pertempuran) supaya angka korban
+      // bisa ditulis di entri si pemenang juga (2026-11-28: detail
+      // log PvP); entri "gugur" si kalah sendiri tetap ditulis di
+      // bawah, dalam bahasa si kalah.
+      const loserId = won ? defenderRow?.id ?? null : p.id;
+      const loserKind: TroopKind = won ? "defense" : "attack";
+      let dead = 0;
+      let deadLeft = 0;
+      if (loserId !== null) {
+        const loserTroops = await loadTroops(db, loserId);
+        const cur = loserTroops[loserKind];
+        dead = pvpCasualties(cur.count, cur.level);
+        if (dead > 0) {
+          deadLeft = cur.count - dead;
+          await db
+            .update(schema.pvpTroops)
+            .set({ count: deadLeft })
+            .where(
+              and(
+                eq(schema.pvpTroops.playerId, loserId),
+                eq(schema.pvpTroops.kind, loserKind),
+              ),
+            );
+        }
+      }
+      // Nama pasukan yang gugur, dalam bahasa entri log pertempuran
+      // (bahasa penyerang) — "" bila tidak ada korban.
+      const deadName = dead > 0 ? troopName(troopDef(loserKind), lang) : "";
       // Cooldown penyerang + perisai yang diserang mulai dari
       // sekarang (menang maupun kalah).
       await db
@@ -4122,8 +4154,8 @@ export const gameActions = {
           p.id,
           "pvp_attack",
           loot.length > 0
-            ? S.logPvpAttackWin(defenderLabel, lootKt)
-            : S.logPvpAttackWinEmpty(defenderLabel),
+            ? S.logPvpAttackWin(defenderLabel, lootKt, attackerPower, defenderPower, dead, deadName)
+            : S.logPvpAttackWinEmpty(defenderLabel, attackerPower, defenderPower, dead, deadName),
           null,
         );
         if (loot.length > 0) {
@@ -4135,8 +4167,8 @@ export const gameActions = {
             defenderRow.id,
             "pvp_defend",
             loot.length > 0
-              ? S.logPvpDefendedLose(attackerLabel, lootKt)
-              : S.logPvpDefendedLoseEmpty(attackerLabel),
+              ? S.logPvpDefendedLose(attackerLabel, lootKt, attackerPower, defenderPower)
+              : S.logPvpDefendedLoseEmpty(attackerLabel, attackerPower, defenderPower),
             null,
           );
           if (loot.length > 0) {
@@ -4156,7 +4188,7 @@ export const gameActions = {
           db,
           p.id,
           "pvp_attack",
-          S.logPvpAttackLose(defenderLabel),
+          S.logPvpAttackLose(defenderLabel, attackerPower, defenderPower),
           null,
         );
         if (destroyed.length > 0) {
@@ -4167,48 +4199,28 @@ export const gameActions = {
             db,
             defenderRow.id,
             "pvp_defend",
-            S.logPvpDefendedWin(attackerLabel),
+            S.logPvpDefendedWin(attackerLabel, attackerPower, defenderPower, dead, deadName),
             null,
           );
         }
       }
-      // Korban pasukan (2026-11-25): yang kalah kehilangan sebagian
-      // drone jenis yang dipakainya — makin tinggi level, makin
-      // sedikit yang gugur (20% ÷ level, minimal 1). NPC tidak
-      // punya pasukan, jadi tidak ada korban di pihaknya. Log korban
-      // ditulis dalam bahasa si kalah.
-      const loserId = won ? defenderRow?.id ?? null : p.id;
-      const loserKind: TroopKind = won ? "defense" : "attack";
-      if (loserId !== null) {
-        const loserTroops = await loadTroops(db, loserId);
-        const cur = loserTroops[loserKind];
-        const dead = pvpCasualties(cur.count, cur.level);
-        if (dead > 0) {
-          const newCount = cur.count - dead;
-          await db
-            .update(schema.pvpTroops)
-            .set({ count: newCount })
-            .where(
-              and(
-                eq(schema.pvpTroops.playerId, loserId),
-                eq(schema.pvpTroops.kind, loserKind),
-              ),
-            );
-          const loserLang = won
-            ? normalizeLang(defenderRow?.language ?? "id")
-            : lang;
-          await logActivity(
-            db,
-            loserId,
-            won ? "pvp_defend" : "pvp_attack",
-            serverStrings(loserLang).logPvpTroopsLost(
-              dead,
-              troopName(troopDef(loserKind), loserLang),
-              newCount,
-            ),
-            null,
-          );
-        }
+      // Entri "gugur" si kalah (dihitung di atas) — ditulis dalam
+      // bahasa si kalah.
+      if (dead > 0 && loserId !== null) {
+        const loserLang = won
+          ? normalizeLang(defenderRow?.language ?? "id")
+          : lang;
+        await logActivity(
+          db,
+          loserId,
+          won ? "pvp_defend" : "pvp_attack",
+          serverStrings(loserLang).logPvpTroopsLost(
+            dead,
+            troopName(troopDef(loserKind), loserLang),
+            deadLeft,
+          ),
+          null,
+        );
       }
       // Audit (tidak memengaruhi permainan): siapa vs siapa, siapa
       // menang, berapa kekuatan, berapa KT rampasan.
