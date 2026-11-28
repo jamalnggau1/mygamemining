@@ -648,7 +648,7 @@ function ConfettiLayer({ burst }: { burst: Burst }) {
   );
 }
 
-type Tab = "tambang" | "peta" | "pasar" | "wd" | "misi" | "hangar" | "lab" | "admin" | "pengaturan";
+type Tab = "tambang" | "peta" | "pasar" | "wd" | "misi" | "hangar" | "lab" | "admin" | "pengaturan" | "premium";
 
 /** Layar boot bermerek — tampil saat state awal game dimuat (bukan
  *  saat error). Judul + bar progres animasi + baris status yang
@@ -1139,7 +1139,7 @@ export function App() {
             {p.premium.active ? (
               <p className="mt-1.5 inline-flex items-center gap-1.5 rounded-full border border-amber-400/50 bg-amber-400/15 px-2.5 py-0.5 text-xs font-bold text-amber-300"><CrownIcon size={13} /> {t("premiumActive", { tier: p.premium.tier === "pro" ? t("dualDrillTag") : t("standardTag") })}{p.premium.until ? t("premiumUntilShort", { date: fmtDate(p.premium.until) }) : ""}</p>
             ) : (
-              <button type="button" onClick={() => setTab("misi")} className="btn-press mt-1.5 inline-flex items-center gap-1.5 rounded-full border border-amber-400/40 bg-amber-400/10 px-2.5 py-0.5 text-xs font-bold text-amber-200"><CrownIcon size={13} /> {t("activatePremium")}</button>
+              <button type="button" onClick={() => { setPrevTab(tab); setTab("premium"); }} className="btn-press mt-1.5 inline-flex items-center gap-1.5 rounded-full border border-amber-400/40 bg-amber-400/10 px-2.5 py-0.5 text-xs font-bold text-amber-200"><CrownIcon size={13} /> {t("activatePremium")}</button>
             )}
           </section>
           {/* Panel Posisi Misi — latar cincin (redesain 2026-11-24) */}
@@ -1343,7 +1343,7 @@ export function App() {
         )}
 
         {tab === "peta" && (
-          <PetaTab data={data} onTravel={(i) => travel.mutate(i)} travelling={travel.isPending} jobActive={job != null} onGoPremium={() => setTab("misi")} />
+          <PetaTab data={data} onTravel={(i) => travel.mutate(i)} travelling={travel.isPending} jobActive={job != null} onGoPremium={() => { setPrevTab(tab); setTab("premium"); }} />
         )}
 
         {tab === "pasar" && (
@@ -1360,7 +1360,7 @@ export function App() {
 
 
         {tab === "wd" && (<WdTab data={data} onCancel={(id) => cancelWd.mutate(id)} cancelling={cancelWd.isPending} onDone={(ok, err, good) => { showResult(ok, err, good); refresh(); }} />)}
-        {tab === "misi" && (<MisiTab userId={sessionInfo.userId} referrals={data.player.referrals} channelBonusClaimed={data.player.channelBonusClaimed} channelBonusKt={data.player.channelBonusKt} onClaimChannel={() => claimChannel.mutate()} claimingChannel={claimChannel.isPending} canClaimDailyBonus={data.player.canClaimDailyBonus} dailyBonusKt={data.player.dailyBonusKt} onClaimDaily={() => claimBonus.mutate()} claimingDaily={claimBonus.isPending} premiumData={data} onBuyPremium={(plan) => buyPremium.mutate(plan)} buyingPremium={buyPremium.isPending} onBuyPremiumGram={(plan) => buyPremiumGram.mutate(plan)} buyingPremiumGram={buyPremiumGram.isPending} gramPhase={gramPhase} inTelegram={sessionInfo.inTelegram} onCancelPremiumOrder={(id) => cancelPremiumOrder.mutate(id)} cancellingPremiumOrder={cancelPremiumOrder.isPending} />)}
+        {tab === "misi" && (<MisiTab userId={sessionInfo.userId} referrals={data.player.referrals} channelBonusClaimed={data.player.channelBonusClaimed} channelBonusKt={data.player.channelBonusKt} onClaimChannel={() => claimChannel.mutate()} claimingChannel={claimChannel.isPending} canClaimDailyBonus={data.player.canClaimDailyBonus} dailyBonusKt={data.player.dailyBonusKt} onClaimDaily={() => claimBonus.mutate()} claimingDaily={claimBonus.isPending} />)}
         {tab === "hangar" && (<HangarTab data={data} onTrain={(kind) => startTraining.mutate(kind)} onCollectTraining={() => collectTraining.mutate()} onCancelTraining={() => cancelTraining.mutate()} trainingBusy={startTraining.isPending || collectTraining.isPending || cancelTraining.isPending} onRefresh={refresh} />)}
         {tab === "lab" && (<LabTab data={data} onResearch={(args) => startResearch.mutate(args)} onCollectResearch={() => collectResearch.mutate()} onCancelResearch={() => cancelResearch.mutate()} researchBusy={startResearch.isPending || collectResearch.isPending || cancelResearch.isPending} onRefresh={refresh} />)}
         {tab === "admin" && p.isAdmin && (<AdminTab data={data} onDone={(ok, err, good) => { showResult(ok, err, good); refresh(); }} />)}
@@ -1374,6 +1374,19 @@ export function App() {
               <h2 className="font-display text-lg">{t("settingsTitle")}</h2>
             </div>
             <SettingsTab sessionLabel={sessionLabel} username={sessionInfo.username} onOpenTutorial={() => setShowTutorial(true)} />
+          </div>
+        </div>
+      )}
+      {tab === "premium" && (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-[#050810]">
+          <div className="pt-safe mx-auto max-w-3xl px-4 pb-6">
+            <div className="sticky top-0 z-10 -mx-4 flex items-center gap-2 border-b border-[var(--border)] bg-[#050810]/95 px-4 py-3 backdrop-blur">
+              <button type="button" onClick={() => setTab(prevTab)} aria-label={t("backLabel")} className="btn-press inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-white/25 bg-black/40 text-white"><ChevronLeftIcon size={20} /></button>
+              <h2 className="font-display text-lg">{t("premiumTitle")}</h2>
+            </div>
+            <div className="mt-3">
+              <PremiumCard data={data} onBuy={(plan) => buyPremium.mutate(plan)} buying={buyPremium.isPending} onBuyGram={(plan) => buyPremiumGram.mutate(plan)} buyingGram={buyPremiumGram.isPending} gramPhase={gramPhase} inTelegram={sessionInfo.inTelegram} onCancelOrder={(id) => cancelPremiumOrder.mutate(id)} cancelling={cancelPremiumOrder.isPending} />
+            </div>
           </div>
         </div>
       )}
@@ -2101,7 +2114,7 @@ function LabTab({ data, onResearch, onCollectResearch, onCancelResearch, researc
   );
 }
 
-function MisiTab({ userId, referrals, channelBonusClaimed, channelBonusKt, onClaimChannel, claimingChannel, canClaimDailyBonus, dailyBonusKt, onClaimDaily, claimingDaily, premiumData, onBuyPremium, buyingPremium, onBuyPremiumGram, buyingPremiumGram, gramPhase, inTelegram, onCancelPremiumOrder, cancellingPremiumOrder }: { userId: number | null; referrals: { invited: number; rewarded: number; earnedKt: number; list: Array<{ id: number; name: string; status: "pending" | "rewarded"; joinedAt: string }> }; channelBonusClaimed: boolean; channelBonusKt: number; onClaimChannel: () => void; claimingChannel: boolean; canClaimDailyBonus: boolean; dailyBonusKt: number; onClaimDaily: () => void; claimingDaily: boolean; premiumData: GameState; onBuyPremium: (plan: "standard" | "pro") => void; buyingPremium: boolean; onBuyPremiumGram: (plan: "standard" | "pro") => void; buyingPremiumGram: boolean; gramPhase: "idle" | "paying" | "verifying"; inTelegram: boolean; onCancelPremiumOrder: (id: number) => void; cancellingPremiumOrder: boolean }) {
+function MisiTab({ userId, referrals, channelBonusClaimed, channelBonusKt, onClaimChannel, claimingChannel, canClaimDailyBonus, dailyBonusKt, onClaimDaily, claimingDaily }: { userId: number | null; referrals: { invited: number; rewarded: number; earnedKt: number; list: Array<{ id: number; name: string; status: "pending" | "rewarded"; joinedAt: string }> }; channelBonusClaimed: boolean; channelBonusKt: number; onClaimChannel: () => void; claimingChannel: boolean; canClaimDailyBonus: boolean; dailyBonusKt: number; onClaimDaily: () => void; claimingDaily: boolean; }) {
   const [copied, setCopied] = useState(false);
   // Link referral: Mini App + startapp payload ref_<telegramId>.
   // startapp membuka Mini App LANGSUNG dengan kode menempel
@@ -2246,7 +2259,6 @@ function MisiTab({ userId, referrals, channelBonusClaimed, channelBonusKt, onCla
           <p className="mt-2 text-xs text-[var(--dim)]">{t("commRefEmpty")}</p>
         ) : null}
       </div>
-      <PremiumCard data={premiumData} onBuy={onBuyPremium} buying={buyingPremium} onBuyGram={onBuyPremiumGram} buyingGram={buyingPremiumGram} gramPhase={gramPhase} inTelegram={inTelegram} onCancelOrder={onCancelPremiumOrder} cancelling={cancellingPremiumOrder} />
-    </section>
+     </section>
   );
 }
