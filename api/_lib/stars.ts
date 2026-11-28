@@ -33,6 +33,11 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 export const STARS_WEBHOOK_URL =
   "https://mygamemining.vercel.app/api/telegram-webhook";
 
+/** URL Web App produksi — dipakai tombol "Mainkan" di semua pesan
+ *  otomatis (broadcast, notifikasi WD, pengingat tidak aktif).
+ *  Tombol web_app membuka Mini App langsung di dalam Telegram. */
+export const WEB_APP_URL = "https://mygamemining.vercel.app";
+
 const TELEGRAM_API = "https://api.telegram.org";
 const WEBHOOK_SECRET_LABEL = "astra-mining-webhook";
 
@@ -193,7 +198,9 @@ export async function createInvoiceLink(
 
 /** Mengirim pesan teks ke satu chat Telegram via Bot API. Dipakai
  *  broadcast Kendali, notifikasi WD, dan pengingat pemain tidak
- *  aktif. Mengembalikan true bila Telegram menerimanya, false bila
+ *  aktif. Setiap pesan membawa tombol "Mainkan" (web_app) di bawah
+ *  teks, supaya pemain langsung bisa membuka game dari pesan itu.
+ *  Mengembalikan true bila Telegram menerimanya, false bila
  *  token hilang / jaringan gagal / Telegram menolak (mis. pemain
  *  memblokir bot → 403). TIDAK PERNAH throw: pemanggil (aksi game,
  *  cron) tidak boleh gagal hanya karena satu pesan gagal terkirim. */
@@ -203,7 +210,15 @@ export async function sendTelegramMessage(
 ): Promise<boolean> {
   const r = await callBotApi<true>(
     "sendMessage",
-    { chat_id: args.chatId, text: args.text },
+    {
+      chat_id: args.chatId,
+      text: args.text,
+      reply_markup: {
+        inline_keyboard: [
+          [{ text: "Mainkan", web_app: { url: WEB_APP_URL } }],
+        ],
+      },
+    },
     fetchImpl,
   );
   return r.ok;
