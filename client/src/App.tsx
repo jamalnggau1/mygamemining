@@ -1042,14 +1042,20 @@ export function App() {
   const adminCount = pendingCount + approvedCount + pendingOrders;
   const totalOreQty = data.ores.reduce((a, o) => a + o.qty, 0);
   const ktToNextUsdt = p.ktBalance >= p.wdMinKt ? 0 : p.wdMinKt - p.ktBalance;
+  // Titik merah di tab: Jual = jumlah bijih di kargo, Kendali = antrean WD,
+  // Pasukan = ada latihan selesai (siap diambil), Lab = ada riset selesai.
+  // Diperiksa terhadap jam saat render; data di-refresh tiap 5 detik,
+  // jadi titiknya muncul paling lambat ~5 detik setelah selesai.
+  const trainReady = data.pvp.training != null && new Date(data.pvp.training.endsAt).getTime() <= Date.now();
+  const researchReady = data.pvp.research != null && new Date(data.pvp.research.endsAt).getTime() <= Date.now();
   const tabs: { id: Tab; label: string; icon: ReactNode; badge?: number }[] = [
     { id: "tambang", label: t("tabMine"), icon: <RocketIcon size={14} /> },
     { id: "peta", label: t("tabMaps"), icon: <MapIcon size={14} /> },
     { id: "pasar", label: t("tabMarket"), icon: <SatelliteIcon size={14} />, badge: totalOreQty > 0 ? totalOreQty : undefined },
     { id: "wd", label: t("tabWd"), icon: <GemIcon size={14} /> },
     { id: "misi", label: t("tabMisi"), icon: <GiftIcon size={14} /> },
-    { id: "hangar", label: t("tabTroops"), icon: <SwordsIcon size={14} /> },
-    { id: "lab", label: t("tabLab"), icon: <BookIcon size={14} /> },
+    { id: "hangar", label: t("tabTroops"), icon: <SwordsIcon size={14} />, badge: trainReady ? 1 : undefined },
+    { id: "lab", label: t("tabLab"), icon: <BookIcon size={14} />, badge: researchReady ? 1 : undefined },
   ];
   // Tab Kendali hanya untuk pemilik — pemain biasa tidak pernah
   // melihatnya (server tetap yang menegakkan: aksi Kendali ditolak
@@ -1143,7 +1149,7 @@ export function App() {
         </div>
 
         <nav aria-label={t("navLabel")} className="sticky top-0 z-20 mt-3 grid grid-cols-4 gap-1.5 bg-[var(--bg)]/95 py-1.5 backdrop-blur">
-          {tabs.map((t) => (<button key={t.id} type="button" onClick={() => setTab(t.id)} aria-pressed={tab === t.id} className={`btn-press relative inline-flex min-h-8 w-full min-w-0 items-center justify-center gap-1 rounded-xl px-1.5 py-1 text-center text-[11px] font-bold leading-tight ${tab === t.id ? "bg-cyan-400 text-black" : "bg-[var(--surface)] text-[var(--text)] border border-[var(--border)]"}`}><span className="shrink-0">{t.icon}</span><span className="min-w-0">{t.label}</span>{t.badge != null && (<span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">{t.badge}</span>)}</button>))}
+          {tabs.map((t) => (<button key={t.id} type="button" onClick={() => setTab(t.id)} aria-pressed={tab === t.id} className={`btn-press relative inline-flex min-h-8 w-full min-w-0 items-center justify-center gap-1 rounded-xl px-1.5 py-1 text-center text-[11px] font-bold leading-tight ${tab === t.id ? "bg-cyan-400 text-black" : "bg-[var(--surface)] text-[var(--text)] border border-[var(--border)]"}`}><span className="shrink-0">{t.icon}</span><span className="min-w-0">{t.label}</span>{t.badge != null && (<span className="absolute -right-1 -top-1 flex h-3 min-w-3 items-center justify-center rounded-full bg-red-500 px-0.5 text-[9px] font-bold text-white">{t.badge}</span>)}</button>))}
         </nav>
 
         {banner && (<div key={bannerId} role="status" className={`banner-in mt-3 rounded-xl border px-3 py-2.5 text-sm font-semibold ${banner.kind === "good" ? "border-emerald-500/40 bg-emerald-500/15" : banner.kind === "bad" ? "border-red-500/40 bg-red-500/15" : "border-[var(--border)] bg-[var(--surface)]"}`}>{banner.text}</div>)}
