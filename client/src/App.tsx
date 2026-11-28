@@ -8,7 +8,7 @@ import {
   isTonConnectAvailable,
   sendGramPayment,
 } from "./tonconnect";
-import { fmt, fmtDate, fmtDateLong, fmtDateTime, fmtDur, LanguagePicker, t, trich, useLang } from "./i18n.js";
+import { fmt, fmtDate, fmtDateLong, fmtDateTime, fmtDur, getCurrentLang, LanguagePicker, t, trich, useLang } from "./i18n.js";
 import { ensureMusic, musicEnabled, playClaim, playClick, playCoin, playDrill, playError, playScan, playSuccess, setMusicEnabled, setSoundEnabled, soundEnabled, stopMusic } from "./sound.js";
 import { ExpandableText } from "./ExpandableText";
 import heroImg from "./assets/hero.webp";
@@ -657,8 +657,34 @@ type Tab = "tambang" | "peta" | "pasar" | "wd" | "misi" | "hangar" | "lab" | "ad
  *  penuh saat getGameState masih pending, dan sebagai overlay yang
  *  memudar begitu data tiba (lihat efek boot di App). */
 const BOOT_LINES = ["loading", "loadingAsteroid", "loadingDrill"] as const;
+
+// Mineral yang ditampilkan di layar loading (2026-11-28, owner):
+// ganti ikon roket dengan sprite mineral yang bergantian tiap 1 detik,
+// mulai dari posisi acak supaya tiap buka game mineralnya beda.
+// Nama di sini cerminan api/_lib/game.ts ORES — dipakai sebelum game
+// state dimuat, jadi nama tidak bisa diambil dari server.
+const BOOT_MINERALS: { id: string; name: string; nameEn: string; nameRu: string }[] = [
+  { id: "regolith", name: "Regolith Asteroid", nameEn: "Asteroid Regolith", nameRu: "Астероидный реголит" },
+  { id: "kondrit", name: "Kondrit Karbon", nameEn: "Carbonaceous Chondrite", nameRu: "Углеродистый хондрит" },
+  { id: "besinikel", name: "Besi-Nikel", nameEn: "Iron-Nickel", nameRu: "Железо-никель" },
+  { id: "kobalt", name: "Kobalt Antariksa", nameEn: "Space Cobalt", nameRu: "Космический кобальт" },
+  { id: "platinum", name: "Platinum", nameEn: "Platinum", nameRu: "Платина" },
+  { id: "iridium", name: "Iridium", nameEn: "Iridium", nameRu: "Иридий" },
+  { id: "helium3", name: "Kristal Helium-3", nameEn: "Helium-3 Crystal", nameRu: "Кристалл гелия-3" },
+  { id: "opal", name: "Opal Pelangi", nameEn: "Rainbow Opal", nameRu: "Радужный опал" },
+  { id: "topaz", name: "Topaz Emas", nameEn: "Golden Topaz", nameRu: "Золотой топаз" },
+  { id: "turkuois", name: "Turkuois Orbit", nameEn: "Orbital Turquoise", nameRu: "Орбитальная бирюза" },
+  { id: "ametis", name: "Ametis Sabuk", nameEn: "Belt Amethyst", nameRu: "Аметист пояса" },
+  { id: "zamrud", name: "Zamrud Bulan", nameEn: "Moon Emerald", nameRu: "Лунный изумруд" },
+  { id: "rubi", name: "Rubi Mare", nameEn: "Mare Ruby", nameRu: "Рубин Моря" },
+  { id: "safir", name: "Safir Bintang", nameEn: "Star Sapphire", nameRu: "Звёздный сапфир" },
+  { id: "berlian", name: "Berlian Psyche", nameEn: "Psyche Diamond", nameRu: "Алмаз Психеи" },
+  { id: "opales", name: "Opal Es Hitam", nameEn: "Black Ice Opal", nameRu: "Чёрный ледяной опал" },
+  { id: "voidium", name: "Kristal Voidium", nameEn: "Voidium Crystal", nameRu: "Кристалл войдиума" },
+];
 function BootLoader({ sessionLabel }: { sessionLabel: string }) {
   const [line, setLine] = useState(0);
+  const [mineral, setMineral] = useState(() => Math.floor(Math.random() * BOOT_MINERALS.length));
   useEffect(() => {
     const id = setInterval(
       () => setLine((v) => (v + 1) % BOOT_LINES.length),
@@ -666,9 +692,20 @@ function BootLoader({ sessionLabel }: { sessionLabel: string }) {
     );
     return () => clearInterval(id);
   }, []);
+  useEffect(() => {
+    const id = setInterval(
+      () => setMineral((v) => (v + 1) % BOOT_MINERALS.length),
+      1000,
+    );
+    return () => clearInterval(id);
+  }, []);
+  const m = BOOT_MINERALS[mineral] ?? BOOT_MINERALS[0]!;
+  const lang = getCurrentLang();
+  const mName = lang === "en" ? m.nameEn : lang === "ru" ? m.nameRu : m.name;
   return (
     <main className="mx-auto flex min-h-[100svh] w-full max-w-3xl flex-col items-center justify-center px-4 py-16 text-center">
-      <span aria-hidden="true" className="flex h-16 w-16 items-center justify-center rounded-full border border-cyan-400/50 bg-cyan-400/10 text-cyan-300 shadow-lg shadow-cyan-500/20"><RocketIcon size={30} /></span>
+      <span key={mineral} aria-hidden="true" className="boot-line flex h-16 w-16 items-center justify-center overflow-hidden rounded-full border border-cyan-400/50 bg-cyan-400/10 shadow-lg shadow-cyan-500/20"><OreIcon id={m.id} color="#9a9186" fill /></span>
+      <p key={`name-${mineral}`} className="boot-line mt-2 text-xs font-bold text-cyan-200">{mName}</p>
       <p className="font-display title-shine mt-4 text-2xl font-black tracking-widest">ASTRA MINING</p>
       <div className="mt-6 h-2.5 w-56 overflow-hidden rounded-full bg-[var(--surface2)]" role="progressbar" aria-label={t("loading")}><div className="boot-bar-fill h-full w-2/5 rounded-full bg-gradient-to-r from-cyan-400 to-sky-600" /></div>
       <p key={line} className="boot-line mt-3 text-sm text-[var(--dim)]">{t(BOOT_LINES[line] ?? "loading")}</p>
